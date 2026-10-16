@@ -1,0 +1,391 @@
+schema_version: 1
+
+resource: Microsoft.Storage/storageAccounts
+title: Azure Storage Account
+
+naming:
+  terraform: "Azure::Microsoft.Storage/storageAccounts"
+  bicep: "Microsoft.Storage/storageAccounts"
+
+boundaries:
+  - "Does not create the resource group. Expects one from the spec's context."
+  - "Does not create private DNS zones — shared infrastructure, owned by a pattern or the platform."
+  - "Does not create the Log Analytics workspace it routes diagnostics to."
+  - "Does not create containers, shares or queues. Data-plane objects are a separate concern."
+
+groups:
+
+  # ---------------------------------------------------------------- placement
+  - id: placement
+    title: Placement
+    questions:
+      - id: environment
+        ask: Which environment is this for?
+        type: enum
+        values: [development, test, acceptance, production]
+        required: true
+        from_context: true
+        why: >
+          Drives the rendered name, the mandatory tags, and the strictness of
+          several defaults below. Nothing sensible can be guessed.
+        renders: naming parameter `environment`, tag `environment`
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        required: true
+        from_context: true
+        why: >
+          Part of the rendered name and not inferable. Note that replication
+          choice and region interact: ZRS is unavailable in regions without
+          availability zones.
+        renders: azurerm_storage_account.location / resource.location
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        ref: resource_group
+        required: true
+        from_context: true
+        why: >
+          The account is placed into an existing group. Creating one here would
+          make this skill own a lifecycle wider than the resource it describes.
+        renders: azurerm_storage_account.resource_group_name / implicit in Bicep scope
+
+  # --------------------------------------------------------------- networking
+  - id: networking
+    title: Networking
+    questions:
+      - id: public_network_access
+        ask: How should the account be reachable?
+        type: enum
+        values: [disabled, enabled_with_firewall, enabled]
+        default: disabled
+        confirm_in: [production]
+        why: >
+          A storage account reachable from the internet is the most common Azure
+          data-exposure finding, and the portal default is permissive. `disabled`
+          means access only through a private endpoint. `enabled_with_firewall`
+          keeps a public address and relies on an ACL to refuse traffic, which is
+          acceptable where the consumer genuinely lives off-network.
+        renders: >
+          terraform: public_network_access_enabled, network_rules.default_action;
+          bicep: properties.publicNetworkAccess, properties.networkAcls.defaultAction
+
+      - id: private_endpoint_subnet
+        ask: Which subnet should the private endpoint live in?
+        type: ref
+        ref: subnet
+        required: true
+        depends_on: { question: public_network_access, equals: disabled }
+        why: >
+          With public access disabled the account is unreachable without an
+          endpoint, so this cannot be defaulted. A pattern skill normally supplies
+          it from the network it owns.
+        renders: azurerm_private_endpoint.subnet_id / Microsoft.Network/privateEndpoints
+
+      - id: private_endpoint_subresources
+        ask: Which storage services need an endpoint?
+        type: list
+        values: [blob, file, queue, table, dfs, web]
+        default: [blob]
+        why: >
+          One private endpoint per sub-resource, each with its own DNS zone. Adding
+          every service "to be safe" multiplies both, so enumerate what is used.
+        renders: azurerm_private_endpoint.private_service_connection.subresource_names
+
+      - id: firewall_ip_rules
+        ask: Which public IP ranges may reach the account?
+        type: list
+        default: []
+        depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        why: >
+          An enumerated allowlist. An empty list with the firewall enabled denies
+          everything public, which is a valid and deliberate state. `0.0.0.0/0`
+          here is not an allowlist and the guardrails reject it.
+        renders: network_rules.ip_rules / networkAcls.ipRules
+
+      - id: firewall_subnet_rules
+        ask: Which subnets may reach the account via service endpoint?
+        type: list
+        ref: subnet
+        default: []
+        depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        why: >
+          Service endpoints are cheaper than private endpoints but leave the
+          account publicly addressable — the ACL does the refusing. Prefer a
+          private endpoint where the posture matters.
+        renders: network_rules.virtual_network_subnet_ids / networkAcls.virtualNetworkRules
+
+      - id: allow_azure_services_bypass
+        ask: Should trusted Azure services bypass the firewall?
+        type: bool
+        default: true
+        why: >
+          Without the bypass, platform features that reach the account on your
+          behalf — diagnostics delivery, backup, some data-factory paths — fail in
+          ways that are hard to attribute. The bypass is scoped to services
+          authenticating with a managed identity in the same tenant.
+        renders: network_rules.bypass / networkAcls.bypass
+
+  # ----------------------------------------------------------------- identity
+  - id: identity
+    title: Identity and access
+    questions:
+      - id: managed_identity
+        ask: Which managed identity should the account carry?
+        type: enum
+        values: [system_assigned, user_assigned, none]
+        default: system_assigned
+        why: >
+          The account needs an identity of its own only when it reaches outward —
+          customer-managed keys being the usual case. System-assigned is the
+          cheaper default; user-assigned is for an identity that must outlive the
+          resource or be shared across several.
+        renders: identity.type / identity
+
+      - id: user_assigned_identity_ids
+        ask: Which user-assigned identities?
+        type: list
+        ref: user_assigned_identity
+        required: true
+        depends_on: { question: managed_identity, equals: user_assigned }
+        why: The identities must already exist; this skill does not create them.
+        renders: identity.identity_ids / identity.userAssignedIdentities
+
+      - id: role_assignments
+        ask: Who needs which data-plane role on this account?
+        type: list
+        default: []
+        why: >
+          With shared-key auth disabled, nothing can read the account until a role
+          is assigned — so an empty list means a working account nobody can use.
+          Scope each assignment to the container it needs, not to the account, and
+          never to the subscription. A pattern skill normally fills this from the
+          consumers it knows about.
+        renders: azurerm_role_assignment / Microsoft.Authorization/roleAssignments
+
+  # ----------------------------------------------------------------- security
+  - id: security
+    title: Security
+    questions:
+      - id: shared_access_key_enabled
+        ask: Should shared key (account key) authentication stay enabled?
+        type: bool
+        default: false
+        confirm_in: [production]
+        why: >
+          An account key is a bearer credential with full data-plane rights, it
+          does not expire, and its use is indistinguishable from any other key
+          holder in the audit log. Disabling it forces Entra ID and RBAC, where
+          access is attributable and revocable. The usual blocker is a legacy
+          consumer holding a connection string — that is a migration, not a reason
+          to leave it on.
+        renders: shared_access_key_enabled / properties.allowSharedKeyAccess
+
+      - id: min_tls_version
+        ask: What is the minimum TLS version?
+        type: enum
+        values: [TLS1_2, TLS1_3]
+        default: TLS1_2
+        why: >
+          1.2 is the floor and non-negotiable. 1.3 is preferable where every
+          client supports it, but an unsupported floor fails as an opaque
+          connection reset, so raise it deliberately.
+        renders: min_tls_version / properties.minimumTlsVersion
+
+      - id: https_traffic_only
+        ask: Should the account refuse plain HTTP?
+        type: bool
+        default: true
+        why: >
+          No current reason to allow HTTP to a storage account. Kept as a question
+          only because a handful of legacy appliances still cannot do TLS, and
+          that exception deserves to be recorded rather than silently impossible.
+        renders: https_traffic_only_enabled / properties.supportsHttpsTrafficOnly
+
+      - id: allow_blob_public_access
+        ask: May individual containers be made publicly readable?
+        type: bool
+        default: false
+        why: >
+          This is the account-level switch that makes anonymous container access
+          possible at all. Left on, a single container misconfiguration becomes a
+          public data leak; turned off, that mistake is not available. Static
+          website hosting is the one legitimate need, and belongs on its own
+          account rather than relaxing a shared one.
+        renders: allow_nested_items_to_be_public / properties.allowBlobPublicAccess
+
+      - id: infrastructure_encryption_enabled
+        ask: Should infrastructure (double) encryption be enabled?
+        type: bool
+        default: true
+        why: >
+          A second encryption layer below the service layer, at no measurable cost.
+          It can only be set when the account is created — turning it on later
+          means a new account and a data migration, which is why the default is on
+          rather than "when someone asks".
+        renders: infrastructure_encryption_enabled / properties.encryption.requireInfrastructureEncryption
+
+      - id: key_management
+        ask: Platform-managed or customer-managed encryption keys?
+        type: enum
+        values: [platform_managed, customer_managed]
+        default: platform_managed
+        why: >
+          Platform-managed keys are encrypted, rotated and free. Customer-managed
+          keys are warranted when a compliance regime names them, or when key
+          revocation must be a capability you actually hold — and they pull in a
+          Key Vault with purge protection, an identity with wrap/unwrap, and a
+          rotation story. Choosing them without those is an incomplete answer.
+        renders: customer_managed_key / properties.encryption.keySource
+
+      - id: cmk_key_vault_key_id
+        ask: Which Key Vault key should encrypt the account?
+        type: ref
+        ref: key_vault_key
+        required: true
+        depends_on: { question: key_management, equals: customer_managed }
+        why: >
+          The key must exist and the account's identity must hold wrap/unwrap on
+          it before the account can be created — an ordering that bites every
+          first attempt.
+        renders: customer_managed_key.key_vault_key_id / properties.encryption.keyvaultproperties
+
+      - id: sftp_enabled
+        ask: Should the SFTP endpoint be enabled?
+        type: bool
+        default: false
+        why: >
+          SFTP requires hierarchical namespace and introduces local users, which
+          are credentials outside Entra ID — exactly what disabling shared keys
+          was for. Enable only where an external party genuinely cannot use
+          anything else.
+        renders: sftp_enabled / properties.isSftpEnabled
+
+  # ---------------------------------------------------------- data protection
+  - id: data_protection
+    title: Data protection
+    questions:
+      - id: replication
+        ask: Which replication does the data need?
+        type: enum
+        values: [LRS, ZRS, GRS, GZRS]
+        default: ZRS
+        confirm_in: [production]
+        why: >
+          ZRS survives the loss of an availability zone at roughly LRS cost and is
+          the right floor for anything that is not scratch data. GRS adds a
+          secondary region and only pays off with a documented failover plan —
+          without one it is cost for a capability nobody will exercise. Replication
+          cannot be changed between local and geo tiers in place, so this choice
+          forces a replacement later.
+        renders: account_replication_type / sku.name
+
+      - id: access_tier
+        ask: Which default access tier?
+        type: enum
+        values: [Hot, Cool, Cold]
+        default: Hot
+        why: >
+          Hot costs more to store and less to read. Cool and Cold invert that and
+          add an early-deletion charge, so they only win for data genuinely read
+          rarely — a lifecycle policy moving data between tiers usually beats
+          picking a cold default.
+        renders: access_tier / properties.accessTier
+
+      - id: blob_soft_delete_days
+        ask: How many days should deleted blobs stay restorable?
+        type: int
+        default: 7
+        why: >
+          The cheapest recovery there is for the most common failure mode, which
+          is someone deleting the wrong thing. 0 disables it and should be a
+          deliberate choice for genuinely reproducible data.
+        renders: blob_properties.delete_retention_policy.days / properties.deleteRetentionPolicy
+
+      - id: container_soft_delete_days
+        ask: How many days should deleted containers stay restorable?
+        type: int
+        default: 7
+        why: >
+          Separate from blob soft delete and frequently forgotten — blob retention
+          does not help when the container itself is gone.
+        renders: blob_properties.container_delete_retention_policy.days / properties.containerDeleteRetentionPolicy
+
+      - id: versioning_enabled
+        ask: Should blob versioning be enabled?
+        type: bool
+        default: true
+        why: >
+          Protects against overwrite, which soft delete does not. The cost is
+          storage for retained versions, so pair it with a lifecycle rule that
+          expires old ones rather than leaving it unbounded.
+        renders: blob_properties.versioning_enabled / properties.isVersioningEnabled
+
+      - id: change_feed_enabled
+        ask: Should the change feed be enabled?
+        type: bool
+        default: false
+        why: >
+          An append-only log of blob changes. Useful for downstream processing and
+          required for point-in-time restore, otherwise it is storage spent on a
+          log nobody reads.
+        renders: blob_properties.change_feed_enabled / properties.changeFeed
+
+      - id: point_in_time_restore_days
+        ask: How many days of point-in-time restore?
+        type: int
+        default: 0
+        why: >
+          Requires versioning and the change feed, and must be shorter than the
+          soft-delete window. 0 disables it. Worth enabling for data where a
+          logical corruption needs rewinding rather than a single object
+          restoring.
+        renders: blob_properties.restore_policy.days / properties.restorePolicy
+
+      - id: immutability
+        ask: Does the data need immutability (WORM)?
+        type: enum
+        values: [none, account_level, container_level]
+        default: none
+        why: >
+          A legal-hold or time-based retention regime that even an account owner
+          cannot delete through. That is the point and also the risk: an
+          account-level locked policy cannot be undone, so it is a compliance
+          decision rather than a hardening default.
+        renders: immutability_policy / properties.immutableStorageWithVersioning
+
+  # ------------------------------------------------------------ observability
+  - id: observability
+    title: Observability
+    questions:
+      - id: diagnostic_workspace
+        ask: Which Log Analytics workspace should receive diagnostics?
+        type: ref
+        ref: log_analytics_workspace
+        required: true
+        why: >
+          A storage account with no diagnostic setting is invisible exactly when
+          someone is investigating it, and the workspace is shared infrastructure
+          this skill does not create. A pattern skill normally supplies it.
+        renders: azurerm_monitor_diagnostic_setting / Microsoft.Insights/diagnosticSettings
+
+      - id: diagnostic_categories
+        ask: Which log categories should be collected?
+        type: list
+        values: [audit, allLogs, StorageRead, StorageWrite, StorageDelete]
+        default: [audit]
+        why: >
+          Audit categories always. `allLogs` is right in non-production and for
+          anything handling regulated data, but data-plane read logging on a busy
+          account is a real ingestion bill — so in production it is a deliberate
+          choice rather than a default.
+        renders: enabled_log.category_group / logs.categoryGroup
+
+      - id: metrics_enabled
+        ask: Should all metrics be collected?
+        type: bool
+        default: true
+        why: Metric ingestion is cheap and the baseline for any capacity question.
+        renders: metric.category = "AllMetrics" / metrics.category

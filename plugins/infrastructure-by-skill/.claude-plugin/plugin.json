@@ -1,0 +1,24 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "infrastructure-by-skill",
+  "description": "Author Azure infrastructure as Terraform or Bicep by answering the decisions each resource actually has. Resource skills carry a grouped question set (placement, networking, identity, security, data protection, observability); pattern skills compose those resources into complete systems and own the wiring between them.",
+  "version": "0.1.0",
+  "author": {
+    "name": "LemurDaniel"
+  },
+  "repository": "https://github.com/LemurDaniel/Infrastructure-by-Skill",
+  "license": "MIT",
+  "keywords": [
+    "azure",
+    "terraform",
+    "bicep",
+    "iac",
+    "caf",
+    "naming",
+    "scaffolding"
+  ],
+  "skills": [
+    "./core/",
+    "./resources/"
+  ]
+}
