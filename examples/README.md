@@ -23,7 +23,7 @@ harder case.
   naming.yaml           # the convention, a full copy of naming.default.yaml
   *.tf, *.tfvars        # the Terraform render, one concern per file
   tests/*.tftest.hcl    # plan-only, platform mocked, naming provider real - one
-                        # assert per spec decision, checked by Test-RenderCoverage.ps1
+                        # assert per spec decision, checked by check_render_coverage.py
   bicep/main.bicep      # the Bicep render of the same spec
   bicep/main.bicepparam # its parameters - the same values as terraform.tfvars
 ```
@@ -36,7 +36,7 @@ terraform init
 terraform fmt -check -recursive
 terraform validate
 terraform test
-pwsh -NoProfile -File ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/Test-RenderCoverage.ps1 ./infra-spec.yaml
+python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
 
 bicep build --stdout bicep/main.bicep > $null
 bicep build-params bicep/main.bicepparam --stdout > $null

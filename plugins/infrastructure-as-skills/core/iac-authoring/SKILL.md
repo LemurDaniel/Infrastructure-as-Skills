@@ -257,7 +257,7 @@ to see it to disagree with it, and the ones they never look at cost one glance.
 ## Phase 5 — Write the spec, then ask twice before rendering
 
 Write `infra-spec.yaml` into the user's repository first — the IaC root, or `infra/` —
-and validate it with `Test-Spec.ps1`.
+and validate it with `check_spec.py`.
 
 **Write `naming.yaml` beside it in the same step**, when the directory has none: a full
 copy of [naming.default.yaml](../iac-rendering/references/naming.default.yaml), with any
@@ -388,13 +388,13 @@ family:
    rendering, not the decisions. Anything true for both belongs in the shared references
    instead.
 7. Add a row to the family's `routing.md`, so the resource is reachable, and its icon to the
-   `$Icons` table of [iac-diagram](../iac-diagram/SKILL.md#icons), so it is drawable.
+   `ICONS` table of [iac-diagram](../iac-diagram/SKILL.md#icons), so it is drawable.
 8. If people would ask for it with a term the
    [azure-resources](../azure-resources/SKILL.md) description does not carry, add the term
    there — that description is the only trigger the resource has.
-9. Validate with the repo's `Test-RepoConsistency.ps1` (naming forms, unique ids,
+9. Validate with the repo's `check_repo_consistency.py` (naming forms, unique ids,
    `required`/`default`, `why`/`renders`, routing reachability). A dedicated
-   `Test-QuestionSet.ps1` that also checks enum defaults and `depends_on` targets is
+   `check_question_set.py` that also checks enum defaults and `depends_on` targets is
    planned and **not written yet** — do not call it.
 
 A genuinely new family gets a directory under `resources/` with a `routing.md`, and a row in

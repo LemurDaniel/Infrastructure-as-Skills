@@ -106,7 +106,7 @@ with an edit hides which is which.
 Run the check script:
 
 ```powershell
-pwsh -NoProfile -File .claude/skills/git-commit-conventions/scripts/Test-RepoConsistency.ps1
+python3 .claude/skills/git-commit-conventions/scripts/check_repo_consistency.py
 ```
 
 It verifies, read-only:
@@ -153,7 +153,7 @@ Beyond the script:
   user of the plugin and on their other skills.
 - **A rendering reference or an example changes with its tests.** Terraform
   rendered here carries one assert per spec decision (`# decision:` markers);
-  `core/iac-rendering/scripts/Test-RenderCoverage.ps1 <spec>` must pass on every
+  `core/iac-rendering/scripts/check_render_coverage.py <spec>` must pass on every
   example, and `terraform test` with it. A commit that adds a decision to a
   question set without the assert in that resource's `terraform.md` is
   incomplete.
@@ -161,7 +161,7 @@ Beyond the script:
   survives into a review of generated infrastructure. A commit adding questions
   without it is incomplete, not minimal.
 - **Documented capabilities match reality.** `README.md` currently marks
-  `Test-QuestionSet.ps1` and `patterns/` as not written. Do not let a commit
+  `check_question_set.py` and `patterns/` as not written. Do not let a commit
   quietly imply otherwise — if it makes one of them true, say so; if not, leave
   the marker.
 - **`PROGRESS.md` is rewritten before a session's last commit.** Goal,

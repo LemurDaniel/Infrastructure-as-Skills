@@ -8,7 +8,7 @@ claude plugin eval plugins/infrastructure-as-skills --allow-tools Write Edit
 ```
 
 `Write` and `Edit` are needed because the run writes the spec. No shell: on Windows the
-eval sandbox has no backend and refuses any case that grants one, so `Test-Spec.ps1` and the
+eval sandbox has no backend and refuses any case that grants one, so `check_spec.py` and the
 diagram run outside the suite. How to run, check and read the suite is in the repo's
 `plugin-evals` skill (`.claude/skills/plugin-evals/`). Results land in `evals/results/`,
 which is ignored.
@@ -40,7 +40,7 @@ run, costs nothing, and its failure says exactly which decision went wrong. Each
 - **The process** — `Skill` fired (an indicator, not scored against the no-plugin arm),
   `naming.yaml` written, no `.tf`/`.bicep` written before confirmation.
 
-`Test-Spec.ps1` — the contract check covering sources, enums, backend attribute spellings
+`check_spec.py` — the contract check covering sources, enums, backend attribute spellings
 and composition — runs on the produced specs after the suite, not inside it.
 
 One `llm` grader, in `vague-public-dev`, on the short final message only, with concrete
@@ -71,8 +71,8 @@ The method follows Hamel Husain's
 
 Re-run the suite after any change to a question set, the guardrails or `iac-authoring`,
 and after a model update — and compare against `baseline.json`, the committed pass rates
-of the last accepted run. `Show-EvalResult.ps1` does the comparison and flags a grader
-whose rate dropped as REGRESS; `-UpdateBaseline` writes the new snapshot once the run is
+of the last accepted run. `show_eval_result.py` does the comparison and flags a grader
+whose rate dropped as REGRESS; `--update-baseline` writes the new snapshot once the run is
 read and accepted. Results stay ignored; the baseline is the one thing a run leaves
 behind in git.
 

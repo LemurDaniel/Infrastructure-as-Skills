@@ -109,7 +109,7 @@ Infrastructure-as-Skills/
     │   ├── iac-authoring/          # interview protocol, the spec, question-set format
     │   │   ├── questions/deployment.yaml     # posture, network, mandates — asked once
     │   │   ├── references/guardrails.md      # where the defaults come from
-    │   │   └── scripts/Test-Spec.ps1         # validates an infra-spec.yaml
+    │   │   └── scripts/check_spec.py         # validates an infra-spec.yaml
     │   ├── iac-rendering/          # spec -> Terraform or Bicep: naming, layout, idiom
     │   ├── iac-diagram/            # spec -> infra-diagram.drawio.png for the customer
     │   └── azure-resources/        # the one trigger for every resource -> family
@@ -215,11 +215,11 @@ and linted with CLI 0.48 — and the two renders diffed. Nothing has been applie
 - [x] Guardrails: the rules every question set takes its defaults from, shared with
       `Infrastructure-by-Skill`
 - [x] Three resources: `storage-account`, `virtual-network`, `log-analytics-workspace`
-- [x] `Test-Spec.ps1` — validates a spec against the contract, and separately whether it
+- [x] `check_spec.py` — validates a spec against the contract, and separately whether it
       is applyable at all
-- [x] `Test-RenderCoverage.ps1` — every spec decision asserted by the rendered Terraform
+- [x] `check_render_coverage.py` — every spec decision asserted by the rendered Terraform
       tests, or marked not-testable with a reason. Bicep has no equivalent yet
-- [ ] **`Test-QuestionSet.ps1`** — still referenced by the docs and not written
+- [ ] **`check_question_set.py`** — still referenced by the docs and not written
 - [ ] **Reference pattern skill** — `patterns/` is empty, so composition is specified but
       unproven
 - [x] A rendered spec: storage account on a referenced platform, Terraform, validated and

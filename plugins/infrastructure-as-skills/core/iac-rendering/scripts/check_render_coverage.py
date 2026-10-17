@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""Checks that every decision in an infra-spec.yaml is asserted by the
+rendered Terraform tests.
+
+Read-only. The rendering contract (core/iac-rendering/SKILL.md) says a render
+is not finished until every decision under `resources:` is asserted by exactly
+one test, or named as not observable in a plan with its reason. This script
+makes that a check instead of a claim.
+
+It reads the spec's `resources:` block - every key path
+`<resource>.<group>.<question>` that carries a `value` is a decision - and
+scans the `.tftest.hcl` files beside the spec for the markers the idiom
+prescribes:
+
+    # decision: storage-account.security.min_tls_version
+    # not-testable: storage-account.networking.allow_azure_services_bypass - <why>
+
+Then:
+  1. A decision with neither marker is unasserted. Error.
+  2. A decision with both, or marked twice, is ambiguous. Error.
+  3. A not-testable marker without a reason after the dash is a silence
+     dressed up as a sentence. Error.
+  4. A marker naming a decision the spec does not have is stale - the spec
+     moved and the test did not. Error.
+  5. A `# decision:` marker not followed by an `assert` block is a label on
+     nothing. Error.
+
+Needs PyYAML (pip install pyyaml). Without it the script says so and exits 2.
+
+Usage:
+    python3 check_render_coverage.py ./infra/infra-spec.yaml [--tests <dir>]
+
+Exit 0 every decision covered, 1 gaps or stale markers, 2 could not check.
+"""
+
+import argparse
+import os
+import re
+import sys
+
+COLORS = {'cyan': '36', 'green': '32', 'red': '31', 'gray': '90'}
+USE_COLOR = sys.stdout.isatty() and not os.environ.get('NO_COLOR')
+
+
+def say(text, color=None):
+    if color and USE_COLOR:
+        print(f"\033[{COLORS[color]}m{text}\033[0m")
+    else:
+        print(text)
+
+
+def ok(text): say(f"[ ok ] {text}", 'green')
+def bad(text): say(f"[fail] {text}", 'red')
+
+
+DECISION_RE = re.compile(r'^\s*#\s*decision:\s*([A-Za-z0-9_.\-]+)\s*$')
+NOT_TESTABLE_RE = re.compile(r'^\s*#\s*not-testable:\s*([A-Za-z0-9_.\-]+)\s*(-\s*(.*))?$')
+COMMENT_OR_BLANK_RE = re.compile(r'^\s*(#.*)?$')
+ASSERT_RE = re.compile(r'^\s*assert\s*\{')
+COMMENT_TEXT_RE = re.compile(r'^\s*#\s*(\S.*)$')
+MARKER_RE = re.compile(r'^\s*#\s*(decision|not-testable):')
+
+
+def main():
+    ap = argparse.ArgumentParser(description='Check that every spec decision is asserted by the rendered Terraform tests.')
+    ap.add_argument('spec', help='the infra-spec.yaml; tests are looked up in tests/ beside it unless --tests says otherwise')
+    ap.add_argument('--tests', help='directory holding the .tftest.hcl files (default: <spec dir>/tests)')
+    args = ap.parse_args()
+
+    if not os.path.isfile(args.spec):
+        bad(f"no such file: {args.spec}")
+        return 2
+    spec_path = os.path.abspath(args.spec)
+    tests_dir = args.tests or os.path.join(os.path.dirname(spec_path), 'tests')
+    if not os.path.isdir(tests_dir):
+        bad(f"no tests directory at {tests_dir} - a render without tests is not finished")
+        return 1
+    test_files = sorted(f for f in os.listdir(tests_dir)
+                        if f.endswith('.tftest.hcl') and os.path.isfile(os.path.join(tests_dir, f)))
+    if not test_files:
+        bad(f"no .tftest.hcl in {tests_dir} - a render without tests is not finished")
+        return 1
+
+    # --- read the spec -----------------------------------------------------
+    try:
+        import yaml
+    except ImportError:
+        bad('no YAML parser available (pip install pyyaml)')
+        return 2
+    try:
+        with open(spec_path, encoding='utf-8') as f:
+            doc = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        bad(f"YAML does not parse: {e}")
+        return 1
+
+    # Every map carrying a `value` under resources: is a decision; its key path is its id.
+    decisions = []
+
+    def find(node, path):
+        if not isinstance(node, dict):
+            return
+        if 'value' in node:
+            decisions.append(path)
+            return
+        for k in node:
+            if str(k).startswith('_'):
+                continue
+            find(node[k], f"{path}.{k}" if path else str(k))
+
+    if isinstance(doc, dict) and 'resources' in doc:
+        find(doc['resources'], '')
+
+    say(f"Render coverage - {spec_path}", 'cyan')
+    print('-' * 70)
+
+    if not decisions:
+        bad('the spec has no decisions under resources: - nothing to cover')
+        return 1
+
+    # --- read the markers --------------------------------------------------
+    errors = []
+    asserted = {}   # decision -> file:line
+    marked = {}     # decision -> file:line
+
+    for name in test_files:
+        with open(os.path.join(tests_dir, name), encoding='utf-8') as f:
+            lines = f.read().splitlines()
+        for i, line in enumerate(lines):
+            where = f"{name}:{i + 1}"
+
+            m = DECISION_RE.match(line)
+            if m:
+                did = m.group(1)
+                if did in asserted:
+                    errors.append(f"{did} is asserted twice ({asserted[did]} and {where}); one assert per decision")
+                asserted[did] = where
+                # The next non-blank, non-comment line has to open an assert block.
+                j = i + 1
+                while j < len(lines) and COMMENT_OR_BLANK_RE.match(lines[j]):
+                    j += 1
+                if j >= len(lines) or not ASSERT_RE.match(lines[j]):
+                    errors.append(f"{did} at {where} is not followed by an assert block")
+                continue
+
+            m = NOT_TESTABLE_RE.match(line)
+            if m:
+                did = m.group(1)
+                reason = (m.group(3) or '').strip()
+                # The reason may continue on the next comment lines.
+                j = i + 1
+                while j < len(lines):
+                    t = COMMENT_TEXT_RE.match(lines[j])
+                    if not t or MARKER_RE.match(lines[j]):
+                        break
+                    reason += ' ' + t.group(1).strip()
+                    j += 1
+                if not reason:
+                    errors.append(f"{did} at {where} is marked not-testable without a reason after the dash")
+                if did in marked:
+                    errors.append(f"{did} is marked not-testable twice ({marked[did]} and {where})")
+                marked[did] = where
+
+    # --- compare -----------------------------------------------------------
+    covered = 0
+    for d in decisions:
+        a, n = d in asserted, d in marked
+        if a and n:
+            errors.append(f"{d} is both asserted ({asserted[d]}) and marked not-testable ({marked[d]}) - pick one")
+        elif not a and not n:
+            errors.append(f"{d} is neither asserted nor marked not-testable")
+        else:
+            covered += 1
+    for did in list(asserted) + list(marked):
+        if did not in decisions:
+            where = asserted.get(did, marked.get(did))
+            errors.append(f"{did} (marker at {where}) is not a decision in the spec - stale marker")
+
+    ok(f"{len(decisions)} decision(s) in resources:, {len(asserted)} asserted, {len(marked)} marked not-testable, {len(test_files)} test file(s)")
+    for did in sorted(marked):
+        say(f"  not-testable: {did} ({marked[did]})", 'gray')
+
+    print('-' * 70)
+    if errors:
+        bad(f"{len(errors)} gap(s)")
+        for e in errors:
+            say(f"         {e}", 'gray')
+        return 1
+    say(f"Every decision covered ({covered}/{len(decisions)}).", 'green')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
