@@ -94,7 +94,8 @@ try {
         if (-not $fm.Success) { return $null }
         $block = $fm.Groups[1].Value
         # description may wrap across lines; take everything up to the next top-level key.
-        $nameMatch = [regex]::Match($block, '(?m)^name:[ \t]*(\S.*?)[ \t]*$')
+        # .NET's (?m)$ matches before \n only, so a CRLF file would carry the \r into the name.
+        $nameMatch = [regex]::Match($block, '(?m)^name:[ \t]*(\S[^\r\n]*?)[ \t]*\r?$')
         $descMatch = [regex]::Match($block, '(?sm)^description:[ \t]*(.+?)(?=\r?\n[A-Za-z_][A-Za-z0-9_-]*:|\z)')
         [pscustomobject]@{
             Name        = $nameMatch.Groups[1].Value
