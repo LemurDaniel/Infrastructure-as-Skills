@@ -16,9 +16,11 @@
       4. Plugin manifest paths: every path in plugin.json's skills array exists,
          and every group directory holding a SKILL.md is declared. A missing
          path fails to load the plugin.
-      5. Question sets: both naming identifier forms declared, the Bicep one
-         without an Azure:: prefix, unique ids, required/default not both set,
-         why and renders present.
+      5. Question sets: both naming identifier forms and the abbreviation
+         declared, the Bicep one without an Azure:: prefix, unique ids,
+         required/default not both set, why and renders present. A
+         scope: deployment set names no resource and is exempt from the
+         naming checks.
       6. Routing coverage: every questions/*.yaml reachable from its family
          SKILL.md, and no row pointing at a missing file.
       7. No CLAUDE.md inside the plugin directory - it is not loaded as context
@@ -289,16 +291,24 @@ try {
             $rel = [System.IO.Path]::GetRelativePath($repo, $qs.FullName) -replace '\\', '/'
             $raw = Get-Content -LiteralPath $qs.FullName -Raw
 
-            $tfName = [regex]::Match($raw, '(?m)^\s*terraform:\s*"?([^"\r\n]+)"?\s*$')
-            $bcName = [regex]::Match($raw, '(?m)^\s*bicep:\s*"?([^"\r\n]+)"?\s*$')
+            # A deployment-scoped set answers for the whole deployment and names
+            # no resource, so the naming identifiers do not apply to it.
+            $isDeployment = [regex]::IsMatch($raw, '(?m)^\s*scope:\s*deployment\s*$')
 
-            if (-not $tfName.Success) { $qErrors.Add("$rel - naming.terraform not declared") }
-            if (-not $bcName.Success) { $qErrors.Add("$rel - naming.bicep not declared") }
-            if ($bcName.Success -and $bcName.Groups[1].Value -match '^\s*\w+::') {
-                $qErrors.Add("$rel - naming.bicep carries a cloud prefix ('$($bcName.Groups[1].Value.Trim())'); the Bicep genName function takes none")
-            }
-            if ($tfName.Success -and $tfName.Groups[1].Value -notmatch '::') {
-                $qErrors.Add("$rel - naming.terraform is missing the '<Provider>::' prefix ('$($tfName.Groups[1].Value.Trim())')")
+            if (-not $isDeployment) {
+                $tfName = [regex]::Match($raw, '(?m)^\s*terraform:\s*"?([^"\r\n]+)"?\s*$')
+                $bcName = [regex]::Match($raw, '(?m)^\s*bicep:\s*"?([^"\r\n]+)"?\s*$')
+                $abbrev = [regex]::Match($raw, '(?m)^\s*abbreviation:\s*"?([^"\r\n]+)"?\s*$')
+
+                if (-not $tfName.Success) { $qErrors.Add("$rel - naming.terraform not declared") }
+                if (-not $bcName.Success) { $qErrors.Add("$rel - naming.bicep not declared") }
+                if (-not $abbrev.Success) { $qErrors.Add("$rel - naming.abbreviation not declared; the Bicep side assembles the name from vars and has no other source for the prefix") }
+                if ($bcName.Success -and $bcName.Groups[1].Value -match '^\s*\w+::') {
+                    $qErrors.Add("$rel - naming.bicep carries a cloud prefix ('$($bcName.Groups[1].Value.Trim())'); the Bicep resource type takes none")
+                }
+                if ($tfName.Success -and $tfName.Groups[1].Value -notmatch '::') {
+                    $qErrors.Add("$rel - naming.terraform is missing the '<Provider>::' prefix ('$($tfName.Groups[1].Value.Trim())')")
+                }
             }
 
             # Per-entry structural rules. Split on the "- id:" boundaries, which
@@ -326,11 +336,16 @@ try {
                 }
                 $hasDefault  = [regex]::IsMatch($b, '(?m)^\s+default:')
                 $hasRequired = [regex]::IsMatch($b, '(?m)^\s+required:\s*true')
+                # Inherited from the deployment set, so it needs no default of its own.
+                $hasInherit  = [regex]::IsMatch($b, '(?m)^\s+from_deployment:')
                 if ($hasDefault -and $hasRequired) {
                     $qErrors.Add("$rel - '$qid' sets both required: true and a default. A required question is one with no safe default.")
                 }
-                if (-not $hasDefault -and -not $hasRequired) {
-                    $qWarnings.Add("$rel - '$qid' has neither a default nor required: true, so it is unclear whether it gets asked")
+                if ($hasInherit -and ($hasDefault -or $hasRequired)) {
+                    $qErrors.Add("$rel - '$qid' sets from_deployment together with a default or required. The deployment answer is the default; a second one here is the ambiguity this field exists to remove.")
+                }
+                if (-not $hasDefault -and -not $hasRequired -and -not $hasInherit) {
+                    $qWarnings.Add("$rel - '$qid' has neither a default, required: true, nor from_deployment, so it is unclear whether it gets asked")
                 }
                 if (-not [regex]::IsMatch($b, '(?m)^\s+why:')) {
                     $qWarnings.Add("$rel - '$qid' has no why. It is the only artefact that survives into a review.")
@@ -375,8 +390,11 @@ try {
                     $routeIssues.Add("$famRel/SKILL.md never mentions questions/$leaf - the resource is unreachable")
                 }
             }
-            # Rows pointing at a questions/ file that does not exist.
-            foreach ($m in [regex]::Matches($body, 'questions/([A-Za-z0-9._-]+\.ya?ml)')) {
+            # Rows pointing at a questions/ file that does not exist. The
+            # lookbehind keeps a path-qualified reference out of this - a link to
+            # core/iac-authoring/questions/deployment.yaml names another skill's
+            # set and is not a route into this family.
+            foreach ($m in [regex]::Matches($body, '(?<![\w./-])questions/([A-Za-z0-9._-]+\.ya?ml)')) {
                 $target = Join-Path $famDir (Join-Path 'questions' $m.Groups[1].Value)
                 if (-not (Test-Path -LiteralPath $target)) {
                     $routeIssues.Add("$famRel/SKILL.md routes to questions/$($m.Groups[1].Value), which does not exist")
