@@ -196,6 +196,8 @@ and linted with CLI 0.48 — and the two renders diffed. Nothing has been applie
 - [x] Three resources: `storage-account`, `virtual-network`, `log-analytics-workspace`
 - [x] `Test-Spec.ps1` — validates a spec against the contract, and separately whether it
       is applyable at all
+- [x] `Test-RenderCoverage.ps1` — every spec decision asserted by the rendered Terraform
+      tests, or marked not-testable with a reason. Bicep has no equivalent yet
 - [ ] **`Test-QuestionSet.ps1`** — still referenced by the docs and not written
 - [ ] **Reference pattern skill** — `patterns/` is empty, so composition is specified but
       unproven

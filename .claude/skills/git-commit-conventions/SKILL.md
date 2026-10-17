@@ -121,6 +121,12 @@ Beyond the script:
   budget. A commit that adds a skill directory needs a sentence in
   the body justifying the listing-budget cost, because the cost lands on every
   user of the plugin and on their other skills.
+- **A rendering reference or an example changes with its tests.** Terraform
+  rendered here carries one assert per spec decision (`# decision:` markers);
+  `core/iac-rendering/scripts/Test-RenderCoverage.ps1 <spec>` must pass on every
+  example, and `terraform test` with it. A commit that adds a decision to a
+  question set without the assert in that resource's `terraform.md` is
+  incomplete.
 - **A question set's `why` is not optional.** It is the only artefact that
   survives into a review of generated infrastructure. A commit adding questions
   without it is incomplete, not minimal.

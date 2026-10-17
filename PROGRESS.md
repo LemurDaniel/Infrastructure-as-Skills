@@ -33,6 +33,10 @@ the conversation.
 - **Sub-resource names go through `<?SUBNAME>`**, not appended to a finished name. The
   first cross-backend diff found the Terraform render naming a private endpoint
   `…-01-blob` while Bicep said `…-blob-01`; the convention has the token for exactly this.
+- **Tests are part of the render, with coverage as the contract.** One assert per spec
+  decision, named by its key path; a decision a plan cannot observe is marked with its
+  reason. `Test-RenderCoverage.ps1` checks spec against tests, so "everything is tested"
+  is a gate, not an intention. Bicep has no equivalent yet (see Open).
 - **No registry alias, no registry modules.** The Bicep render inlines diagnostics and role
   assignments when `bicepconfig.json` has no `br/modules`; inventing the alias bakes a
   PoC address into a consumer repository.
@@ -44,6 +48,9 @@ the conversation.
 - No render has been applied: neither `terraform plan` nor `what-if` has run against a
   subscription, so the renders are validated, not proven.
 - The eval suite has no committed baseline yet; the first full run writes it.
+- Bicep renders have no tests. `bicep test` is experimental; the candidate is asserting on
+  the compiled ARM JSON per decision, mirroring the tftest markers. Decided to leave it
+  until the Terraform side has proven the contract on a second example.
 - Remaining families: `compute`, `data`, `security`.
 
 ## Next

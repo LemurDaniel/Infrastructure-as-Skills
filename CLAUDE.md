@@ -34,6 +34,8 @@ pwsh -NoProfile -File plugins/infrastructure-as-skills/core/iac-authoring/script
 # A rendered example: fmt, validate, plan-only tests with a mocked platform - and the
 # Bicep render of the same spec compiled and linted.
 terraform -chdir=examples/private-storage-on-platform init && terraform -chdir=examples/private-storage-on-platform test
+# Every decision in the spec asserted by those tests, or marked not-testable with a reason.
+pwsh -NoProfile -File plugins/infrastructure-as-skills/core/iac-rendering/scripts/Test-RenderCoverage.ps1 examples/private-storage-on-platform/infra-spec.yaml
 bicep build --stdout examples/private-storage-on-platform/bicep/main.bicep > $null && bicep lint examples/private-storage-on-platform/bicep/main.bicep
 ```
 
@@ -125,6 +127,9 @@ fails on it.
 - **A decision that holds for more than one resource belongs in the deployment set.** A
   resource question that re-asks one carries `from_deployment` instead of a `default`.
 - **A missing question set is said out loud, never improvised.**
+- **A Terraform render ships with its tests.** One `assert` per spec decision, named
+  `# decision: <resource>.<group>.<question>`; what a plan cannot observe is
+  `# not-testable:` with a reason. `Test-RenderCoverage.ps1` fails on anything else.
 - **`Test-QuestionSet.ps1` does not exist yet** although the authoring docs name it.
   `Test-RepoConsistency.ps1` covers part of what it would.
 
