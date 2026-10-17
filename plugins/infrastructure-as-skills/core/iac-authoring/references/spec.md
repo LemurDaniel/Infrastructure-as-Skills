@@ -302,15 +302,95 @@ The spec says *what* the modules are; each target's idiom says what they look li
 Details, including the asymmetries that do not survive a naive port, are in
 [terraform-idiom.md](../../iac-rendering/references/terraform-idiom.md) and [bicep-idiom.md](../../iac-rendering/references/bicep-idiom.md).
 
+## Where it lives
+
+The spec is source, not output. It is written into the user's repository, committed with
+the code it renders, and read back by every later run. A spec that only existed in the
+conversation that produced it cannot be extended: the next run would re-interview from
+nothing, and the answers would drift from the code already deployed.
+
+**One spec per deployable root**, in that root, under a fixed name:
+
+```
+infra/                       # or wherever the repository's IaC root already is
+  infra-spec.yaml            # the decisions
+  infra-diagram.drawio       # drawn from it
+  infra-diagram.drawio.png
+  main.tf | main.bicep ...   # rendered from it
+```
+
+- **The repository already has an IaC root** (a directory holding `*.tf` or `main.bicep`)
+  → the spec goes there. It describes that code, so it sits next to it.
+- **It has none** → create `infra/` at the repository root. Say where it went; do not
+  ask, since a fixed default is what lets the next run find it.
+- **Several roots** (one per workload or per landing zone) → one spec in each. A spec never
+  spans two roots, because `composition` and `needs` only mean something inside one.
+
+The name is fixed — `infra-spec.yaml`, never `storage-spec.yaml` or `spec-prod.yaml` —
+because finding it is the whole mechanism. Do not put it in `.gitignore`, and do not put it
+under `.claude/`: it is read by reviewers and by the other backends, not only by this
+plugin.
+
+## Finding it
+
+Before the interview, search the repository for `**/infra-spec.yaml`, skipping
+`.terraform/`, `node_modules/` and `.git/`:
+
+| Found | Then |
+|---|---|
+| None | A new spec. The location rule above decides where |
+| One | **Extend it.** Say so in the first message — "Ich erweitere `infra/infra-spec.yaml` (storage-account, virtual-network)" — so the user can redirect if they meant something new |
+| Several | Ask which one, or whether this is a new root. The paths are real, so offering them as options is fine |
+
+Finding none while the repository holds IaC code is worth one sentence: the code was not
+written from a spec, and the run that follows creates the first one beside it rather than
+pretending to describe what is already there.
+
+## Extending one
+
+Extension is the normal case after the first run, and the spec is shaped for it: each
+decision is a separate key with its own `source`, so adding to it is adding keys.
+
+**What is carried and what is re-derived.** Values whose `source` is `stated`, `asked`,
+`pattern`, `default`, `overridden` or `carried` are carried as they are — they were
+decided. Values whose `source` is `deployment` or `forced` are consequences, so they are
+re-derived from what they follow: if `network_exposure` changes in this run, every
+resource inheriting it follows, and every `forced` value is recomputed from its
+`forced_by`.
+
+**The opening question changes.** Phase 0 asks what should be added or changed, not what is
+being built — the system is already described. List what the spec holds, so the user
+answers against it.
+
+**Only the delta is asked and reported.** The deployment set is already resolved; a new
+resource asks only its own surviving questions. Phase 4 shows what this run added or
+changed, not the whole spec again.
+
+| Change | In the spec |
+|---|---|
+| A resource added | New key under `resources:`, a `composition.modules` entry or an existing module's `contains` extended, `wiring:` entries if it connects to something |
+| A decision changed | The new value with `source: overridden` and a comment naming the old value. Consequences re-derived |
+| A resource removed | Its key, its `contains` entry and every `wiring:` entry naming it are deleted. Say before rendering that the plan will **destroy** it — a removal in the spec is a deletion in Azure |
+| A question added to the set since | Absent, resolves from its default, recorded as `default`. Name the additions |
+
+Never rewrite a value the user did not touch. Reformatting, reordering keys or
+"normalising" an old answer turns the git diff of the spec — the one review this design
+promises — into noise.
+
+Update `spec.at`, `skill_version` and `generated_by` on every write; the history of the
+decisions is the spec's git log, which is why it is committed.
+
+Then regenerate both the diagram and the code from the whole spec, and let the diff show
+what moved.
+
 ## Reading one back
 
-When a spec already exists in the target directory, load it before interviewing. Its values
-enter resolution as `carried`, so a re-run normally asks nothing.
+When a spec exists, load it before interviewing. Its values enter resolution as `carried`,
+so a re-run that changes nothing asks nothing.
 
 Two cases need care:
 
-- **A question was added to the set since.** It is absent, resolves from its default, and
-  is recorded as `default`. Name the additions rather than slipping them in.
+- **A question was added to the set since.** See the table above.
 - **`schema_version` is older than the question set's.** Say what changed before
   regenerating. Silently migrating a file whose purpose is auditability defeats the file.
 

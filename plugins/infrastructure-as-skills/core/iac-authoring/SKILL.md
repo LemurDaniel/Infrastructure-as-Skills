@@ -32,6 +32,15 @@ by-product: a backend renders *from* it, and the same spec can go to a different
 including `Infrastructure-by-Skill` for API-driven execution — which is what makes the two
 tracks comparable at all. Never generate code directly from the interview.
 
+## Before anything — find an existing spec
+
+Search the repository for `**/infra-spec.yaml` first. If one exists, this run **extends**
+it rather than starting over: its decisions are carried, Phase 0 asks what should be added
+or changed, and only the delta is asked and reported. If none exists, the spec this run
+writes goes into the repository's IaC root, or `infra/` when there is none, and is
+committed with the code — it is what the next run extends. The rules for both, and for
+several roots, are in [references/spec.md](references/spec.md#where-it-lives).
+
 ## Phase 0 — Ask what is being built, in the user's own words
 
 The interview opens with one open question, not with the question set. Let the user
@@ -123,11 +132,17 @@ For each question, the answer then comes from the first source that has one:
 
 | # | Source | `source` recorded as |
 |---|---|---|
-| 1 | What the user said — the request and the Phase 0 description | `stated` |
-| 2 | A pattern skill's pre-answers | `pattern` |
-| 3 | The deployment set's answer, for a `from_deployment` question | `deployment` |
-| 4 | An existing `infra-spec.yaml` in the target directory | `carried` |
+| 1 | What the user said — the request and the Phase 0 description | `stated`, or `overridden` where it changes a carried value |
+| 2 | The existing `infra-spec.yaml` | `carried` |
+| 3 | A pattern skill's pre-answers | `pattern` |
+| 4 | The deployment set's answer, for a `from_deployment` question | `deployment` |
 | 5 | The question's `default` | `default` |
+
+A carried value outranks a pattern and a default on purpose: it was decided, and quite
+possibly deployed. A re-run that let a pattern or a changed guardrail flip it would turn
+"add a key vault" into a silent change to the storage account. Only the user changes a
+carried value. Consequences are the exception — `deployment` and `forced` values are
+re-derived from what they follow, not carried.
 
 A question with `required: true` has no default and no safe guess. It is the only kind you
 must ask.
@@ -232,7 +247,8 @@ to see it to disagree with it, and the ones they never look at cost one glance.
 
 ## Phase 5 — Write the spec, draw it, then render
 
-Write `infra-spec.yaml` first, then render from it. Doing it in that order is not
+Write `infra-spec.yaml` into the user's repository first — the IaC root, or `infra/` —
+then render from it, into the same directory. Doing it in that order is not
 bookkeeping: it forces the decisions to be expressible in the backend-neutral vocabulary,
 and a decision that will not fit is usually one that absorbed a backend's spelling.
 
