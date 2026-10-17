@@ -409,13 +409,13 @@ Two cases need care:
 ## Validate
 
 ```powershell
-pwsh -NoProfile -File <plugin>/core/iac-authoring/scripts/Test-Spec.ps1 ./infra-spec.yaml
+python3 <plugin>/core/iac-authoring/scripts/check_spec.py ./infra-spec.yaml
 
 # Before applying, which also fails on assumed values and open entries:
-pwsh -NoProfile -File <plugin>/core/iac-authoring/scripts/Test-Spec.ps1 ./infra-spec.yaml -RequireApplyable
+python3 <plugin>/core/iac-authoring/scripts/check_spec.py ./infra-spec.yaml --require-applyable
 ```
 
-Needs a YAML parser — `powershell-yaml`, or python with PyYAML. Without one it exits 2
+Needs PyYAML (`pip install pyyaml`). Without it the script exits 2
 and says so rather than reporting a file it could not read as fine.
 
 Checks that every value carries a known `source`, that referenced skills exist, that enum

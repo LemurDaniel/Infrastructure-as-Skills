@@ -287,7 +287,7 @@ sentence rather than a silence:
 # not rendered with public access disabled; nothing in the plan carries the bypass
 ```
 
-`core/iac-rendering/scripts/Test-RenderCoverage.ps1 <spec>` reads the spec and the
+`core/iac-rendering/scripts/check_render_coverage.py <spec>` reads the spec and the
 `tests/` beside it and fails on a decision that is neither asserted nor marked, and on a
 marker naming a decision the spec no longer has. Run it with `terraform test`; a render
 that passes one and not the other is half done.
@@ -355,7 +355,7 @@ element-wise.
 terraform fmt -recursive
 terraform validate
 terraform test
-pwsh -NoProfile -File <plugin>/core/iac-rendering/scripts/Test-RenderCoverage.ps1 ./infra-spec.yaml
+python3 <plugin>/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
 ```
 
 `fmt` is not optional — unformatted generated code is the fastest way to make a reviewer

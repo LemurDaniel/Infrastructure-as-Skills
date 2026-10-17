@@ -10,7 +10,7 @@ infrastructure usually reads neither YAML nor HCL, and still has to say whether 
 what they meant. This skill gives them a picture of the same decisions.
 
 ```
-infra-spec.yaml  ──New-Diagram──>  infra-diagram.drawio  ──Export-Diagram──>  infra-diagram.drawio.png
+infra-spec.yaml  ──new_diagram──>  infra-diagram.drawio  ──export_diagram──>  infra-diagram.drawio.png
 ```
 
 It draws **from the spec, never from rendered code**. That is what lets the diagram come
@@ -21,13 +21,12 @@ for Terraform and Bicep, as the spec is.
 
 ## Run it
 
-```powershell
-$s = '<plugin>/core/iac-diagram/scripts'
-pwsh -NoProfile -File $s/New-Diagram.ps1    ./infra-spec.yaml -Language de
-pwsh -NoProfile -File $s/Export-Diagram.ps1 ./infra-diagram.drawio
+```sh
+python3 <plugin>/core/iac-diagram/scripts/new_diagram.py    ./infra-spec.yaml --language de
+python3 <plugin>/core/iac-diagram/scripts/export_diagram.py ./infra-diagram.drawio
 ```
 
-`-Language` is the user's language, `de` or `en`. It covers the fixed labels and the
+`--language` is the user's language, `de` or `en`. It covers the fixed labels and the
 decisions panel; Azure names, types, ranges and role names stay as Azure spells them,
 since those are what the customer will find in the portal.
 
@@ -45,9 +44,9 @@ names stacked on the same line. If the generated layout is wrong, fix the script
 
 Exit codes, both scripts: `0` written, `1` failed, `2` could not run.
 
-- `New-Diagram` exit 1 with `overlaps` or `does not fit` is a layout bug in the script, not
+- `new_diagram.py` exit 1 with `overlaps` or `does not fit` is a layout bug in the script, not
   something to patch in the output.
-- `Export-Diagram` exit 2 means draw.io desktop is not installed. Say so, deliver the
+- `export_diagram.py` exit 2 means draw.io desktop is not installed. Say so, deliver the
   `.drawio` file, and do not substitute a different renderer — a PNG without the embedded
   diagram is a picture the customer cannot correct.
 
@@ -92,16 +91,16 @@ Export a preview without the embedded diagram and look at it — the overlap che
 geometry, not taste:
 
 ```powershell
-pwsh -NoProfile -File $s/Export-Diagram.ps1 ./infra-diagram.drawio -OutFile <scratch>/preview.png -NoEmbed
+python3 <plugin>/core/iac-diagram/scripts/export_diagram.py ./infra-diagram.drawio --out <scratch>/preview.png --no-embed
 ```
 
 Then check it against the spec: every resource in `resources:` drawn exactly once, every
 `open:` entry in the panel, nothing drawn that the spec does not contain. A `[warn] no
-icon` from `New-Diagram` means a resource was drawn as a plain box — say so.
+icon` from `new_diagram.py` means a resource was drawn as a plain box — say so.
 
 ## Icons
 
-`$Icons` in [New-Diagram.ps1](scripts/New-Diagram.ps1) maps each resource key to a path in
+`ICONS` in [new_diagram.py](scripts/new_diagram.py) maps each resource key to a path in
 draw.io's built-in `azure2` library. Every resource with a question set needs a row there.
 
 Check a new path in the preview before adding it: a wrong path does not fail, it exports

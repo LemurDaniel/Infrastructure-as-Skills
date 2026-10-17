@@ -67,7 +67,7 @@ than inferring the shape from an example spec.
    a plan is marked as such with its reason. A render without its tests is not finished —
    the tests are what make "the code matches the spec" a check instead of a claim, and
    what makes the next re-render a diff instead of a review. The shape per target is in
-   the idiom file; `scripts/Test-RenderCoverage.ps1` fails on an unasserted decision.
+   the idiom file; `scripts/check_render_coverage.py` fails on an unasserted decision.
 8. **Validate before handing over.** Syntactically valid is not done — `fmt` →
    `validate` → `test` → `plan` / `what-if`, then say which diffs are service-affecting.
    The commands are at the end of each idiom file.
@@ -102,4 +102,4 @@ is spelled. A port that reads as a transliteration has usually lost one of them.
 | [references/bicep-idiom.md](references/bicep-idiom.md) | Target is Bicep |
 | [../iac-authoring/references/spec.md](../iac-authoring/references/spec.md) | Reading the spec you render from |
 | [../iac-authoring/references/guardrails.md](../iac-authoring/references/guardrails.md) | A value in the spec looks wrong and you need the rule behind it |
-| `scripts/Test-RenderCoverage.ps1` | After rendering: every spec decision asserted or marked, nothing stale |
+| `scripts/check_render_coverage.py` | After rendering: every spec decision asserted or marked, nothing stale |

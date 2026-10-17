@@ -231,7 +231,7 @@ the root no longer owns the resource, so the assert target moves:
   which is the part a module cannot test for you.
 
 The first AVM render will settle which decisions a plan can observe through `resource`;
-until then this section describes the intended contract, and `Test-RenderCoverage.ps1`
+until then this section describes the intended contract, and `check_render_coverage.py`
 accepts both an assert and a marker per decision.
 
 Bicep has no test runner in this repo yet (see `PROGRESS.md`); `bicep build` against the
