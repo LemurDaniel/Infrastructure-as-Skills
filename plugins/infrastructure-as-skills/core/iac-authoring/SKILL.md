@@ -107,6 +107,12 @@ agree on. If the split is settled per renderer, the same spec produces one Terra
 and six Bicep files, and comparing the two outputs stops meaning anything. See
 [references/spec.md](references/spec.md#modularity).
 
+The same reading settles `deployment.module_source`: a repository whose resources are
+already authored resource blocks stays `authored`; everything else is `avm` — each
+resource a call to its Azure Verified Module, which is the default and is not asked.
+Under `avm` the split above is mostly decided too: one module call per resource, the
+root holding the wiring, so `single` unless a pattern says otherwise.
+
 ## Phase 2 — Resolve the deployment set, then every resource question
 
 [`questions/deployment.yaml`](questions/deployment.yaml) is resolved **before** any

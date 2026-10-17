@@ -102,6 +102,56 @@ groups:
           (network_ownership), not this value.
         renders: variable resource_group_name / param resourceGroupName / scope
 
+  - id: modules
+    title: Modules
+    questions:
+      - id: module_source
+        ask: Should resources render as calls to Azure Verified Modules, or as authored resources?
+        type: enum
+        values: [avm, authored]
+        default: avm
+        why: >
+          Azure Verified Modules (AVM) are Microsoft's published, tested and
+          versioned modules, one per resource type, with the same shape in
+          Terraform and Bicep. They already implement what every authored
+          render here reinvents and gets wrong first - private endpoints with
+          their DNS zone groups, diagnostic settings per sub-resource, role
+          assignments, locks, customer-managed keys - so a call to one is the
+          default and authored resources are the fallback. One answer per
+          deployment: a configuration that mixes module calls and authored
+          resources for the same resource type has two conventions to review.
+          `authored` is for a repository that already renders its resources
+          this way and did not ask to migrate, or for a user who stated it.
+          A resource whose type has no `Available` module in the AVM index
+          renders authored either way, recorded per module with
+          `source: forced` - the index is checked at render time, not
+          remembered. Not asked unless the user raises it.
+        renders: >
+          composition.modules[].implementation for every module (avm | authored);
+          terraform: module "<id>" { source = "Azure/avm-res-<ns>-<type>/azurerm" }
+          vs. resource blocks; bicep: module from 'br/public:avm/res/<ns>/<type>:<version>'
+          vs. resource declarations - see core/iac-rendering/references/avm.md
+
+      - id: module_telemetry
+        ask: May the Azure Verified Modules send their deployment telemetry to Microsoft?
+        type: enum
+        values: [enabled, disabled]
+        default: enabled
+        depends_on: { question: module_source, equals: avm }
+        why: >
+          Every AVM module sends one telemetry event per deployment to Microsoft
+          unless told not to - module name, version, a deployment correlation
+          id, no resource data. The Terraform modules do it through the
+          Azure/modtm provider, the Bicep modules through an empty nested
+          deployment. Leaving the module default is a decision a reviewer will
+          ask about, so it is recorded and rendered explicitly on every module
+          call either way. `enabled` is the default because the usage count is
+          what keeps a module maintained; an organisation whose policy forbids
+          it states `disabled` once here and not per resource.
+        renders: >
+          terraform: enable_telemetry on every AVM module call; bicep:
+          enableTelemetry on every AVM module call
+
   - id: posture
     title: Posture
     questions:

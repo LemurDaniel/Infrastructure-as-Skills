@@ -245,7 +245,7 @@ existing spec, decides this before the interview starts.
 | `inputs` | Context keys and values the caller passes in. Not the full decision set — the decisions stay in `resources:` |
 | `outputs` | What other modules or the caller may consume. Nothing secret |
 | `needs` | Other module ids it consumes outputs from. The dependency is declared here, never discovered from the rendered code |
-| `implementation` | `authored` (default) or `reuse` — see below. Never a module path |
+| `implementation` | `avm` (default), `authored`, or `reuse` — see below. Never a module path |
 
 Three rules that hold in both targets:
 
@@ -260,23 +260,32 @@ Three rules that hold in both targets:
 
 ### Reusing an existing module
 
-Whether a module is authored here or is a call to a published one is a decision, so it is
-in the spec. *Which* published module, and how it is addressed, is not:
+Whether a module is a call to a published one or authored here is a decision, so it is in
+the spec. *Which* published module, and how it is addressed, is not:
 
 ```yaml
     - id: storage
       contains: [storage-account]
-      implementation: reuse      # authored | reuse
-      source: stated
+      implementation: avm        # avm | authored | reuse
+      source: deployment         # follows deployment.module_source unless overridden
 ```
 
+| Value | Meaning |
+|---|---|
+| `avm` | **Default.** A call to the resource's Azure Verified Module, in whichever target renders. Follows `deployment.module_source: avm`; not written per module unless it departs |
+| `authored` | Resources written out from the resource's own rendering reference. The fallback when no AVM module exists for the type — then `source: forced`, `forced_by: no AVM module for <type>` — or the deployment chose it |
+| `reuse` | A published module that is not AVM, named by the user. The coordinate goes into `_target_overrides` with a comment |
+
 The coordinate stays in the renderer, because it is target knowledge with target rules
-attached — the `br/modules:` alias, `bicepconfig.json` and the pin read from `version.json`
-on the Bicep side; the registry source and version constraint on the Terraform side. Those
-belong with [bicep-idiom.md](../../iac-rendering/references/bicep-idiom.md) and
-[terraform-idiom.md](../../iac-rendering/references/terraform-idiom.md), which is also where they stay correct when a
-registry moves. A spec carrying them would go stale while looking authoritative, and would
-make the same decision unreadable to the third backend.
+attached — `br/public:avm/res/...` and the exact version on the Bicep side,
+`Azure/avm-res-.../azurerm` and the version constraint on the Terraform side, and the
+module's status in the AVM index, which decides whether it is used at all. Those belong
+with [avm.md](../../iac-rendering/references/avm.md),
+[bicep-idiom.md](../../iac-rendering/references/bicep-idiom.md) and
+[terraform-idiom.md](../../iac-rendering/references/terraform-idiom.md), which is also where
+they stay correct when a module moves or a version breaks. A spec carrying them would go
+stale while looking authoritative, and would make the same decision unreadable to the
+third backend.
 
 The spec is not a lockfile either. What was actually resolved is pinned in the generated
 code, which is the artefact that gets deployed and reviewed.
@@ -285,7 +294,8 @@ Two consequences worth stating before generating:
 
 - A published module may not expose every decision the question set resolved. Name the
   ones it swallows rather than dropping them silently — that gap is the price of reuse and
-  the user should see it.
+  the user should see it. The rules per kind of gap are in
+  [avm.md](../../iac-rendering/references/avm.md#gaps-what-the-module-does-not-carry).
 - If the user named a specific module, that is a target-specific instruction and goes in
   `_target_overrides` with a comment, not into `implementation`.
 
@@ -414,5 +424,5 @@ defaulted, and that no decision key uses a backend's attribute spelling.
 
 For `composition`: module ids unique, every resource in `resources:` contained by exactly
 one module, `contains` and `needs` pointing at things that exist, `needs` acyclic, and
-`implementation` being `authored` or `reuse` rather than a module path that belongs in the
+`implementation` being `avm`, `authored` or `reuse` rather than a module path that belongs in the
 renderer.
