@@ -31,14 +31,19 @@ Commits are authored by the repository owner, not by the tool:
 LemurDaniel <landau.daniel.1998@gmail.com>
 ```
 
-Before the first commit of a session, check `git config user.name` and
-`git config user.email` in the repo. If they are missing or say anything else
-(`Claude <noreply@anthropic.com>` is what a cloud session starts with), set
-them **repo-locally** — `git config user.name "LemurDaniel"` and
-`git config user.email "landau.daniel.1998@gmail.com"`, never `--global`. A
-commit that went out under the wrong author is not amended if it is already
-pushed (section 6); say so and let the owner decide whether to rewrite the
-branch.
+This applies **only when a tool is committing** — a Claude Code cloud session,
+an agent run, anything whose git identity starts as
+`Claude <noreply@anthropic.com>` or is unset. There, before the first commit of
+the session, check `git config user.name` and `git config user.email` in the
+repo and, if they are missing or say `Claude`, set them **repo-locally**:
+`git config user.name "LemurDaniel"` and
+`git config user.email "landau.daniel.1998@gmail.com"`, never `--global`.
+
+On the owner's own machine the identity is already theirs: do not touch the
+git config there, and do not rewrite a configured identity that is not
+`Claude`. A commit that went out under the wrong author is not amended if it
+is already pushed (section 6); say so and let the owner decide whether to
+rewrite the branch.
 
 ## 2. Message format
 

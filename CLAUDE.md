@@ -137,8 +137,9 @@ fails on it.
 
 [.claude/skills/git-commit-conventions/](.claude/skills/git-commit-conventions/SKILL.md)
 carries the working rules — read it before committing. In short: commits are authored as
-**LemurDaniel \<landau.daniel.1998@gmail.com\>** (set repo-locally when the session starts
-as `Claude`); they carry **no attribution trailers** (no `Co-Authored-By`, no "Generated
+**LemurDaniel \<landau.daniel.1998@gmail.com\>** (set repo-locally only in a tool-driven
+session whose identity starts as `Claude`; never touch a configured identity on the
+owner's machine); they carry **no attribution trailers** (no `Co-Authored-By`, no "Generated
 with Claude Code"); English imperative subject; one concern per commit; default branch is
 `master`; `PROGRESS.md` is rewritten before a session's last commit.
 
