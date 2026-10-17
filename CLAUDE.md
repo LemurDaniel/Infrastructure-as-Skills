@@ -17,7 +17,7 @@ Two layers, plus a handover file:
 
 | Layer | Role |
 |---|---|
-| **Resource family skills** (`resources/<family>/`) | Resolve one resource's decisions from `questions/<resource>.yaml` |
+| **Resource families** (`resources/<family>/`) | Reference material, not skills. Each resolves one resource's decisions from `questions/<resource>.yaml`; the `azure-resources` skill routes into them |
 | **Pattern skills** (`patterns/`) | Pre-answer most of a resource's questions and own the wiring between the parts |
 | **`infra-spec.yaml`** | The interview's output. A backend renders *from* it; it is not a by-product |
 
@@ -61,7 +61,8 @@ it by full path, or let the check script find it.
 | `.../core/iac-rendering/` | The other side of the spec: how it becomes Terraform or Bicep |
 | `.../core/iac-rendering/references/naming.md` | The Terraform and Bicep naming interfaces |
 | `.../core/iac-rendering/references/{terraform,bicep}-idiom.md` | File layout, modules, variables, tagging, tests per target |
-| `.../resources/<family>/SKILL.md` | Routing table: request → question set |
+| `.../core/azure-resources/` | The single trigger for every resource: request → family. Its description is the keyword surface for all of them |
+| `.../resources/<family>/routing.md` | Routing table: request → question set. **Not** a `SKILL.md` — see below |
 | `.../resources/<family>/questions/<resource>.yaml` | **The content.** One file per resource |
 | `.../resources/<family>/references/<resource>/notes.md` | What the question set cannot express |
 | `.../resources/<family>/references/<resource>/{terraform,bicep}.md` | The rendering per target |
@@ -71,7 +72,7 @@ it by full path, or let the check script find it.
 
 Both are easy to violate by accident and both fail quietly.
 
-### Skills are grouped by family, never one per resource
+### One skill triggers every resource; families are not skills
 
 Claude Code keeps every skill's name and description in context under a **shared character
 budget** — about 1% of the model's context window — and drops descriptions when it overflows,
@@ -79,24 +80,35 @@ starting with the least-used skills. The name survives; the description does not
 description *is* the triggering mechanism. So the skill is installed, it appears in the
 listing, and nothing matches it. Nothing tells you this happened.
 
-Fifty Azure resources at one skill each would spend the whole budget and crowd out every
-other skill on the user's system. Hence: **the family is the triggering unit, the question
-set is the knowledge unit.** Nothing is lost — question sets stay exactly as specific as
-they would have been.
+A skill per resource would spend the budget at once. A skill per family was the first
+answer and it did not hold: five skills cost 1,506 of ~2,000 characters, and the three
+planned families would have put it at ~2,450 — overflowing on the plugin's own roadmap.
+Hence three units: **`azure-resources` is the triggering unit, the family the routing unit,
+the question set the knowledge unit.** Nothing is lost — question sets stay exactly as
+specific as they would have been.
 
-Per-entry cap is 1,536 characters regardless of budget. Keep descriptions around 350; the
-four here were cut from ~660 for this reason. `/context` shows the listing size after the
-budget is applied and `/doctor` names the biggest contributors — measure before adding a
-family.
+The single description can afford to be long: the per-entry cap is 1,536 characters, about
+five family descriptions' worth, so one entry carries the keyword surface for every family
+at a fifth of the cost. It is kept separate from `iac-authoring` on purpose — a keyword list
+that grows with every family would otherwise crowd out the sentences describing the
+protocol, inside the same cap. Past ~1,200 characters prune the least-typed terms; do not
+split it, because a split is the per-family layout this replaced.
+
+`/context` shows the listing size after the budget is applied and `/doctor` names the
+biggest contributors.
 
 ### The groups are declared, not discovered
 
-`core/` and `resources/` sit **beside** `skills/`, not inside it, and are declared in
-`plugin.json`:
+`core/` sits **beside** `skills/`, not inside it, and is declared in `plugin.json`:
 
 ```json
-"skills": ["./core/", "./resources/"]
+"skills": ["./core/"]
 ```
+
+`resources/` is **deliberately undeclared**. Nothing in it is a skill, so nothing in it costs
+listing budget; the azure-resources skill reads it by relative path. A family therefore has
+a `routing.md`, never a `SKILL.md` — an undeclared directory holding a `SKILL.md` loads
+nothing, and the consistency script fails on it.
 
 Two reasons, both load-breaking if ignored:
 

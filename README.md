@@ -18,7 +18,9 @@ So the knowledge in this repo is shaped as a **question set**, not as a template
 
 ## Two layers
 
-**Resource skills** — one per Azure resource type. Each carries its decisions grouped by
+**Resources** — one question set per Azure resource type, grouped into families
+(`storage`, `network`, `observability`). A single `azure-resources` skill routes any
+resource request to the right one. Each question set carries its decisions grouped by
 concern:
 
 | Group | Decides |
@@ -34,10 +36,10 @@ Most questions have an opinionated secure default and are never asked — they a
 Only the decisions that genuinely cannot be defaulted get asked. That distinction is what
 keeps the interview short enough to be used.
 
-**Pattern skills** — compose resource skills into whole systems. A pattern is not a
-shortcut around the questions; it is an **answer set** plus the wiring. `private-webapp`
+**Pattern skills** — compose resources into whole systems. A pattern is not a shortcut
+around the questions; it is an **answer set** plus the wiring. `private-webapp`
 pre-answers thirty of the storage account's questions because the pattern implies them,
-asks the four that remain, and then owns what no single resource skill can: the private
+asks the four that remain, and then owns what no single question set can: the private
 endpoints, the DNS zone links, the role assignments between the parts.
 
 ```
@@ -50,8 +52,8 @@ private-webapp
 
 ## Terraform and Bicep from one question set
 
-The questions are IaC-neutral. Only the rendering differs, so each resource skill has a
-`references/terraform.md` and a `references/bicep.md` and Claude reads the one you need.
+The questions are IaC-neutral. Only the rendering differs, so each resource has a
+`references/<resource>/terraform.md` and a `bicep.md` and Claude reads the one you need.
 This is why both targets live in one repo: duplicating the decision knowledge per target
 is how the two halves drift apart.
 
@@ -91,10 +93,11 @@ Infrastructure-by-Skill/
     │   │   ├── questions/deployment.yaml     # posture, network, mandates — asked once
     │   │   ├── references/guardrails.md      # where the defaults come from
     │   │   └── scripts/Test-Spec.ps1         # validates an infra-spec.yaml
-    │   └── iac-rendering/          # spec -> Terraform or Bicep: naming, layout, idiom
-    ├── resources/                  # one skill per resource FAMILY
+    │   ├── iac-rendering/          # spec -> Terraform or Bicep: naming, layout, idiom
+    │   └── azure-resources/        # the one trigger for every resource -> family
+    ├── resources/                  # NOT skills - undeclared, read by azure-resources
     │   ├── storage/
-    │   │   ├── SKILL.md            # routes to the right question set
+    │   │   ├── routing.md          # routes to the right question set
     │   │   ├── questions/
     │   │   │   └── storage-account.yaml      # the decisions — this is the content
     │   │   └── references/storage-account/
@@ -108,7 +111,7 @@ Infrastructure-by-Skill/
 
 Planned families: `storage`, `network`, `compute`, `data`, `security`, `observability`.
 
-### Why families and not one skill per resource
+### Why one trigger, and families that are not skills
 
 Claude Code keeps a listing of every skill's name and description in context, and that
 listing has a **shared character budget** — [1% of the model's context
@@ -121,28 +124,34 @@ That failure is silent. The skill is installed, it appears in the listing, and n
 matches it. One report with 160 skills installed kept 20 descriptions and the model found
 none of the skills that had lost theirs.
 
-Fifty Azure resources at one skill each would spend the whole budget and crowd out every
-other skill on the system. So the **family is the triggering unit and the question set is
-the knowledge unit** — one skill per family, one `questions/<resource>.yaml` per resource.
-Nothing is lost: the question sets stay exactly as specific as they would have been.
+Fifty Azure resources at one skill each would spend the whole budget at once. One skill per
+family was the first answer, and it did not survive measurement: five skills cost 1,506 of
+~2,000 characters, and the three planned families would have taken it to ~2,450. So there
+are three units now — **`azure-resources` triggers, the family routes, the question set
+holds the knowledge**. One entry carries the keyword surface for every family at a fifth of
+the cost: the 1,536-character cap fits about five family descriptions. Three skills in
+total, 954 characters, under half the budget.
 
-Measure before adding a family: `/context` shows the listing size after the budget is
-applied, and `/doctor` names the biggest contributors.
+The trigger is its own skill rather than part of `iac-authoring` so that a keyword list
+growing with every family never crowds out the description of how the protocol works —
+both would otherwise share one cap.
 
 ### Why the groups are declared, not discovered
 
 `skills/` is scanned exactly one level deep — `<name>/SKILL.md` — and does not recurse, so
-nesting inside it would load nothing. The groups are therefore declared as scan directories
+nesting inside it would load nothing. The skills therefore live in a scan directory declared
 in `plugin.json`:
 
 ```json
-"skills": ["./core/", "./resources/"]
+"skills": ["./core/"]
 ```
 
-They sit beside `skills/` rather than inside it, because the default `skills/` scan cannot
-be switched off and would otherwise treat each group folder as a skill without a
-`SKILL.md`. Add a group to the array when it gets its first skill — a declared path that
-does not exist fails to load the plugin, which is why `./patterns/` is not listed yet.
+It sits beside `skills/` rather than inside it, because the default `skills/` scan cannot be
+switched off and would otherwise treat the group folder as a skill without a `SKILL.md`.
+`resources/` is deliberately **not** declared: nothing in it is a skill, so nothing in it
+costs budget, and a family's routing table is a `routing.md` that the azure-resources skill
+reads by path. A declared path that does not exist fails to load the plugin, which is why
+`./patterns/` is not listed yet.
 
 ## Install
 
