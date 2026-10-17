@@ -157,8 +157,8 @@ reads by path. A declared path that does not exist fails to load the plugin, whi
 
 [`examples/`](examples/README.md) holds complete runs — request, spec, render, tests — as
 the reference for what a good output looks like. `private-storage-on-platform` is the
-first: one storage account on a referenced platform, in Terraform, validated and tested
-plan-only.
+first: one storage account on a referenced platform, rendered to Terraform and to Bicep
+from the one spec, with the diff between the two written down.
 
 ## Install
 
@@ -182,10 +182,9 @@ matching skill triggers.
 
 Early, and the shape matters more than the coverage right now. One interview has been run
 end to end; it produced a spec, and the spec is honest about what it could not resolve.
-One spec (`private-storage-on-platform`) has been rendered to Terraform against
-`azurerm` 5.10 and `LemurDaniel/naming` 1.0 — `fmt`, `validate` and a plan-only
-`terraform test` with a mocked platform pass. Nothing has been applied, and nothing has
-been rendered to Bicep.
+One spec (`private-storage-on-platform`) has been rendered to both targets — Terraform
+against `azurerm` 5.10 and `LemurDaniel/naming` 1.0 with plan-only tests, Bicep compiled
+and linted with CLI 0.48 — and the two renders diffed. Nothing has been applied.
 
 - [x] Plugin skeleton, marketplace manifest, grouped layout
 - [x] Shared contract: spec format, question-set format, the interview protocol
@@ -203,8 +202,10 @@ been rendered to Bicep.
 - [x] A rendered spec: storage account on a referenced platform, Terraform, validated and
       tested plan-only, committed under `examples/`. Surfaced the `azurerm` 5.x renames
       and the two-target diagnostics
-- [ ] **A rendered spec in Bicep**, and the same spec through both — the cross-backend diff
-- [ ] **An applied render.** The plan has not been run against a subscription
+- [x] The same spec rendered to Bicep, compiled and linted, and diffed against the
+      Terraform render — one real divergence found (private endpoint naming) and fixed,
+      the rest documented in `examples/README.md`
+- [ ] **An applied render.** Neither plan nor what-if has run against a subscription
 - [ ] Remaining families: `compute`, `data`, `security`
 - [ ] Remaining storage resources: blob container, file share, queue
 - [ ] Evals per pattern, plus a consistency run: same spec many times, measure the spread

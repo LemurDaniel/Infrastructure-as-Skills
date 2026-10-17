@@ -31,8 +31,10 @@ pwsh -NoProfile -File .claude/skills/git-commit-conventions/scripts/Test-RepoCon
 # open items. Needs powershell-yaml or python with PyYAML.
 pwsh -NoProfile -File plugins/infrastructure-as-skills/core/iac-authoring/scripts/Test-Spec.ps1 <spec>
 
-# A rendered example: fmt, validate, plan-only tests with a mocked platform.
+# A rendered example: fmt, validate, plan-only tests with a mocked platform - and the
+# Bicep render of the same spec compiled and linted.
 terraform -chdir=examples/private-storage-on-platform init && terraform -chdir=examples/private-storage-on-platform test
+bicep build --stdout examples/private-storage-on-platform/bicep/main.bicep > $null && bicep lint examples/private-storage-on-platform/bicep/main.bicep
 ```
 
 There is no build. The artefacts are Markdown and YAML; the scripts and the examples'

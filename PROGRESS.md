@@ -30,18 +30,25 @@ the conversation.
 - **Plan-only tests mock the platform.** A referenced vnet or workspace is a `data` block,
   which a plan reads from Azure; `mock_provider "azurerm"` with parseable ids keeps the
   test credential-free.
+- **Sub-resource names go through `<?SUBNAME>`**, not appended to a finished name. The
+  first cross-backend diff found the Terraform render naming a private endpoint
+  `…-01-blob` while Bicep said `…-blob-01`; the convention has the token for exactly this.
+- **No registry alias, no registry modules.** The Bicep render inlines diagnostics and role
+  assignments when `bicepconfig.json` has no `br/modules`; inventing the alias bakes a
+  PoC address into a consumer repository.
 
 ## Open
 
 - `Test-QuestionSet.ps1` is referenced by the authoring docs and not written.
 - `patterns/` is empty; composition is specified on paper only.
-- No spec has been rendered to Bicep, so the cross-backend diff has never run.
-- No render has been applied against a subscription.
+- No render has been applied: neither `terraform plan` nor `what-if` has run against a
+  subscription, so the renders are validated, not proven.
 - The eval suite has no committed baseline yet; the first full run writes it.
 - Remaining families: `compute`, `data`, `security`.
 
 ## Next
 
-Render `private-storage-on-platform` to Bicep from the same spec and diff it against the
-Terraform render in `examples/`. That is the measurement the spec design promises and the
-one thing nothing here has tested.
+Render `greenfield-telemetry` — three resources, created network and workspace, Bicep —
+as the second example. It exercises the `create` branches (`azurerm_subnet` resource
+instead of `data`, a workspace resource, `log_retention_days`) that the first example
+never reached, and every one of those branches in the rendering references is untested.
