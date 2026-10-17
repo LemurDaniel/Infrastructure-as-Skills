@@ -92,26 +92,29 @@ It verifies, read-only:
 - **plugin manifest paths**: every path in `plugin.json`'s `skills` array exists,
   and every group directory holding a `SKILL.md` is declared. Error — a missing
   path fails to load the plugin.
-- **question sets**: `naming.terraform` and `naming.bicep` both declared, the
-  Bicep identifier without an `Azure::` prefix, unique question ids, `required`
-  and `default` not both set, and `why`/`renders` present. Error on the naming
-  rules, warning on the rest.
+- **question sets**: `naming.terraform`, `naming.bicep` and `naming.abbreviation`
+  declared, the Bicep identifier without an `Azure::` prefix, unique question
+  ids, `required`/`default`/`from_deployment` not combined, and `why`/`renders`
+  present. Error on the naming rules, warning on the rest. A `scope: deployment`
+  set names no resource and is exempt from the naming checks.
 - **routing table coverage**: every `questions/*.yaml` reachable from its family
   `SKILL.md`, and no row pointing at a file that does not exist. Warning.
 - **no `CLAUDE.md` inside the plugin directory** — it is not loaded as context
   there and `claude plugin validate` warns about it. Error.
 - **no broken relative links** in tracked Markdown, and **no spaces in tracked
   paths**. Error.
+- **`claude plugin validate`**, on the plugin and on the marketplace. Error if
+  either fails, warning if the CLI cannot be found — an unchecked manifest is not
+  a clean one. The script looks on `PATH` first, then for the binary the VS Code
+  extension ships at
+  `~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe`,
+  which is where it actually is on this machine.
 
 The script's YAML checks are regex-based, not a real parser. They catch the
 structural mistakes that actually happen; they do not prove a question set is
 valid YAML.
 
 Beyond the script:
-
-- **Run `claude plugin validate ./plugins/infrastructure-by-skill`** after
-  touching `plugin.json` or adding a skill. It is the authoritative manifest
-  check and the script cannot replace it.
 - **Never add a skill per Azure resource.** A resource goes into an existing
   family's `questions/`. A commit that adds a skill directory needs a sentence in
   the body justifying the listing-budget cost, because the cost lands on every
@@ -128,9 +131,9 @@ Beyond the script:
 - The repo commits **directly to `master`**; no feature branches unless asked.
   `master` matches four of the owner's five repos (`terraform-random-naming` is
   the outlier on `main`).
-- **`origin/master` does not exist yet.** The first push creates it. Settle
-  deliberately whether this repo stays on `master` before that happens — it is
-  free now and a nuisance afterwards.
+- **`origin/master` exists.** The branch question is settled; do not re-raise it.
+  Check how far ahead the local branch is with `git status -sb` before assuming
+  anything is published.
 - **Commit only when asked, push only when asked.** They are separate
   instructions — "commit das" is not permission to push.
 - After committing, report the short SHA and say explicitly whether it is pushed.

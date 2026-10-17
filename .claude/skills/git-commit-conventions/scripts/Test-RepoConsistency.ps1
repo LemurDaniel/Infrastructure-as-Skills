@@ -21,18 +21,23 @@
          required/default not both set, why and renders present. A
          scope: deployment set names no resource and is exempt from the
          naming checks.
+
       6. Routing coverage: every questions/*.yaml reachable from its family
          SKILL.md, and no row pointing at a missing file.
       7. No CLAUDE.md inside the plugin directory - it is not loaded as context
          there and claude plugin validate warns about it.
       8. Broken relative links in tracked Markdown, and spaces in tracked paths.
+      9. Manifests: runs 'claude plugin validate' on the plugin and on the
+         marketplace when the CLI can be found - on PATH, or the binary the
+         VS Code extension ships. It is the only check that reads plugin.json
+         the way the loader does, which is why it is no longer left to memory.
 
     The YAML checks are regex-based, not a real parser. They catch the
     structural mistakes that happen in practice; they do not prove a question
     set is valid YAML.
 
-    This script does not replace `claude plugin validate`, which is the
-    authoritative manifest check. Run that too after touching plugin.json.
+    Check 9 runs `claude plugin validate` itself. If the CLI cannot be found it
+    warns rather than passing quietly - an unchecked manifest is not a clean one.
 
 .PARAMETER SkipLinks
     Skip the link check (it reads every tracked Markdown file).
@@ -470,13 +475,54 @@ try {
         $errors.Add("$($spaced.Count) tracked path(s) contain a space (breaks the shell and PowerShell helpers).")
     }
 
+    # --- 9. the authoritative manifest check ---------------------------------
+    # `claude plugin validate` is the only check that reads the manifest the way
+    # the loader does. The CLI is often not on PATH - the VS Code extension ships
+    # its own binary - so look there before reporting it as unchecked.
+    # StrictMode: a missing command returns nothing, and .Source on nothing throws.
+    $cli = $null
+    $cmd = @(Get-Command claude -ErrorAction SilentlyContinue)
+    if ($cmd.Count -gt 0 -and $cmd[0].PSObject.Properties['Source']) { $cli = $cmd[0].Source }
+    if (-not $cli) {
+        $extGlobs = @(
+            "$env:USERPROFILE\.vscode\extensions\anthropic.claude-code-*\resources\native-binary\claude.exe",
+            "$env:USERPROFILE\.vscode-insiders\extensions\anthropic.claude-code-*\resources\native-binary\claude.exe",
+            "$env:USERPROFILE\.cursor\extensions\anthropic.claude-code-*\resources\native-binary\claude.exe",
+            "$env:USERPROFILE\.claude\local\claude*",
+            "$env:APPDATA\npm\claude.cmd"
+        )
+        foreach ($g in $extGlobs) {
+            $hit = @(Get-Item -Path $g -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1)
+            if ($hit.Count -gt 0) { $cli = $hit[0].FullName; break }
+        }
+    }
+
+    if (-not $cli) {
+        Write-Host "[warn] manifests - 'claude' not found, so the authoritative check did not run" -ForegroundColor Yellow
+        $warnings.Add("claude plugin validate could not run - the CLI is not on PATH and no bundled binary was found. It is the only check that reads plugin.json the way the loader does.")
+    } else {
+        $out = & $cli plugin validate $pluginRoot 2>&1
+        $code = $LASTEXITCODE
+        $mOut = & $cli plugin validate $repo 2>&1
+        $mCode = $LASTEXITCODE
+
+        if ($code -eq 0 -and $mCode -eq 0) {
+            Write-Host "[ ok ] manifests - plugin and marketplace validate" -ForegroundColor Green
+            # Advice lines do not change the verdict, but they are worth seeing.
+            foreach ($line in @($out + $mOut)) {
+                if ("$line" -match '^\s*❯') { Write-Host "       $line" -ForegroundColor DarkGray }
+            }
+        } else {
+            Write-Host '[fail] manifests - claude plugin validate reported a problem' -ForegroundColor Red
+            foreach ($line in @($out + $mOut)) { Write-Host "         $line" -ForegroundColor DarkGray }
+            $errors.Add('claude plugin validate failed. A manifest the loader rejects means the plugin does not load at all.')
+        }
+    }
+
     Write-Host ('-' * 70)
 
     foreach ($w in $warnings) { Write-Host "  ! $w" -ForegroundColor Yellow }
     foreach ($e in $errors)   { Write-Host "  X $e" -ForegroundColor Red }
-
-    Write-Host "`n  Not checked here: run 'claude plugin validate ./plugins/infrastructure-by-skill'" -ForegroundColor DarkGray
-    Write-Host "  for the authoritative manifest check." -ForegroundColor DarkGray
 
     if ($errors.Count -gt 0) {
         Write-Host "`n$($errors.Count) error(s) - fix before committing.`n" -ForegroundColor Red
