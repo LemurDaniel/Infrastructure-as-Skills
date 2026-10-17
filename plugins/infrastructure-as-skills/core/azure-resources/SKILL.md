@@ -1,6 +1,6 @@
 ---
 name: azure-resources
-description: Routes a request for an Azure resource to the question set that decides it, for Terraform or Bicep. Storage (storage account, blob, ADLS Gen2, data lake, file share, queue), network (vnet, subnet, address space, private endpoint), observability (Log Analytics workspace, log retention, diagnostics). Use whenever one of these is created, changed, reviewed or ported between targets.
+description: Routes a request for an Azure resource to the question set that decides it, for Terraform or Bicep. Storage (storage account, blob, ADLS Gen2, data lake, file share, queue), network (vnet, subnet, address space, private endpoint), observability (Log Analytics workspace, log retention, diagnostics). Renders Azure Verified Modules (AVM) first, authored resources as fallback. Use whenever one of these is created, changed, reviewed or ported between targets.
 ---
 
 # Azure resources
