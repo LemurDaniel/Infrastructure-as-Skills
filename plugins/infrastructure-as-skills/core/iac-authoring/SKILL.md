@@ -248,7 +248,14 @@ to see it to disagree with it, and the ones they never look at cost one glance.
 ## Phase 5 — Write the spec, then ask twice before rendering
 
 Write `infra-spec.yaml` into the user's repository first — the IaC root, or `infra/` —
-and validate it with `Test-Spec.ps1`. Doing that before any code is not bookkeeping: it
+and validate it with `Test-Spec.ps1`.
+
+**Write `naming.yaml` beside it in the same step**, when the directory has none: a full
+copy of [naming.default.yaml](../iac-rendering/references/naming.default.yaml), with any
+departure the user stated applied to it. It belongs to the spec, not to the code — the
+names in the diagram and every later render come from it, and a run that stops after the
+spec (the user says "noch nicht") must still leave the convention in the repository.
+An existing `naming.yaml` is left untouched. Doing that before any code is not bookkeeping: it
 forces the decisions to be expressible in the backend-neutral vocabulary, and a decision
 that will not fit is usually one that absorbed a backend's spelling.
 
