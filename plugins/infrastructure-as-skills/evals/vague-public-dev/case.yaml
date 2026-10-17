@@ -11,18 +11,18 @@ graders:
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'network_exposure:[\s\S]{0,60}?value:\W{0,3}public\b'
+    pattern: 'network_exposure:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?public\b'
 
   - name: no-network
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'network_ownership:[\s\S]{0,60}?value:\W{0,3}none\b'
+    pattern: 'network_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?none\b'
 
   - name: environment-development
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'environment:\W{0,3}(value:\W{0,3})?development\b'
+    pattern: 'environment:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?development\b'
 
   # The four things nobody said. Each must be an open item, not a value.
   - name: open-subscription

@@ -12,19 +12,19 @@ graders:
   - name: target-terraform
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'target:\W{0,3}terraform\b'
+    pattern: 'target:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?terraform\b'
 
   - name: exposure-private
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'network_exposure:[\s\S]{0,60}?value:\W{0,3}private\b'
+    pattern: 'network_exposure:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?private\b'
 
   - name: network-referenced
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'network_ownership:[\s\S]{0,60}?value:\W{0,3}reference\b'
+    pattern: 'network_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?reference\b'
 
   - name: names-the-hub-vnet
     type: regex
@@ -45,7 +45,7 @@ graders:
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'public_network_access:[\s\S]{0,60}?value:\W{0,3}disabled\b'
+    pattern: 'public_network_access:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?disabled\b'
 
   # The two referenced things must not reappear as resources this run creates.
   - name: does-not-create-the-vnet
@@ -69,6 +69,17 @@ graders:
     target: { source: file, path: infra/infra-spec.yaml }
     pattern: '\b10\.\d+\.\d+\.\d+/\d+'
     match: not_contains
+
+  # "nur aus dem Firmennetz" over an existing hub is the corp archetype.
+  - name: corp-landing-zone
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'landing_zone:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?corp\b'
+
+  - name: dns-records-by-policy
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'private_dns_records:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?policy\b'
 
   - name: naming-convention-written
     type: file_exists

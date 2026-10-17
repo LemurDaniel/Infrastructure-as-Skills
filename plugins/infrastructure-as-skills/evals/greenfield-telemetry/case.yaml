@@ -10,29 +10,29 @@ graders:
   - name: target-bicep
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'target:\W{0,3}bicep\b'
+    pattern: 'target:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?bicep\b'
 
   - name: environment-staging
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'environment:\W{0,3}(value:\W{0,3})?staging\b'
+    pattern: 'environment:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?staging\b'
 
   - name: location-gwc
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'location:\W{0,3}(value:\W{0,3})?germanywestcentral\b'
+    pattern: 'location:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?germanywestcentral\b'
 
   - name: network-created
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'network_ownership:[\s\S]{0,60}?value:\W{0,3}create\b'
+    pattern: 'network_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?create\b'
 
   - name: workspace-created
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'observability_ownership:[\s\S]{0,60}?value:\W{0,3}create\b'
+    pattern: 'observability_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?create\b'
 
   # The stated ranges are carried exactly - not rounded, not re-planned.
   - name: address-space-as-stated
@@ -49,7 +49,7 @@ graders:
   - name: app-subnet-as-stated
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'snet-app[\s\S]{0,80}10\.20\.2\.0/24|10\.20\.2\.0/24[\s\S]{0,80}snet-app'
+    pattern: 'snet-app[\s\S]{0,300}10\.20\.2\.0/24|10\.20\.2\.0/24[\s\S]{0,300}snet-app'
 
   - name: all-three-resources
     type: regex
@@ -63,26 +63,30 @@ graders:
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'retention_days:[\s\S]{0,60}?value:\W{0,3}90\b'
+    pattern: 'retention_days:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?90\b'
 
   - name: storage-public-access-disabled
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'public_network_access:[\s\S]{0,60}?value:\W{0,3}disabled\b'
+    pattern: 'public_network_access:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?disabled\b'
 
   # A created network is a spoke: "nothing exists yet" is the workload, not the
-  # platform. DNS zones stay in the hub, and where that is was not stated.
+  # platform. DNS zones stay in the hub; the platform's policy writes the records.
   - name: dns-stays-with-platform
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'private_dns_ownership:[\s\S]{0,60}?value:\W{0,3}platform\b'
+    pattern: 'private_dns_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?platform\b'
 
-  - name: open-dns-zone-scope
+  - name: dns-records-by-policy
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: '^open:[\s\S]*(private_dns_zone_scope|private_dns_zones)'
-    flags: m
+    pattern: 'private_dns_records:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?policy\b'
+
+  - name: corp-landing-zone
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'landing_zone:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?corp\b'
 
   - name: naming-convention-written
     type: file_exists

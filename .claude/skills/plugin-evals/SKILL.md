@@ -59,16 +59,22 @@ Each of these cost a run to discover.
 ## 3. Writing graders
 
 **Regex over the spec file first.** It reads the whole file identically every run, costs
-nothing, and a failure names the decision. The spec writes a decision either as a block or
-inline (`{ value: x, source: y }`), so match both with a bounded gap:
+nothing, and a failure names the decision. The same decision comes out in several shapes —
+inline (`key: { value: x }`), as a block (`key:` then `value: x` indented on the next
+line), a bare value, and with comment lines between key and value. Agents add those
+comments freely. Use this shape for every "key has value" check:
 
 ```yaml
 - name: exposure-private
   type: regex
   weight: 2
   target: { source: file, path: infra/infra-spec.yaml }
-  pattern: 'network_exposure:[\s\S]{0,60}?value:\W{0,3}private\b'
+  pattern: 'network_exposure:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?private\b'
 ```
+
+Never a fixed-width gap like `\W{0,3}` or `[\s\S]{0,60}`: the first three-run measurement
+reported four graders as UNSTABLE, and all four were a correct spec in block form or with
+a comment — grader failures that read like plugin failures.
 
 - A resource the run must **not** create: `'^\s{2}virtual-network:'` with `flags: m` and
   `match: not_contains` — two spaces is a key directly under `resources:`.
