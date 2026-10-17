@@ -153,6 +153,13 @@ costs budget, and a family's routing table is a `routing.md` that the azure-reso
 reads by path. A declared path that does not exist fails to load the plugin, which is why
 `./patterns/` is not listed yet.
 
+## Examples
+
+[`examples/`](examples/README.md) holds complete runs — request, spec, render, tests — as
+the reference for what a good output looks like. `private-storage-on-platform` is the
+first: one storage account on a referenced platform, in Terraform, validated and tested
+plan-only.
+
 ## Install
 
 On Claude Code 2.1.275 or later, one step:
@@ -194,7 +201,8 @@ been rendered to Bicep.
 - [ ] **Reference pattern skill** — `patterns/` is empty, so composition is specified but
       unproven
 - [x] A rendered spec: storage account on a referenced platform, Terraform, validated and
-      tested plan-only. Surfaced the `azurerm` 5.x renames and the two-target diagnostics
+      tested plan-only, committed under `examples/`. Surfaced the `azurerm` 5.x renames
+      and the two-target diagnostics
 - [ ] **A rendered spec in Bicep**, and the same spec through both — the cross-backend diff
 - [ ] **An applied render.** The plan has not been run against a subscription
 - [ ] Remaining families: `compute`, `data`, `security`
