@@ -233,7 +233,7 @@ if (Test-Key $spec 'composition') {
         $errors.Add("composition.granularity '$gran' is not single, per-concern or per-resource")
     }
 
-    $modules = @(Get-Val $comp 'modules')
+    $modules = @(@(Get-Val $comp 'modules') | Where-Object { $_ })
     $ids = @($modules | ForEach-Object { Get-Val $_ 'id' })
     $dupes = @($ids | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
     if ($dupes.Count -gt 0) { $errors.Add("composition: duplicate module id(s): $($dupes -join ', ')") }
@@ -265,8 +265,8 @@ if (Test-Key $spec 'composition') {
     }
     foreach ($id in $ids) { if ($id) { Test-Cycle -node $id -stack @() } }
 
-    # every resource in exactly one module
-    if (Test-Key $spec 'resources') {
+    # every resource in exactly one module - moot for `single`, which is "one root, no modules" by contract
+    if ($gran -ne 'single' -and (Test-Key $spec 'resources')) {
         $contained = @($modules | ForEach-Object { @(Get-Val $_ 'contains') } | Where-Object { $_ })
         foreach ($r in (Get-Keys (Get-Val $spec 'resources'))) {
             $hits = @($contained | Where-Object { $_ -eq $r }).Count
