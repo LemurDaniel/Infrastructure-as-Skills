@@ -146,6 +146,14 @@ does not exist fails to load the plugin, which is why `./patterns/` is not liste
 
 ## Install
 
+On Claude Code 2.1.275 or later, one step:
+
+```
+/plugin install infrastructure-by-skill --marketplace LemurDaniel/Infrastructure-by-Skill
+```
+
+Before that, the marketplace is added first:
+
 ```
 /plugin marketplace add LemurDaniel/Infrastructure-by-Skill
 /plugin install infrastructure-by-skill
