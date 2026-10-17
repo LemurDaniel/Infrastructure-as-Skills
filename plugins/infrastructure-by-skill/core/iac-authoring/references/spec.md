@@ -44,10 +44,62 @@ context:
   subscription_id: 00000000-0000-0000-0000-000000000000
   resource_group_name: rg-we-prod-payments-01
 
+  # The tag set this repository uses, taken from it rather than prescribed here.
+  tags:
+    cost_center: CC-4711
+    owner_team: payments
+
+# The deployment set's answers. Resolved once; every resource inherits them.
+deployment:
+  network_exposure:
+    value: private
+    source: asked
+  local_auth:
+    value: disabled
+    source: default
+  network_ownership:
+    value: create
+    source: asked
+  address_space:
+    value: 10.42.0.0/16
+    source: asked
+  private_endpoint_subnet:
+    value: snet-data-prod-01
+    source: asked
+  private_dns_ownership:
+    value: platform
+    source: default
+  mandates:
+    value: [BSI C5]
+    source: stated
+  key_protection:
+    value: hsm
+    source: stated
+    forces:                      # what this answer determined elsewhere
+      - key-vault.sku: premium
+
 # Present only when a pattern drove the run.
 pattern:
   id: private-webapp
   resources: [app-service, storage-account, key-vault]
+
+# How the rendered code is split. Both targets have a module concept, so the split
+# is decided once here rather than twice in two renderers.
+composition:
+  granularity: per-concern     # single | per-concern | per-resource
+  source: default
+
+  modules:
+    - id: storage
+      contains: [storage-account]
+      inputs: [environment, location, workload, resource_group_name]
+      outputs: [id, name, principal_id]
+
+    - id: storage-network
+      contains: [private-endpoint, private-dns-record]
+      needs: [storage]         # consumes storage.id
+      inputs: [subnet_id, dns_zone_id]
+      outputs: [private_endpoint_ip]
 
 resources:
   storage-account:
@@ -93,6 +145,9 @@ config file whose provenance has to be guessed.
 | `stated` | The user said it in their request, before being asked |
 | `asked` | The user answered it in the interview |
 | `pattern` | A pattern skill pre-answered it |
+| `deployment` | Inherited from the deployment set, via the question's `from_deployment` |
+| `forced` | Determined by another answer, with `forced_by` naming it |
+| `assumed` | The run chose a value to keep going. Valid for `plan`, never for `apply` |
 | `default` | The question set's opinionated default applied |
 | `carried` | Taken unchanged from a previous spec |
 | `overridden` | The user contradicted a pattern pre-answer or a previous value |
@@ -100,6 +155,39 @@ config file whose provenance has to be guessed.
 `overridden` carries a comment on the same key saying what it departed from. It is the one
 source that marks a deliberate exception, and an undocumented exception reads as an
 accident a year later.
+
+`assumed` and the `open:` block are the two ways a spec stays honest about what it does not
+know. An `assumed` value lets a run finish and be reviewed — the alternative is no artefact
+at all — but it is a placeholder with a value-shaped hole in it, so the rule is hard:
+**a spec containing `assumed` renders and plans, and does not apply.** `open:` is the
+list of prerequisites nothing could resolve, each with who has to answer it:
+
+```yaml
+open:
+  - key: context.resource_group_name
+    question: Which resource group does this deploy into?
+    blocks: apply
+  - key: deployment.address_space
+    question: Which address range is assigned to this workload?
+    owner: network / IPAM owner
+    blocks: apply
+```
+
+Neither is a defect in the spec. A run that invents a resource group to avoid an empty
+field is the defect, and it is invisible until someone deploys it.
+
+`forced` carries `forced_by`, and that chain is the point: a Premium Key Vault is a
+recurring cost, and "because the mandate requires HSM keys" is the difference between a
+reviewer accepting it and reopening the decision from scratch.
+
+```yaml
+  key-vault:
+    security:
+      sku:
+        value: premium
+        source: forced
+        forced_by: deployment.key_protection   # hsm, from mandate BSI C5
+```
 
 ## Backend-neutral on purpose
 
@@ -126,6 +214,94 @@ resources:
 Anything under `_target_overrides` needs a comment saying why, and a spec that accumulates
 them is telling you the question set is missing a question.
 
+## Modularity
+
+`composition` is what keeps the two backends structurally comparable. Without it, each
+renderer invents its own split and the same spec produces one root module in Terraform and
+six Bicep files — at which point diffing the two outputs measures the renderers rather than
+the decisions.
+
+It is a decision like any other, so it carries a `source`. Usually `default`; `carried`
+when an existing spec already fixed the layout; `stated` when the user asked for a
+particular split.
+
+### `granularity`
+
+| Value | Meaning | When |
+|---|---|---|
+| `single` | One root, no modules | A single resource, a throwaway, or a repository that has no `modules/` |
+| `per-concern` | A module per concern — the resource, its networking, its observability | Default. Mirrors the one-concern-per-file rule a level up |
+| `per-resource` | A module per resource | A pattern with many resources whose parts are reused separately |
+
+Do not ask for it when the repository answers it. An existing `modules/` directory, or an
+existing spec, decides this before the interview starts.
+
+### A module entry
+
+| Field | Meaning |
+|---|---|
+| `id` | Stable, backend-neutral. Becomes a directory in Terraform and a file in Bicep |
+| `contains` | Resource keys from `resources:`, or wiring parts a pattern owns. Every resource belongs to exactly one module |
+| `inputs` | Context keys and values the caller passes in. Not the full decision set — the decisions stay in `resources:` |
+| `outputs` | What other modules or the caller may consume. Nothing secret |
+| `needs` | Other module ids it consumes outputs from. The dependency is declared here, never discovered from the rendered code |
+| `implementation` | `authored` (default) or `reuse` — see below. Never a module path |
+
+Three rules that hold in both targets:
+
+- **A module never reaches into another module's resources.** It consumes a declared
+  output or it does not consume it. This is enforceable in Terraform and in Bicep, and it
+  is what makes `needs` the whole truth about ordering.
+- **Wiring lives in the root, not in a module.** Role assignments and DNS records between
+  two modules belong to whoever can see both — the same rule that makes `wiring:` a
+  top-level block.
+- **`needs` is acyclic.** Two modules that need each other are one module, or there is a
+  wiring entry pretending to be a module.
+
+### Reusing an existing module
+
+Whether a module is authored here or is a call to a published one is a decision, so it is
+in the spec. *Which* published module, and how it is addressed, is not:
+
+```yaml
+    - id: storage
+      contains: [storage-account]
+      implementation: reuse      # authored | reuse
+      source: stated
+```
+
+The coordinate stays in the renderer, because it is target knowledge with target rules
+attached — the `br/modules:` alias, `bicepconfig.json` and the pin read from `version.json`
+on the Bicep side; the registry source and version constraint on the Terraform side. Those
+belong with [bicep-idiom.md](../../iac-rendering/references/bicep-idiom.md) and
+[terraform-idiom.md](../../iac-rendering/references/terraform-idiom.md), which is also where they stay correct when a
+registry moves. A spec carrying them would go stale while looking authoritative, and would
+make the same decision unreadable to the third backend.
+
+The spec is not a lockfile either. What was actually resolved is pinned in the generated
+code, which is the artefact that gets deployed and reviewed.
+
+Two consequences worth stating before generating:
+
+- A published module may not expose every decision the question set resolved. Name the
+  ones it swallows rather than dropping them silently — that gap is the price of reuse and
+  the user should see it.
+- If the user named a specific module, that is a target-specific instruction and goes in
+  `_target_overrides` with a comment, not into `implementation`.
+
+### Rendering it
+
+The spec says *what* the modules are; each target's idiom says what they look like on disk:
+
+| | Terraform | Bicep |
+|---|---|---|
+| A module is | A directory, `modules/<id>/` | A file, `modules/<id>.bicep` |
+| Called from | `module "<id>"` in the root | `module <id> 'modules/<id>.bicep'` |
+| `needs` renders as | Passing `module.<other>.<output>` | Passing `<other>.outputs.<name>` |
+
+Details, including the asymmetries that do not survive a naive port, are in
+[terraform-idiom.md](../../iac-rendering/references/terraform-idiom.md) and [bicep-idiom.md](../../iac-rendering/references/bicep-idiom.md).
+
 ## Reading one back
 
 When a spec already exists in the target directory, load it before interviewing. Its values
@@ -141,9 +317,20 @@ Two cases need care:
 ## Validate
 
 ```powershell
-pwsh -NoProfile -File scripts/Test-Spec.ps1 <path-to-infra-spec.yaml>
+pwsh -NoProfile -File <plugin>/core/iac-authoring/scripts/Test-Spec.ps1 ./infra-spec.yaml
+
+# Before applying, which also fails on assumed values and open entries:
+pwsh -NoProfile -File <plugin>/core/iac-authoring/scripts/Test-Spec.ps1 ./infra-spec.yaml -RequireApplyable
 ```
+
+Needs a YAML parser — `powershell-yaml`, or python with PyYAML. Without one it exits 2
+and says so rather than reporting a file it could not read as fine.
 
 Checks that every value carries a known `source`, that referenced skills exist, that enum
 values are within the question set's `values`, that no `required` question is missing or
 defaulted, and that no decision key uses a backend's attribute spelling.
+
+For `composition`: module ids unique, every resource in `resources:` contained by exactly
+one module, `contains` and `needs` pointing at things that exist, `needs` acyclic, and
+`implementation` being `authored` or `reuse` rather than a module path that belongs in the
+renderer.
