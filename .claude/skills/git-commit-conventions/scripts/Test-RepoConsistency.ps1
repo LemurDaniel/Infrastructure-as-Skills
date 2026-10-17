@@ -132,8 +132,11 @@ try {
         )
         # Placeholders the skills legitimately contain. Applied to the matched
         # span, not the whole line, so a real secret beside the word "example"
-        # is still caught.
-        $placeholder = '(?i)(\{\{?\s*\w+\s*\}?\}|<[^>\r\n]{1,40}>|\$\{?\w+\}?|xxx+|\*\*\*+|REDACTED|PLACEHOLDER|CHANGEME|0{8}-0{4})'
+        # is still caught. A GUID whose every segment is one repeated character
+        # (00000000-0000-..., 11111111-2222-..., aaaaaaaa-bbbb-...) is the shape
+        # the eval prompts and the examples use; no real subscription looks
+        # like that.
+        $placeholder = '(?i)(\{\{?\s*\w+\s*\}?\}|<[^>\r\n]{1,40}>|\$\{?\w+\}?|xxx+|\*\*\*+|REDACTED|PLACEHOLDER|CHANGEME|\b([0-9a-f])\2{7}-([0-9a-f])\3{3}-([0-9a-f])\4{3}-([0-9a-f])\5{3}-([0-9a-f])\6{11}\b)'
 
         $textExt = @('.md', '.json', '.yml', '.yaml', '.ps1', '.sh', '.py', '.txt', '.env', '.ini', '.cfg', '.toml', '.tf', '.bicep')
         $candidates = @($tracked | Where-Object { $textExt -contains [System.IO.Path]::GetExtension($_).ToLowerInvariant() })
