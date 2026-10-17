@@ -1,0 +1,167 @@
+schema_version: 1
+
+resource: Microsoft.OperationalInsights/workspaces
+title: Azure Log Analytics Workspace
+
+naming:
+  terraform: "Azure::Microsoft.OperationalInsights/workspaces"
+  bicep: "Microsoft.OperationalInsights/workspaces"
+  abbreviation: "law"
+
+boundaries:
+  - "Does not create the resource group. Expects one from the spec's context."
+  - "Does not create the diagnostic settings on other resources. Each resource renders its own, pointing here."
+  - "Does not create alerts, action groups or workbooks."
+  - "Reached only when deployment.observability_ownership is `create`. Otherwise a workspace is referenced, not generated."
+
+groups:
+
+  # ---------------------------------------------------------------- placement
+  - id: placement
+    title: Placement
+    questions:
+      - id: environment
+        ask: Which environment is this for?
+        type: enum
+        values: [development, test, acceptance, production]
+        required: true
+        from_context: true
+        why: >
+          Drives the rendered name and the retention and access defaults below.
+        renders: naming parameter `environment`
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        required: true
+        from_context: true
+        why: >
+          Logs are stored in the workspace's region, which is a data-residency
+          statement as much as a latency one. Cross-region ingestion works and
+          carries egress cost.
+        renders: location
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        ref: resource_group
+        required: true
+        from_context: true
+        why: >
+          A workspace normally outlives the workloads reporting into it, which
+          argues for a platform resource group rather than the application's — and
+          for the deletion lock that usually comes with one.
+        renders: resource_group_name / scope
+
+  # ------------------------------------------------------------------- cost
+  - id: cost
+    title: Retention and cost
+    questions:
+      - id: retention_days
+        ask: How long should logs be retained?
+        type: int
+        from_deployment: log_retention_days
+        why: >
+          Inherited from the deployment set. 30 days covers incident investigation,
+          which is what most logs are for; longer is an audit or regulatory
+          requirement rather than an operational one. The first 31 days are
+          included in the ingestion price, so 30 is also where the retention line
+          item starts.
+        renders: retention_in_days / properties.retentionInDays
+
+      - id: daily_quota_gb
+        ask: Should ingestion be capped per day?
+        type: int
+        from_deployment: daily_quota_gb
+        confirm_in: [production]
+        why: >
+          Inherited, next to retention: both are the cost screws on this
+          workspace, and a deployment that owns its logging owns the bill. Asked a
+          level apart, one gets answered and the other forgotten. -1 means no cap;
+          a cap drops logs for the rest of the day once hit.
+        renders: daily_quota_gb / properties.workspaceCapping.dailyQuotaGb
+
+      - id: sku
+        ask: Which pricing tier?
+        type: enum
+        values: [PerGB2018, CapacityReservation]
+        default: PerGB2018
+        why: >
+          PerGB2018 is pay-as-you-go and correct until the volume is predictable. A
+          capacity reservation is cheaper per gigabyte above roughly 100 GB/day and
+          is a commitment — it bills the reserved tier whether the data arrives or
+          not, so it follows measurement rather than estimation.
+        renders: sku / properties.sku.name
+
+  # ----------------------------------------------------------------- access
+  - id: access
+    title: Access
+    questions:
+      - id: public_network_access
+        ask: Should the workspace be reachable from the internet?
+        type: enum
+        values: [disabled, enabled]
+        from_deployment: network_exposure
+        confirm_in: [production]
+        why: >
+          Inherited from the deployment posture, with one consequence worth saying
+          out loud: `disabled` needs an Azure Monitor Private Link Scope (AMPLS),
+          not just a private endpoint, and an AMPLS is tenant-wide infrastructure
+          with real blast radius — it changes resolution for every agent in the
+          networks linked to it. Query and ingestion are two separate switches,
+          which is why a half-configured workspace accepts logs nobody can read.
+        renders: >
+          internet_ingestion_enabled and internet_query_enabled /
+          properties.publicNetworkAccessForIngestion and ...ForQuery
+
+      - id: local_auth
+        ask: Should workspace keys be usable for ingestion?
+        type: bool
+        from_deployment: local_auth
+        why: >
+          The shared key is a bearer credential with ingestion rights and no
+          expiry. Disabling it forces Entra ID, which the modern agents use
+          anyway; the blocker is usually a legacy collector still posting with the
+          workspace key.
+        renders: local_authentication_disabled / properties.features.disableLocalAuth
+
+      - id: rbac_only_access
+        ask: Should data access be governed only by Azure RBAC?
+        type: bool
+        default: true
+        why: >
+          With this on, workspace permissions decide who reads which data instead
+          of permissions inherited from the resources that emitted it. Off, a
+          reader on a resource can query its logs here — convenient, and the
+          reason people find data in a workspace they were never granted.
+        renders: >
+          local_authentication_disabled is separate; this is
+          properties.features.enableLogAccessUsingOnlyResourcePermissions (inverted)
+
+  # ------------------------------------------------------------- data export
+  - id: data_protection
+    title: Data protection
+    questions:
+      - id: immediate_purge_protection
+        ask: Should the workspace keep its 14-day soft delete?
+        type: bool
+        default: true
+        why: >
+          A deleted workspace is recoverable for 14 days and its name stays
+          reserved for that period. Keeping it is right; the cost is that a
+          destroy-then-recreate cycle with the same name inside the window either
+          fails or silently recovers the old workspace with its old data.
+        renders: >
+          terraform: the provider's permanently_delete_on_destroy (inverted);
+          bicep: the forceDelete query parameter on deletion, not a template property
+
+      - id: archive_to_storage
+        ask: Should logs also be archived to a storage account?
+        type: bool
+        default: false
+        why: >
+          Long retention in a workspace is expensive per gigabyte-month; archival
+          storage is an order of magnitude cheaper and is not queryable with KQL.
+          Archive for an audit requirement that demands years of data nobody reads
+          daily — and then alongside the workspace, never instead of it.
+        renders: a diagnostic setting with a storage account destination
