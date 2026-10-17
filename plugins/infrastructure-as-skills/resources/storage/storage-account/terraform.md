@@ -6,7 +6,7 @@ conventions are in
 
 Verify argument names against the installed provider rather than this file where they
 disagree — `azurerm` renames arguments across major versions, and the examples below are
-written for 4.x:
+written for 5.x (verified against 5.10):
 
 ```bash
 terraform providers schema -json \
@@ -17,9 +17,9 @@ terraform providers schema -json \
 
 | Decision | Argument |
 |---|---|
-| `public_network_access: disabled` | `public_network_access_enabled = false` |
-| `public_network_access: enabled_with_firewall` | `public_network_access_enabled = true` + `network_rules.default_action = "Deny"` |
-| `public_network_access: enabled` | `public_network_access_enabled = true` + `network_rules.default_action = "Allow"` |
+| `public_network_access: disabled` | `public_network_access = "Disabled"` |
+| `public_network_access: enabled_with_firewall` | `public_network_access = "Enabled"` + `network_rules.default_action = "Deny"` |
+| `public_network_access: enabled` | `public_network_access = "Enabled"` + `network_rules.default_action = "Allow"` |
 | `shared_access_key_enabled` | `shared_access_key_enabled` |
 | `https_traffic_only` | `https_traffic_only_enabled` (was `enable_https_traffic_only` before 4.0) |
 | `allow_blob_public_access` | `allow_nested_items_to_be_public` |
@@ -34,6 +34,14 @@ terraform providers schema -json \
 
 `account_tier` is not a question — it follows from `replication` and `access_tier`. Standard
 unless the answers call for premium block blob.
+
+`public_network_access` is a string in 5.x. The 4.x bool `public_network_access_enabled`
+still exists and is **deprecated** — the schema marks it, `validate` does not warn. A
+repository already on 4.x keeps the bool; do not mix the two on one account.
+
+With `shared_access_key_enabled = false` the **provider** also needs
+`storage_use_azuread = true` in its `provider "azurerm"` block, or its own data-plane
+reads (blob properties, containers) fail with a 403 after a successful create.
 
 ## The account
 
@@ -57,11 +65,12 @@ resource "azurerm_storage_account" "this" {
   https_traffic_only_enabled      = true
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
-  public_network_access_enabled   = false
+  public_network_access           = "Disabled"
 
   # Access is via Entra ID and RBAC. A key would bypass both and is not
   # attributable in the audit log.
   shared_access_key_enabled = false
+  sftp_enabled              = false
 
   # Settable only at creation — changing it later replaces the account.
   infrastructure_encryption_enabled = true
@@ -71,7 +80,8 @@ resource "azurerm_storage_account" "this" {
   }
 
   blob_properties {
-    versioning_enabled = true
+    versioning_enabled  = true
+    change_feed_enabled = false
 
     delete_retention_policy {
       days = 7
@@ -149,12 +159,25 @@ resource "azurerm_private_endpoint" "storage" {
     }
   }
 
+  # Under `policy`: the zone group the policy attaches would otherwise show up
+  # as a change Terraform wants to remove on every plan.
+  lifecycle {
+    ignore_changes = [private_dns_zone_group]
+  }
+
   tags = local.tags
 }
 ```
 
-Under `policy`, also add `lifecycle { ignore_changes = [private_dns_zone_group] }`: the zone
-group the policy attaches would otherwise show up as a change Terraform wants to remove.
+When the spec fixes `private_dns_records` (it always does — it is a deployment decision,
+not a variable), render only the branch that applies: under `policy` no `dynamic` block and
+no `private_dns_zone_ids` variable, just the `lifecycle` block with its comment. A
+variable the caller can never meaningfully set is a question the interview already
+answered.
+
+`subnet_id` comes from `data.azurerm_subnet.private_endpoints.id` when the network is
+referenced (`network_ownership: reference`), and from the deployment's own
+`azurerm_subnet` resource when it is created — never from a hardcoded id.
 
 `subresource_names` takes exactly one entry per endpoint. Passing several is accepted at
 plan time and fails at apply.
@@ -198,11 +221,28 @@ in place before the account exists.
 
 ## Diagnostics
 
+Two settings, because the account and its blob service are two diagnostic targets. The
+account itself emits **no log categories** — a setting on the account with an
+`enabled_log` block is rejected at apply. `diagnostic_categories` therefore renders on the
+blob service; the account gets metrics only:
+
 ```hcl
 resource "azurerm_monitor_diagnostic_setting" "storage" {
   name                       = "diag"
   target_resource_id         = azurerm_storage_account.this.id
-  log_analytics_workspace_id = var.diagnostic_workspace_id
+  log_analytics_workspace_id = data.azurerm_log_analytics_workspace.platform.id
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
+}
+
+# Blob data-plane logs attach to <account>/blobServices/default. A setting on
+# the account alone collects no StorageRead/Write/Delete while looking configured.
+resource "azurerm_monitor_diagnostic_setting" "storage_blob" {
+  name                       = "diag"
+  target_resource_id         = "${azurerm_storage_account.this.id}/blobServices/default"
+  log_analytics_workspace_id = data.azurerm_log_analytics_workspace.platform.id
 
   dynamic "enabled_log" {
     for_each = toset(var.diagnostic_categories)
@@ -217,27 +257,26 @@ resource "azurerm_monitor_diagnostic_setting" "storage" {
 }
 ```
 
-Blob data-plane logs attach to the blob service, not the account — the target id needs
-`/blobServices/default` appended. A diagnostic setting on the account alone collects no
-`StorageRead` or `StorageWrite` events, which is a silent gap that looks configured.
+One more pair per sub-resource that has an endpoint and is used (`fileServices`,
+`queueServices`, `tableServices`) — a service nobody writes to needs no log.
+
+The workspace id is read from the referenced workspace's data source
+(`observability_ownership: reference`) or from the deployment's own
+`azurerm_log_analytics_workspace` resource — not passed in as a bare id variable, which
+would pin a subscription into the configuration.
 
 ## Tests
 
-Assert the decisions, not the attributes:
+Assert the decisions, not the attributes. The platform data sources are mocked so the
+plan needs no credentials — how, and why the mocked ids must parse, is in
+[terraform-idiom.md](../../../core/iac-rendering/references/terraform-idiom.md#tests):
 
 ```hcl
 run "account_is_private_and_keyless" {
   command = plan
 
-  variables {
-    environment           = "production"
-    location              = "westeurope"
-    resource_group_name   = "rg-test"
-    diagnostic_workspace_id = "/subscriptions/0/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law"
-  }
-
   assert {
-    condition     = azurerm_storage_account.this.public_network_access_enabled == false
+    condition     = azurerm_storage_account.this.public_network_access == "Disabled"
     error_message = "The account must not be reachable from the public internet."
   }
 
@@ -251,4 +290,25 @@ run "account_is_private_and_keyless" {
     error_message = "Anonymous container access must not be possible at the account level."
   }
 }
+
+run "name_follows_the_convention" {
+  command = plan
+
+  assert {
+    condition     = azurerm_storage_account.this.name == "stweprodinvoicing01"
+    error_message = "The name must come from naming.yaml, not from a literal."
+  }
+}
+
+run "no_dns_zone_group_under_policy" {
+  command = plan
+
+  assert {
+    condition     = length(azurerm_private_endpoint.storage["blob"].private_dns_zone_group) == 0
+    error_message = "private_dns_records: policy - the platform writes the record, not this code."
+  }
+}
 ```
+
+The naming provider is **not** mocked, so the second run asserts the name exactly as it
+will be deployed — which is also the test that catches an edited `naming.yaml`.
