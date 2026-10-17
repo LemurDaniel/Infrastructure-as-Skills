@@ -4,6 +4,93 @@ Mapping from the question set to `azurerm_log_analytics_workspace`. General layo
 variables and tagging are in
 [../../../core/iac-rendering/references/terraform-idiom.md](../../../core/iac-rendering/references/terraform-idiom.md).
 
+## With the AVM module
+
+`Azure/avm-res-operationalinsights-workspace/azurerm` — the primary rendering for
+`observability_ownership: create`. Documented against **v0.5.1** (resolved 2026-10-17);
+resolve the current version and re-read its README inputs before rendering, as
+[avm.md](../../../core/iac-rendering/references/avm.md) says.
+
+**This module is still `azurerm`-based and pins `azurerm >= 4.36, < 5.0`.** A root that
+calls it cannot be on `azurerm ~> 5.0`; the module's constraint wins, and anything
+authored in the same root follows the 4.x spelling. It also requires `azapi ~> 2.12`,
+`modtm` and `random`, and takes `resource_group_name`, not `parent_id`.
+
+A referenced workspace (`observability_ownership: reference`) stays a `data` block as
+below.
+
+### Decision → module input
+
+| Decision | Input | Note |
+|---|---|---|
+| `retention_days` | `log_analytics_workspace_retention_in_days` | Module default `null` → the API's 30; written anyway |
+| `daily_quota_gb` | `log_analytics_workspace_daily_quota_gb` | `-1` for no cap |
+| `sku` | `log_analytics_workspace_sku` | `PerGB2018`, or `CapacityReservation` + `…_reservation_capacity_in_gb_per_day` |
+| `public_network_access: disabled` | `log_analytics_workspace_internet_ingestion_enabled = false` **and** `…_internet_query_enabled = false` | Module defaults are already `false` — the guardrail's posture; written anyway |
+| `local_auth: disabled` | `log_analytics_workspace_local_authentication_enabled = false` | Module default is **`true`** — must be written |
+| `rbac_only_access` | `log_analytics_workspace_allow_resource_only_permissions = false` | The inversion from the authored render holds |
+| `immediate_purge_protection` | — | Provider-side `features {}` in the root, as in the authored render; not a module input |
+| `managed_identity` | `log_analytics_workspace_identity = { type = "SystemAssigned" }` | |
+| `key_management: customer_managed` | `customer_managed_key = { key_vault_resource_id, key_name, … }` | |
+| diagnostics of the workspace itself | `diagnostic_settings = { <key> = { workspace_resource_id, logs, metrics } }` | Into itself, usually |
+| `deployment.module_telemetry` | `enable_telemetry` | |
+| `context.tags` | `tags = local.tags` | |
+
+### The call
+
+```hcl
+module "workspace" {
+  source  = "Azure/avm-res-operationalinsights-workspace/azurerm"
+  version = "~> 0.5.0"
+
+  name                = data.naming_name.log_analytics_workspace.name
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  log_analytics_workspace_sku               = "PerGB2018"
+  # decision: log-analytics-workspace.cost.retention_days (deployment.log_retention_days)
+  log_analytics_workspace_retention_in_days = 30
+  # decision: log-analytics-workspace.cost.daily_quota_gb - -1 is no cap
+  log_analytics_workspace_daily_quota_gb    = -1
+
+  # Both, or logs arrive and nobody can read them.
+  log_analytics_workspace_internet_ingestion_enabled = false
+  log_analytics_workspace_internet_query_enabled     = false
+
+  # Access is via Entra ID; the workspace key is a non-expiring bearer credential.
+  # The module default is true.
+  log_analytics_workspace_local_authentication_enabled = false
+
+  # false means RBAC on the workspace governs reads, rather than permissions
+  # inherited from whichever resource emitted the row.
+  log_analytics_workspace_allow_resource_only_permissions = false
+
+  enable_telemetry = true
+  tags             = local.tags
+}
+
+output "id" { value = module.workspace.resource_id }
+```
+
+### Tests
+
+The module's `resource` output is the `azurerm_log_analytics_workspace`, so with
+`azurerm` mocked the asserts of the authored render apply to
+`module.workspace.resource.<attribute>` unchanged:
+
+```hcl
+  # decision: log-analytics-workspace.cost.retention_days
+  assert {
+    condition     = module.workspace.resource.retention_in_days == 30
+    error_message = "Retention as stated in the deployment set."
+  }
+```
+
+## Authored rendering
+
+The fallback — `implementation: authored`, a repository that already renders the
+workspace this way, or reading what the module does inside.
+
 ## Decision → argument
 
 | Decision | Argument |

@@ -8,6 +8,71 @@ layout, parameters and naming are in
 bicep build --stdout modules/observability.bicep
 ```
 
+## With the AVM module
+
+`br/public:avm/res/operational-insights/workspace:<version>` — the primary rendering for
+`observability_ownership: create`. Documented against **0.16.1** (resolved 2026-10-17);
+resolve the current version and re-read its README parameters before rendering, as
+[avm.md](../../../core/iac-rendering/references/avm.md) says. A referenced workspace stays
+an `existing` reference as below.
+
+### Decision → module parameter
+
+| Decision | Parameter | Note |
+|---|---|---|
+| `retention_days` | `dataRetention` | Module default is **365** — the guardrail says 30; must be written |
+| `daily_quota_gb` | `dailyQuotaGb: '-1'` | A **string** on this module |
+| `sku` | `skuName`, `skuCapacityReservationLevel` | |
+| `public_network_access: disabled` | `publicNetworkAccessForIngestion: 'Disabled'` **and** `publicNetworkAccessForQuery: 'Disabled'` | Module defaults are **`'Enabled'`** — both must be written |
+| `local_auth: disabled` | `features: { disableLocalAuth: true }` | |
+| `rbac_only_access` | `features: { enableLogAccessUsingOnlyResourcePermissions: false }` | |
+| `managed_identity` | `managedIdentities: { systemAssigned: true }` | |
+| `key_management: customer_managed` | `features.enableDataExport` is unrelated; CMK is a linked dedicated cluster, outside this question set | |
+| diagnostics of the workspace itself | `diagnosticSettings: [ { workspaceResourceId, … } ]` | |
+| `deployment.module_telemetry` | `enableTelemetry` | |
+| `context.tags` | `tags` | |
+
+### The call
+
+```bicep
+module workspace 'br/public:avm/res/operational-insights/workspace:0.16.1' = {
+  name: 'observability'
+  params: {
+    name: workspaceName
+    location: location
+    tags: tags
+
+    skuName: 'PerGB2018'
+    // decision: log-analytics-workspace.cost.retention_days - the module default is 365
+    dataRetention: 30
+    // decision: log-analytics-workspace.cost.daily_quota_gb - a string here, -1 is no cap
+    dailyQuotaGb: '-1'
+
+    // Both, or logs arrive and nobody can read them. The module defaults are Enabled.
+    publicNetworkAccessForIngestion: 'Disabled'
+    publicNetworkAccessForQuery: 'Disabled'
+
+    features: {
+      // The workspace key is a non-expiring bearer credential.
+      disableLocalAuth: true
+      // false: RBAC on the workspace governs reads, rather than permissions
+      // inherited from whichever resource emitted the row.
+      enableLogAccessUsingOnlyResourcePermissions: false
+    }
+
+    enableTelemetry: true
+  }
+}
+
+output id string = workspace.outputs.resourceId
+output name string = workspace.outputs.name
+```
+
+## Authored rendering
+
+The fallback — `implementation: authored`, a repository that already renders the
+workspace this way, or reading what the module does inside.
+
 ## Decision → property
 
 | Decision | Property |
