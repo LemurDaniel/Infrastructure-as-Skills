@@ -16,7 +16,8 @@
       4. Plugin manifest paths: every path in plugin.json's skills array exists,
          and every group directory holding a SKILL.md is declared. A missing
          path fails to load the plugin.
-      5. Question sets: both naming identifier forms and the abbreviation
+      5. Question sets: both naming identifier forms and the abbreviation, which
+         must equal the type's ::default entry in naming.default.yaml
          declared, the Bicep one without an Azure:: prefix, unique ids,
          required/default not both set, why and renders present. A
          scope: deployment set names no resource and is exempt from the
@@ -302,6 +303,10 @@ try {
         $qWarnings = [System.Collections.Generic.List[string]]::new()
         $qCount    = 0
 
+        $conventionFile = Join-Path $pluginRoot 'core/iac-rendering/references/naming.default.yaml'
+        $conventionText = if (Test-Path -LiteralPath $conventionFile) { Get-Content -LiteralPath $conventionFile -Raw } else { $null }
+        if (-not $conventionText) { $qErrors.Add('core/iac-rendering/references/naming.default.yaml missing - the naming convention every question set mirrors') }
+
         foreach ($qs in $questionSets) {
             $rel = [System.IO.Path]::GetRelativePath($repo, $qs.FullName) -replace '\\', '/'
             $raw = Get-Content -LiteralPath $qs.FullName -Raw
@@ -323,6 +328,17 @@ try {
                 }
                 if ($tfName.Success -and $tfName.Groups[1].Value -notmatch '::') {
                     $qErrors.Add("$rel - naming.terraform is missing the '<Provider>::' prefix ('$($tfName.Groups[1].Value.Trim())')")
+                }
+                # The abbreviation mirrors the convention. Drift here means Bicep renders
+                # one prefix and the Terraform provider another for the same resource.
+                if ($abbrev.Success -and $bcName.Success -and $conventionText) {
+                    $type = [regex]::Escape($bcName.Groups[1].Value.Trim())
+                    $conv = [regex]::Match($conventionText, "(?m)^\s*$type::default:\s*(\S*)\s*$")
+                    if (-not $conv.Success) {
+                        $qWarnings.Add("$rel - $($bcName.Groups[1].Value.Trim()) has no ::default abbreviation in naming.default.yaml")
+                    } elseif ($conv.Groups[1].Value -ne $abbrev.Groups[1].Value.Trim()) {
+                        $qErrors.Add("$rel - naming.abbreviation '$($abbrev.Groups[1].Value.Trim())' differs from the convention's '$($conv.Groups[1].Value)'")
+                    }
                 }
             }
 
