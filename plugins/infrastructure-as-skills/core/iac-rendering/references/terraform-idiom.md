@@ -205,11 +205,11 @@ resource "azurerm_storage_account" "this" {
 
   # Explicit, though several match the provider default: a reviewer can see
   # a decision that was made, and a provider major version cannot move it.
-  https_traffic_only_enabled      = true
-  min_tls_version                 = "TLS1_2"
-  public_network_access_enabled   = false
-  shared_access_key_enabled       = false
-  allow_nested_items_to_be_public = false
+  https_traffic_only_enabled        = true
+  min_tls_version                   = "TLS1_2"
+  public_network_access             = "Disabled"
+  shared_access_key_enabled         = false
+  allow_nested_items_to_be_public   = false
   infrastructure_encryption_enabled = true
 
   tags = local.tags
@@ -219,23 +219,54 @@ resource "azurerm_storage_account" "this" {
 Comment the ones whose reason is not obvious from the name, and keep that comment to the
 *why* — the `how` is the line above it.
 
+## The context values
+
+`context:` and the refs under `deployment:` are variables, and their stated values go into
+`terraform.tfvars` beside the code — the subscription, the resource group, the referenced
+network and workspace by name. Not into variable `default`s: a default makes the value
+look optional, and the next environment then inherits production's subscription by
+forgetting to set it. The tfvars file is committed; it holds names and ids, never a
+secret.
+
 ## Tests
 
 Generate a `.tftest.hcl` alongside, asserting the decisions the question set recorded.
-Plan-only (`command = plan`) so it needs no credentials:
+Plan-only (`command = plan`) so it needs no credentials.
+
+A referenced platform (`network_ownership: reference`, `observability_ownership:
+reference`) is `data` blocks, and a plan reads those from Azure — so the test would need
+credentials after all. Mock the `azurerm` provider for the test and give every mocked data
+source an **id that parses**: the provider validates the shape of every id it is handed,
+and the random string a bare mock returns fails that validation with a segment-by-segment
+error before any assertion runs. The naming provider stays real, so names are asserted as
+they will be deployed:
 
 ```hcl
+mock_provider "azurerm" {
+  mock_data "azurerm_subnet" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-hub/subnets/snet-privatelink"
+    }
+  }
+  mock_data "azurerm_log_analytics_workspace" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-observability/providers/Microsoft.OperationalInsights/workspaces/log-platform"
+    }
+  }
+}
+
+variables {
+  environment = "production"
+  location    = "westeurope"
+  workload    = "myapp"
+  # ...the rest of terraform.tfvars
+}
+
 run "storage_account_is_private" {
   command = plan
 
-  variables {
-    environment = "production"
-    location    = "westeurope"
-    workload    = "myapp"
-  }
-
   assert {
-    condition     = azurerm_storage_account.this.public_network_access_enabled == false
+    condition     = azurerm_storage_account.this.public_network_access == "Disabled"
     error_message = "The storage account must not be reachable from the public internet."
   }
 
@@ -264,6 +295,10 @@ terraform test        # if tests were generated
 
 `fmt` is not optional — unformatted generated code is the fastest way to make a reviewer
 distrust the rest of it.
+
+`validate` does not warn about a deprecated argument — only the provider schema marks
+it. After a provider major version, check the arguments the rendering references name
+against `terraform providers schema -json` once rather than trusting the examples.
 
 Then the step that tells you what would actually change:
 
