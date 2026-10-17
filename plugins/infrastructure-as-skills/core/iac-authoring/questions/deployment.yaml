@@ -193,7 +193,11 @@ groups:
           subnet-scoped need one, and the posture is unimplementable without it.
           Under those, `none` is not an available answer. Owning the network is
           preferred - the deployment is then self-contained and reproducible in a
-          fresh subscription. `reference` is for a platform-owned hub or an
+          fresh subscription. A created network is a **spoke**: it is peered to the
+          platform hub, and what is shared - above all the private DNS zones - stays
+          in the hub subscription (see private_dns_ownership). "Nothing exists yet"
+          from the user describes the workload, not the platform around it.
+          `reference` is for a platform-owned hub or an
           existing landing zone, and the word is literal: the network is read,
           never managed. `none` exists for a genuinely public deployment whose
           resources are all reached over their public endpoints - no endpoint, no
@@ -266,11 +270,33 @@ groups:
           Private DNS zones are shared infrastructure: two deployments each creating
           `privatelink.blob.core.windows.net` is a conflict that only surfaces at
           apply time. `platform` references existing zones and creates only the A
-          records, which is correct almost everywhere. `deployment` is for an
-          isolated environment that genuinely owns its own resolution.
+          records, which is correct almost everywhere - including for a network
+          this deployment creates: that network is a spoke, and the zones live in
+          the platform's hub subscription regardless. `deployment` is for an
+          isolated environment that genuinely owns its own resolution, and only
+          when the user says so; "nothing exists yet" is not that.
         renders: >
           whether privatelink zones are created or referenced; the zone group on
           every private endpoint either way
+
+      - id: private_dns_zone_scope
+        ask: In which subscription and resource group does the platform keep the private DNS zones?
+        type: ref
+        ref: resource_group
+        required: true
+        depends_on: { question: private_dns_ownership, equals: platform }
+        why: >
+          Referencing a zone needs its subscription and resource group, and in a
+          hub-and-spoke platform that is the hub's, not the workload's - so it is
+          never the context's subscription by assumption. One answer per
+          platform, recorded as "subscription-id / resource-group" and carried by
+          every later run; a pattern skill for a known platform supplies it.
+          Only reached when a private endpoint exists, i.e. under a private
+          posture.
+        renders: >
+          terraform: data "azurerm_private_dns_zone" with resource_group_name and a
+          provider alias for the hub subscription; bicep: an `existing` zone with
+          scope: resourceGroup(subscriptionId, resourceGroupName)
 
   - id: observability
     title: Observability
