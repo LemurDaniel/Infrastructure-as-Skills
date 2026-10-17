@@ -1,3 +1,7 @@
 
 # claude plugin eval output
 plugins/infrastructure-as-skills/evals/results/
+
+# Terraform working files - the examples are rendered, never applied here
+.terraform/
+.terraform.lock.hcl

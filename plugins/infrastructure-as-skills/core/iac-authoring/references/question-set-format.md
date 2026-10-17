@@ -125,11 +125,15 @@ public access is disabled. Gate them rather than asking and discarding.
 
 ## Validate
 
+Today: the repo's `.claude/skills/git-commit-conventions/scripts/Test-RepoConsistency.ps1`,
+which checks naming forms, unique ids, `required`/`default` not combined, `why`/`renders`
+present and routing reachability. The dedicated script below is **planned, not written**:
+
 ```powershell
 pwsh -NoProfile -File scripts/Test-QuestionSet.ps1 <family-directory>
 ```
 
-Checks every resource's `questions.yaml` in the family for the structural invariants: unique ids,
+It would check every resource's `questions.yaml` in the family for the structural invariants: unique ids,
 `required` and `default` not both set, enum defaults within `values`, `depends_on` pointing
 at a question that exists, `why` and `renders` present, both naming forms and the
 abbreviation declared, the Bicep identifier not carrying an `Azure::` prefix, and every

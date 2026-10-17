@@ -70,7 +70,11 @@ The method follows Hamel Husain's
    `name / resource-group` label overflow) gets a case or a grader, so it stays fixed.
 
 Re-run the suite after any change to a question set, the guardrails or `iac-authoring`,
-and after a model update.
+and after a model update — and compare against `baseline.json`, the committed pass rates
+of the last accepted run. `Show-EvalResult.ps1` does the comparison and flags a grader
+whose rate dropped as REGRESS; `-UpdateBaseline` writes the new snapshot once the run is
+read and accepted. Results stay ignored; the baseline is the one thing a run leaves
+behind in git.
 
 ## Adding a case
 

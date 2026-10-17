@@ -6,7 +6,7 @@ conventions are in
 
 Verify argument names against the installed provider rather than this file where they
 disagree — `azurerm` renames arguments across major versions, and the examples below are
-written for 4.x:
+written for 5.x (verified against 5.10):
 
 ```bash
 terraform providers schema -json \
@@ -17,9 +17,9 @@ terraform providers schema -json \
 
 | Decision | Argument |
 |---|---|
-| `public_network_access: disabled` | `public_network_access_enabled = false` |
-| `public_network_access: enabled_with_firewall` | `public_network_access_enabled = true` + `network_rules.default_action = "Deny"` |
-| `public_network_access: enabled` | `public_network_access_enabled = true` + `network_rules.default_action = "Allow"` |
+| `public_network_access: disabled` | `public_network_access = "Disabled"` |
+| `public_network_access: enabled_with_firewall` | `public_network_access = "Enabled"` + `network_rules.default_action = "Deny"` |
+| `public_network_access: enabled` | `public_network_access = "Enabled"` + `network_rules.default_action = "Allow"` |
 | `shared_access_key_enabled` | `shared_access_key_enabled` |
 | `https_traffic_only` | `https_traffic_only_enabled` (was `enable_https_traffic_only` before 4.0) |
 | `allow_blob_public_access` | `allow_nested_items_to_be_public` |
@@ -34,6 +34,14 @@ terraform providers schema -json \
 
 `account_tier` is not a question — it follows from `replication` and `access_tier`. Standard
 unless the answers call for premium block blob.
+
+`public_network_access` is a string in 5.x. The 4.x bool `public_network_access_enabled`
+still exists and is **deprecated** — the schema marks it, `validate` does not warn. A
+repository already on 4.x keeps the bool; do not mix the two on one account.
+
+With `shared_access_key_enabled = false` the **provider** also needs
+`storage_use_azuread = true` in its `provider "azurerm"` block, or its own data-plane
+reads (blob properties, containers) fail with a 403 after a successful create.
 
 ## The account
 
@@ -57,11 +65,12 @@ resource "azurerm_storage_account" "this" {
   https_traffic_only_enabled      = true
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
-  public_network_access_enabled   = false
+  public_network_access           = "Disabled"
 
   # Access is via Entra ID and RBAC. A key would bypass both and is not
   # attributable in the audit log.
   shared_access_key_enabled = false
+  sftp_enabled              = false
 
   # Settable only at creation — changing it later replaces the account.
   infrastructure_encryption_enabled = true
@@ -71,7 +80,8 @@ resource "azurerm_storage_account" "this" {
   }
 
   blob_properties {
-    versioning_enabled = true
+    versioning_enabled  = true
+    change_feed_enabled = false
 
     delete_retention_policy {
       days = 7
@@ -119,14 +129,21 @@ One endpoint per sub-resource, in `storage.network.tf`. The DNS zone is referenc
 created:
 
 ```hcl
+# One name per sub-resource through the convention's <?SUBNAME;-%s> token, so
+# the index stays last: pep-we-prod-invoicing-blob-01. Appending the sub-resource
+# to a finished name puts it after the index, and the Bicep render of the same
+# spec then names the endpoint differently.
 data "naming_name" "private_endpoint" {
-  resource = "Azure::Microsoft.Network/privateEndpoints"
+  for_each = toset(var.private_endpoint_subresources)
+
+  resource   = "Azure::Microsoft.Network/privateEndpoints"
+  parameters = { subname = each.key }
 }
 
 resource "azurerm_private_endpoint" "storage" {
   for_each = toset(var.private_endpoint_subresources)
 
-  name                = "${data.naming_name.private_endpoint.name}-${each.key}"
+  name                = data.naming_name.private_endpoint[each.key].name
   resource_group_name = var.resource_group_name
   location            = var.location
   subnet_id           = var.private_endpoint_subnet_id
@@ -149,12 +166,25 @@ resource "azurerm_private_endpoint" "storage" {
     }
   }
 
+  # Under `policy`: the zone group the policy attaches would otherwise show up
+  # as a change Terraform wants to remove on every plan.
+  lifecycle {
+    ignore_changes = [private_dns_zone_group]
+  }
+
   tags = local.tags
 }
 ```
 
-Under `policy`, also add `lifecycle { ignore_changes = [private_dns_zone_group] }`: the zone
-group the policy attaches would otherwise show up as a change Terraform wants to remove.
+When the spec fixes `private_dns_records` (it always does — it is a deployment decision,
+not a variable), render only the branch that applies: under `policy` no `dynamic` block and
+no `private_dns_zone_ids` variable, just the `lifecycle` block with its comment. A
+variable the caller can never meaningfully set is a question the interview already
+answered.
+
+`subnet_id` comes from `data.azurerm_subnet.private_endpoints.id` when the network is
+referenced (`network_ownership: reference`), and from the deployment's own
+`azurerm_subnet` resource when it is created — never from a hardcoded id.
 
 `subresource_names` takes exactly one entry per endpoint. Passing several is accepted at
 plan time and fails at apply.
@@ -198,11 +228,28 @@ in place before the account exists.
 
 ## Diagnostics
 
+Two settings, because the account and its blob service are two diagnostic targets. The
+account itself emits **no log categories** — a setting on the account with an
+`enabled_log` block is rejected at apply. `diagnostic_categories` therefore renders on the
+blob service; the account gets metrics only:
+
 ```hcl
 resource "azurerm_monitor_diagnostic_setting" "storage" {
   name                       = "diag"
   target_resource_id         = azurerm_storage_account.this.id
-  log_analytics_workspace_id = var.diagnostic_workspace_id
+  log_analytics_workspace_id = data.azurerm_log_analytics_workspace.platform.id
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
+}
+
+# Blob data-plane logs attach to <account>/blobServices/default. A setting on
+# the account alone collects no StorageRead/Write/Delete while looking configured.
+resource "azurerm_monitor_diagnostic_setting" "storage_blob" {
+  name                       = "diag"
+  target_resource_id         = "${azurerm_storage_account.this.id}/blobServices/default"
+  log_analytics_workspace_id = data.azurerm_log_analytics_workspace.platform.id
 
   dynamic "enabled_log" {
     for_each = toset(var.diagnostic_categories)
@@ -217,38 +264,209 @@ resource "azurerm_monitor_diagnostic_setting" "storage" {
 }
 ```
 
-Blob data-plane logs attach to the blob service, not the account — the target id needs
-`/blobServices/default` appended. A diagnostic setting on the account alone collects no
-`StorageRead` or `StorageWrite` events, which is a silent gap that looks configured.
+One more pair per sub-resource that has an endpoint and is used (`fileServices`,
+`queueServices`, `tableServices`) — a service nobody writes to needs no log.
+
+The workspace id is read from the referenced workspace's data source
+(`observability_ownership: reference`) or from the deployment's own
+`azurerm_log_analytics_workspace` resource — not passed in as a bare id variable, which
+would pin a subscription into the configuration.
 
 ## Tests
 
-Assert the decisions, not the attributes:
+Every decision in the question set, one assert each, named by its spec key path; one
+`run` per group. The platform data sources are mocked so the plan needs no credentials —
+how, and why the mocked ids must parse, is in
+[terraform-idiom.md](../../../core/iac-rendering/references/terraform-idiom.md#tests).
+The values below are the defaults; a spec that departs changes the expected value, never
+the assert.
 
 ```hcl
-run "account_is_private_and_keyless" {
+run "naming" {
   command = plan
 
-  variables {
-    environment           = "production"
-    location              = "westeurope"
-    resource_group_name   = "rg-test"
-    diagnostic_workspace_id = "/subscriptions/0/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/law"
+  # The naming provider is not mocked: the name is asserted as it will be
+  # deployed, which is also the test that catches an edited naming.yaml.
+  assert {
+    condition     = azurerm_storage_account.this.name == "stweprodinvoicing01"
+    error_message = "The name must come from naming.yaml, not from a literal."
   }
 
   assert {
-    condition     = azurerm_storage_account.this.public_network_access_enabled == false
-    error_message = "The account must not be reachable from the public internet."
+    condition     = azurerm_private_endpoint.storage["blob"].name == "pep-we-prod-invoicing-blob-01"
+    error_message = "Private endpoint name: <?SUBNAME> before the index."
+  }
+}
+
+run "networking" {
+  command = plan
+
+  # decision: storage-account.networking.public_network_access
+  assert {
+    condition     = azurerm_storage_account.this.public_network_access == "Disabled" && length(azurerm_storage_account.this.network_rules) == 0
+    error_message = "Private: no public endpoint, and no ACL that would suggest one."
   }
 
+  # decision: storage-account.networking.private_endpoint_subnet
+  assert {
+    condition     = azurerm_private_endpoint.storage["blob"].subnet_id == data.azurerm_subnet.private_endpoints.id
+    error_message = "The endpoint goes into the deployment's private-endpoint subnet."
+  }
+
+  # decision: storage-account.networking.private_endpoint_subresources
+  assert {
+    condition     = length(azurerm_private_endpoint.storage) == 1 && azurerm_private_endpoint.storage["blob"].private_service_connection[0].subresource_names[0] == "blob"
+    error_message = "One endpoint per listed sub-resource, blob only."
+  }
+
+  # not-testable: storage-account.networking.allow_azure_services_bypass - network_rules
+  # is not rendered with public access disabled; nothing in the plan carries the bypass
+
+  # deployment.private_dns_records: policy
+  assert {
+    condition     = length(azurerm_private_endpoint.storage["blob"].private_dns_zone_group) == 0
+    error_message = "private_dns_records: policy - the platform writes the record, not this code."
+  }
+}
+
+run "identity" {
+  command = plan
+
+  # decision: storage-account.identity.managed_identity
+  assert {
+    condition     = azurerm_storage_account.this.identity[0].type == "SystemAssigned"
+    error_message = "System-assigned identity."
+  }
+
+  # decision: storage-account.identity.role_assignments
+  assert {
+    condition     = length(azurerm_role_assignment.data) == 0
+    error_message = "No consumer named yet, so no assignment - open in the spec."
+  }
+}
+
+run "security" {
+  command = plan
+
+  # decision: storage-account.security.shared_access_key_enabled
   assert {
     condition     = azurerm_storage_account.this.shared_access_key_enabled == false
     error_message = "Shared key auth must stay off; access is via Entra ID and RBAC."
   }
 
+  # decision: storage-account.security.min_tls_version
+  assert {
+    condition     = azurerm_storage_account.this.min_tls_version == "TLS1_2"
+    error_message = "TLS 1.2 is the floor."
+  }
+
+  # decision: storage-account.security.https_traffic_only
+  assert {
+    condition     = azurerm_storage_account.this.https_traffic_only_enabled == true
+    error_message = "No plain HTTP."
+  }
+
+  # decision: storage-account.security.allow_blob_public_access
   assert {
     condition     = azurerm_storage_account.this.allow_nested_items_to_be_public == false
     error_message = "Anonymous container access must not be possible at the account level."
   }
+
+  # decision: storage-account.security.infrastructure_encryption_enabled
+  assert {
+    condition     = azurerm_storage_account.this.infrastructure_encryption_enabled == true
+    error_message = "Settable only at creation; must be on."
+  }
+
+  # decision: storage-account.security.key_management
+  assert {
+    condition     = length(azurerm_storage_account.this.customer_managed_key) == 0
+    error_message = "Platform-managed keys: no CMK block."
+  }
+
+  # decision: storage-account.security.sftp_enabled
+  assert {
+    condition     = azurerm_storage_account.this.sftp_enabled == false
+    error_message = "SFTP brings local users - credentials outside Entra ID."
+  }
+}
+
+run "data_protection" {
+  command = plan
+
+  # decision: storage-account.data_protection.replication
+  assert {
+    condition     = azurerm_storage_account.this.account_replication_type == "ZRS"
+    error_message = "ZRS: survives a zone loss at roughly LRS cost."
+  }
+
+  # decision: storage-account.data_protection.access_tier
+  assert {
+    condition     = azurerm_storage_account.this.access_tier == "Hot"
+    error_message = "Hot tier by default."
+  }
+
+  # decision: storage-account.data_protection.blob_soft_delete_days
+  assert {
+    condition     = azurerm_storage_account.this.blob_properties[0].delete_retention_policy[0].days == 7
+    error_message = "Blob soft delete 7 days."
+  }
+
+  # decision: storage-account.data_protection.container_soft_delete_days
+  assert {
+    condition     = azurerm_storage_account.this.blob_properties[0].container_delete_retention_policy[0].days == 7
+    error_message = "Container soft delete 7 days."
+  }
+
+  # decision: storage-account.data_protection.versioning_enabled
+  assert {
+    condition     = azurerm_storage_account.this.blob_properties[0].versioning_enabled == true
+    error_message = "Versioning on: protects against overwrite, which soft delete does not."
+  }
+
+  # decision: storage-account.data_protection.change_feed_enabled
+  assert {
+    condition     = azurerm_storage_account.this.blob_properties[0].change_feed_enabled == false
+    error_message = "Change feed off unless something consumes it."
+  }
+
+  # decision: storage-account.data_protection.point_in_time_restore_days
+  assert {
+    condition     = length(azurerm_storage_account.this.blob_properties[0].restore_policy) == 0
+    error_message = "Point-in-time restore off: no restore_policy block."
+  }
+
+  # decision: storage-account.data_protection.immutability
+  assert {
+    condition     = length(azurerm_storage_account.this.immutability_policy) == 0
+    error_message = "No WORM policy unless a mandate names one."
+  }
+}
+
+run "observability" {
+  command = plan
+
+  # decision: storage-account.observability.diagnostic_workspace
+  assert {
+    condition     = azurerm_monitor_diagnostic_setting.storage.log_analytics_workspace_id == data.azurerm_log_analytics_workspace.platform.id && azurerm_monitor_diagnostic_setting.storage_blob.log_analytics_workspace_id == data.azurerm_log_analytics_workspace.platform.id
+    error_message = "Both settings route to the deployment's workspace."
+  }
+
+  # decision: storage-account.observability.diagnostic_categories
+  assert {
+    condition     = length(azurerm_monitor_diagnostic_setting.storage_blob.enabled_log) == 1 && contains([for l in azurerm_monitor_diagnostic_setting.storage_blob.enabled_log : l.category_group], "audit")
+    error_message = "audit on the blob service, and nothing else in production."
+  }
+
+  # decision: storage-account.observability.metrics_enabled
+  assert {
+    condition     = length(azurerm_monitor_diagnostic_setting.storage.enabled_metric) == 1 && length(azurerm_monitor_diagnostic_setting.storage_blob.enabled_metric) == 1
+    error_message = "AllMetrics on both targets."
+  }
 }
 ```
+
+A decision asserted through a block is indexed: `blob_properties[0]`,
+`identity[0]`. A decision rendered as an absent block is `length(...) == 0`.
+`enabled_log` is a set — collect it with a `for` and `contains()` rather than comparing
+it to a list literal, which never equals a tuple.

@@ -256,13 +256,24 @@ output name string = storageAccount.name
 output principalId string = storageAccount.identity.principalId
 ```
 
+A per-instance output of a resource loop is an **array**, not a map: Bicep refuses to index
+a resource loop from inside a lambda (`BCP247`), so `toObject(subs, s => s, s => pe[…].id)`
+does not compile. Where Terraform renders `{ for k, pe in … : k => pe.id }`, render
+`[for (sub, i) in subs: { subresource: sub, id: pe[i].id }]` and say so in the
+description — it is one of the asymmetries a port has to carry rather than paper over.
+
 ## Before handing over
 
 ```bash
-bicep format --stdout main.bicep     # or: az bicep format
-bicep build --stdout main.bicep      # fails loudly on unknown properties
+bicep format main.bicep                       # or: az bicep format
+bicep build --stdout main.bicep > /dev/null   # fails loudly on unknown properties
+bicep build-params main.bicepparam --stdout   # the parameter file against the template
 bicep lint main.bicep
 ```
+
+The CLI is also published as the NuGet package `Azure.Bicep.CommandLine.<rid>` — the
+binary sits under `tools/` in the `.nupkg`, which is a zip. Useful where the GitHub
+release download is blocked.
 
 Then the deployment-time check, which is the one that matters:
 
