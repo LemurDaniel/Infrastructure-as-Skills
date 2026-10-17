@@ -2,7 +2,7 @@
 
 Mapping from the question set to `Microsoft.Storage/storageAccounts`. General layout,
 parameter and registry conventions are in
-[../../../../core/iac-authoring/references/bicep-idiom.md](../../../../core/iac-authoring/references/bicep-idiom.md).
+[../../../../core/iac-rendering/references/bicep-idiom.md](../../../../core/iac-rendering/references/bicep-idiom.md).
 
 Compile before handing anything over — `bicep build --stdout` rejects an unknown property
 immediately, which beats reasoning about whether it exists:
@@ -36,10 +36,11 @@ Terraform — where `blob_properties` makes them look like account attributes.
 
 ## The account
 
-```bicep
-import { schema } from 'br/modules:utility/naming/schema:5.5.0'
-import { genName } from 'br/modules:utility/naming/generator:5.5.0'
+The name is assembled from vars — the Bicep naming modules are not shipped. The pattern and
+its parts are in
+[../../../../core/iac-rendering/references/naming.md](../../../../core/iac-rendering/references/naming.md).
 
+```bicep
 @description('Deployment environment. Drives the rendered name, the tags and several security defaults.')
 @allowed(['development', 'test', 'acceptance', 'production'])
 param environment string
@@ -54,12 +55,28 @@ param workload string
 @allowed(['LRS', 'ZRS', 'GRS', 'GZRS'])
 param replication string = 'ZRS'
 
+@description('Instance number, for a second account beside the first.')
+param index int = 1
+
 param tags object
 
-var storageAccountName = genName('Microsoft.Storage/storageAccounts', schema.default, location, {
-  name: workload
-  environment: environment
-})
+// CAF convention, assembled here until the naming modules ship.
+var environmentAbbreviations = {
+  development: 'dev'
+  test: 'tst'
+  acceptance: 'acc'
+  production: 'prd'
+}
+var locationAbbreviations = {
+  westeurope: 'we'
+  northeurope: 'ne'
+  germanywestcentral: 'gwc'
+}
+
+var affix = '${locationAbbreviations[location]}${environmentAbbreviations[environment]}'
+
+// st + we + dev + objects + 01  ->  stwedevobjects01
+var storageAccountName = toLower('st${affix}${workload}${padLeft(index, 2, '0')}')
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
@@ -104,6 +121,11 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
 }
 ```
+
+The name is **lowercase alphanumeric, 3–24 characters, no hyphens** — the one Azure
+resource where the usual hyphenated form is rejected. With `st` + a 5-character affix + the
+2-digit index, `workload` has 15 characters left. `bicep build` will not catch an overlong
+one — it is a deploy-time validation failure — so check it while interviewing.
 
 `networkAcls` stays present even with `publicNetworkAccess: 'Disabled'` — the API accepts
 it and it documents the intended posture should public access ever be re-enabled. Unlike
@@ -154,10 +176,8 @@ One endpoint per sub-resource. The DNS zone is referenced, never created:
 ```bicep
 resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = [
   for sub in privateEndpointSubresources: {
-    name: '${genName('Microsoft.Network/privateEndpoints', schema.default, location, {
-      name: workload
-      environment: environment
-    })}-${sub}'
+    // pep + wedev + objects + blob  ->  pep-wedev-objects-blob
+    name: 'pep-${affix}-${workload}-${sub}'
     location: location
     tags: tags
 
