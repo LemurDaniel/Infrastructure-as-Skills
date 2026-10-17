@@ -1,6 +1,6 @@
 ---
 name: iac-authoring
-description: The shared contract behind every skill here — how a question set becomes infra-spec.yaml, which questions are asked versus silently defaulted, and the Terraform and Bicep idioms the generated code follows. Read before rendering any Azure resource or pattern, when extending a question set, or when asked how this plugin works or why a default was chosen.
+description: The interview protocol behind every skill here — how a question set becomes infra-spec.yaml, which questions get asked versus silently defaulted, and what the spec records. Read before authoring any Azure resource or pattern, when extending a question set, or when asked why a default was chosen.
 ---
 
 # Authoring infrastructure from a question set
@@ -20,6 +20,7 @@ the keywords that make any of it discoverable.
 
 ```
 question set  ──interview──>  infra-spec.yaml  ──render──>  Terraform / Bicep  ──validate──>  explained plan
+                 [here]                       [iac-rendering]
 ```
 
 The spec in the middle is the load-bearing part. It is the handover interface, not a
@@ -27,7 +28,7 @@ by-product: a backend renders *from* it, and the same spec can go to a different
 including `Infrastructure-as-Skills` for API-driven execution — which is what makes the two
 tracks comparable at all. Never generate code directly from the interview.
 
-## Phase 1 — Establish the target
+## Phase 1 — Establish the target and the layout
 
 Terraform or Bicep. Do not ask if the repository answers it:
 
@@ -35,27 +36,76 @@ Terraform or Bicep. Do not ask if the repository answers it:
 - `*.bicep` or `bicepconfig.json` present → Bicep
 - both, or neither → then ask, once
 
-## Phase 2 — Resolve every question
+The same reading settles how the code is split, which the spec records under
+`composition.granularity`:
 
-For each question, the answer comes from the first source that has one:
+- An existing `modules/` directory → match what is there, per module and per file
+- An existing `infra-spec.yaml` → its `composition` is `carried`; do not re-decide it
+- A flat repository, or a single resource → `single`
+- Otherwise → `per-concern`
+
+Deciding this before the interview matters because it is the one thing both backends must
+agree on. If the split is settled per renderer, the same spec produces one Terraform root
+and six Bicep files, and comparing the two outputs stops meaning anything. See
+[references/spec.md](references/spec.md#modularity).
+
+## Phase 2 — Resolve the deployment set, then every resource question
+
+[`questions/deployment.yaml`](questions/deployment.yaml) is resolved **before** any
+resource question set. It holds what is one decision per system rather than one per
+resource, in two halves:
+
+- **The context** — environment, region, workload, subscription, resource group. All
+  `required`, because nothing can be guessed and everything downstream reads them. A
+  resource question marked `from_context: true` points here; without this group that field
+  pointed at nothing, and a run could reach the renderer with no region and therefore no
+  name.
+- **The deployment decisions** — network exposure, local auth, who owns the virtual
+  network and the workspace, mandates and what they force, DNS ownership, retention and
+  the ingestion cap.
+
+Resolve it once and every resource inherits it. A resource question carrying
+`from_deployment: <id>` is answered from there and never asked again — eight resources in
+one run must not produce eight separate exposure answers, and a system is not private
+because seven of them are.
+
+For each question, the answer then comes from the first source that has one:
 
 | # | Source | `source` recorded as |
 |---|---|---|
 | 1 | What the user already said in their request | `stated` |
 | 2 | A pattern skill's pre-answers | `pattern` |
-| 3 | An existing `infra-spec.yaml` in the target directory | `carried` |
-| 4 | The question's `default` | `default` |
+| 3 | The deployment set's answer, for a `from_deployment` question | `deployment` |
+| 4 | An existing `infra-spec.yaml` in the target directory | `carried` |
+| 5 | The question's `default` | `default` |
 
 A question with `required: true` has no default and no safe guess. It is the only kind you
 must ask.
 
+**A forced value is pre-answered, not asked.** `key_protection: hsm` requires a Premium Key
+Vault; `network_exposure: private` requires the private-endpoint subnet. Apply the
+consequence, record it with the question that forced it, and say so in Phase 4 rather than
+putting a question whose answer is already determined to the user.
+
 Defaults are not invented per resource — they come from
-[azure-guardrails](../azure-guardrails/SKILL.md), which is also where their reasoning
+[references/guardrails.md](references/guardrails.md), which is also where their reasoning
 lives. Read it before choosing any default or justifying one.
 
-## Phase 3 — Ask, in one batch
+## Phase 3 — Ask, in at most two batches
 
-Collect every question that survived resolution and put them in a single exchange. Where
+**Fold Phase 1's question into the first batch** when the repository did not answer it.
+Target and layout are two more questions, not a separate exchange — a round trip per
+phase is the serial interrogation this protocol exists to avoid.
+
+**The deployment batch first, on its own.** Its answers decide which resource questions
+survive at all — `network_exposure` removes the firewall questions, `local_auth` settles
+the key switch on every resource — so mixing the two batches asks things that the first
+batch would have answered. It also keeps a missing prerequisite where it belongs: that no
+workspace and no address range exist yet is a deployment problem, and discovering it
+halfway through a storage interview means the interview was wasted.
+
+**Then the resource batch.** Collect every question that survived and put them in a single
+exchange. Where
 the host offers `AskUserQuestion`, use it — grouped options with the trade-off in the
 description beat prose.
 
@@ -66,6 +116,34 @@ front, so there is no reason to discover questions one at a time.
 If more than about six questions survive, you are asking things that should have defaults.
 Say so and propose the defaults instead.
 
+**Never offer an invented value as an option.** Grouped options work for an `enum`, where
+the values come from the question set. They are wrong for a `ref`, an address range, a
+subscription id, a workspace name — anything only the user's environment knows. Offering
+`law-we-prd-platform-01` as a choice does not help someone decide; it invites them to pick
+a plausible-looking identifier that does not exist, and a wrong ref surfaces at apply time.
+
+For those, ask whether the value is already assigned, and let the answer come as text:
+
+```
+Steht ein Adressraum für das neue VNet fest?
+  - Ja, ich gebe ihn an            -> the user types the CIDR
+  - Nein, noch keiner zugewiesen   -> name it as an open decision, do not pick one
+```
+
+An unassigned address range is a blocker to say out loud, not a gap to fill with
+`10.0.0.0/16`. The same holds for a workspace that does not exist yet: that is a
+boundary — something this run does not create — and the honest answer is to record it as
+missing rather than to reference a name nobody has.
+
+**Ask in the user's language; keep the artefacts in English.** The question sets are
+written in English, but a question put to someone who wrote their request in German is
+translated — including the trade-off in the options, which is the part that earns the
+question. What stays English regardless: `infra-spec.yaml`, its `why` entries, code
+comments, variable names and commit messages. They are the interface other backends,
+reviewers and tools read, and a spec that is half German is a spec nobody can diff. Where
+the user wants the reasoning in their language too, that is their call to make — ask once
+rather than deciding it for them.
+
 A question may carry `confirm_in: [production]`. Its default still applies, but in that
 environment you surface it for confirmation rather than applying it silently — these are
 the values whose blast radius makes a silent default inappropriate.
@@ -75,6 +153,12 @@ the values whose blast radius makes a silent default inappropriate.
 Show a compact account. Not forty rows — group it:
 
 ```
+Deployment-wide:
+  exposure        private - every resource gets a private endpoint, no public surface
+  network         own vnet, 10.42.0.0/16
+  mandates        BSI C5 -> HSM key protection -> Key Vault Premium
+  diagnostics     law-we-prod-platform-01
+
 Defaulted (guardrail baseline):
   Security        TLS 1.2 floor, shared-key auth off, infrastructure encryption on
   Data protection blob soft-delete 7d, container soft-delete 7d, versioning on
@@ -83,8 +167,12 @@ Defaulted (guardrail baseline):
 Asked:
   environment     production
   location        westeurope
-  exposure        private endpoint in snet-data-prod-01
+  replication     ZRS
 ```
+
+The deployment block comes first because it is what the rest hangs off, and a forced value
+is shown with what forced it — `HSM -> Premium` is a cost consequence someone may want to
+argue with, and they can only do that if they see the chain.
 
 This is the step that keeps the plugin honest. Someone who disagrees with a default needs
 to see it to disagree with it, and the ones they never look at cost one glance.
@@ -96,34 +184,18 @@ bookkeeping: it forces the decisions to be expressible in the backend-neutral vo
 and a decision that will not fit is usually one that absorbed a backend's spelling.
 
 - Spec schema and the `source` field: [references/spec.md](references/spec.md)
-- Terraform rendering: [references/terraform-idiom.md](references/terraform-idiom.md)
-- Bicep rendering: [references/bicep-idiom.md](references/bicep-idiom.md)
+- Rendering it, for either target: [iac-rendering](../iac-rendering/SKILL.md)
 
 ## Phase 6 — Validate and explain
 
-Generated code is not done when it is syntactically valid. Hand off to
-[iac-plan-review](../iac-plan-review/SKILL.md) for the full sequence; the short version is
-`fmt` → `validate` → `plan` / `what-if` → policy scan → explain what will actually happen
-and what is risky about it.
+Generated code is not done when it is syntactically valid: `fmt` → `validate` →
+`plan` / `what-if` → explain what will actually happen and what is risky about it. The
+commands per target are at the end of each idiom file in
+[iac-rendering](../iac-rendering/SKILL.md).
 
 Do not skip the explanation on the grounds that the plan output is right there. A plan is a
 list of attribute diffs; what a reviewer needs is which of those diffs are
 service-affecting and which are noise, and that is a judgement the plan cannot make.
-
-## Do not invent attributes
-
-A plausible-looking argument that does not exist is worse than asking. Provider schemas
-move, and exact spellings are not something to recall from memory.
-
-- **Terraform** — `terraform providers schema -json` in the target directory (needs
-  `terraform init`). Narrow it with `jq`; it is megabytes.
-- **Bicep** — compile early: `bicep build --stdout <file>` fails loudly on an unknown
-  property, which is faster than reasoning about it. For API versions, prefer the version
-  already used elsewhere in the repository over the newest one you can think of.
-
-When neither is available and you are unsure, name the attribute you are unsure about
-instead of guessing. A named uncertainty is cheap to resolve; a wrong argument found at
-apply time is not.
 
 ## Composition: how a pattern drives a resource
 
@@ -150,6 +222,26 @@ Two rules make this work:
   relationship, so the pattern renders it. This is the genuinely hard part and the main
   reason pattern skills exist.
 
+A pattern may also fix the module split, since it is the only layer that knows which parts
+get reused separately. It does that by supplying `composition.modules` entries, recorded
+with `source: pattern` like any other pre-answer:
+
+```yaml
+composition:
+  granularity: per-resource
+  modules:
+    - id: storage
+      contains: [storage-account]
+      outputs: [id, principal_id]
+    - id: app
+      contains: [app-service]
+      needs: [storage]
+```
+
+The wiring between them stays in `wiring:` and renders into the root, not into a module —
+a module that reaches into another module's resources is the failure this split exists to
+prevent.
+
 ## Adding a resource
 
 A resource goes into an existing family skill — `storage`, `network`, `compute`, `data`,
@@ -160,7 +252,7 @@ A resource goes into an existing family skill — `storage`, `network`, `compute
    the review order, and a reviewer reading three resources should not relearn the layout.
 2. Fill `why` and `renders` for every question. `why` is what a reviewer reads; `renders`
    names the attribute it drives, which is what lets a review map code back to a decision.
-3. Take defaults from [azure-guardrails](../azure-guardrails/SKILL.md) rather than from the
+3. Take defaults from [references/guardrails.md](references/guardrails.md) rather than from the
    Azure portal. They differ often, and the portal default is not a baseline worth
    inheriting.
 4. Mark `required: true` only where no safe default exists. Every extra required question
@@ -184,10 +276,7 @@ Read as needed, not up front:
 
 | File | When |
 |---|---|
-| [references/naming.md](references/naming.md) | Always, before rendering a name — the two targets' identifier syntax differs |
 | [references/spec.md](references/spec.md) | Writing or reading `infra-spec.yaml` |
-| [references/terraform-idiom.md](references/terraform-idiom.md) | Rendering Terraform |
-| [references/bicep-idiom.md](references/bicep-idiom.md) | Rendering Bicep |
 | [references/question-set-format.md](references/question-set-format.md) | Authoring or extending a `questions.yaml` |
-| [azure-guardrails](../azure-guardrails/SKILL.md) | Choosing or justifying any default |
-| [iac-plan-review](../iac-plan-review/SKILL.md) | After rendering: validate, policy-scan, explain |
+| [references/guardrails.md](references/guardrails.md) | Choosing or justifying any default, or weighing an exception |
+| [iac-rendering](../iac-rendering/SKILL.md) | Turning the spec into Terraform or Bicep — naming, layout, idiom |

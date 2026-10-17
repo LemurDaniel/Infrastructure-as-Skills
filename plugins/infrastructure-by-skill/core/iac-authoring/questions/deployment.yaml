@@ -1,0 +1,320 @@
+schema_version: 1
+
+scope: deployment
+title: Deployment-wide decisions
+
+# The decisions that hold for everything in one deployment. Resolved once, before
+# any resource question set, and recorded under `deployment:` in the spec. A
+# resource question marked `from_deployment` reads its answer from here instead of
+# asking again - the posture of a system is one decision, not one per resource.
+
+boundaries:
+  - "Does not create the subscription or the resource group; expects both from the context."
+  - "Does not decide a single resource's exceptions - a resource may depart, and then records why."
+
+groups:
+
+  - id: context
+    title: Context
+    questions:
+      - id: environment
+        ask: Which environment is this for?
+        type: enum
+        values: [development, test, acceptance, production]
+        required: true
+        why: >
+          The first question of any run. It drives every rendered name, the
+          strictness of several defaults, and which questions are surfaced for
+          confirmation rather than applied silently.
+        renders: context.environment - read by every resource via from_context
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        required: true
+        why: >
+          Also a naming input, which makes it a render blocker rather than an
+          apply blocker: without it no name can be produced at all. Asked here
+          because every resource in a deployment shares it - and because a run
+          that forgets it gets all the way to rendering before noticing.
+        renders: context.location - and the region abbreviation in every name
+
+      - id: workload
+        ask: Which workload is this for? (short name, goes into every resource name)
+        type: string
+        required: true
+        why: >
+          The one human-chosen part of a rendered name, and the part someone
+          searching the portal recognises. Short, because several resource types
+          cap the whole name at 24 characters.
+        renders: context.workload - and the name of every resource
+
+      - id: subscription_id
+        ask: Which subscription does this deploy into?
+        type: ref
+        ref: subscription
+        required: true
+        why: >
+          Never guessed, and a context value rather than a template one so the
+          same spec can be rendered against another subscription without editing
+          anything else.
+        renders: provider subscription_id / the deployment's target scope
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        ref: resource_group
+        required: true
+        why: >
+          Expected, not created - every question set here declares that as a
+          boundary. A network often belongs in a platform group rather than the
+          application's, which is a placement decision worth making once.
+        renders: resource_group_name / scope
+
+  - id: posture
+    title: Posture
+    questions:
+      - id: network_exposure
+        ask: Should this infrastructure be reachable from the internet?
+        type: enum
+        values: [private, private_with_exceptions, public]
+        default: private
+        confirm_in: [production]
+        why: >
+          The single decision most resource defaults hang off. `private` means every
+          resource that supports a private endpoint gets one and has no public
+          surface. `private_with_exceptions` is the same baseline with named
+          resources allowed a firewalled public endpoint, each recorded as
+          `overridden`. `public` is a deliberate posture for a system whose
+          consumers genuinely live off-network - it is not the absence of a
+          decision, and the portal default being permissive is not a reason.
+        renders: >
+          pre-answers public_network_access in every resource question set, and
+          decides whether private endpoints and DNS records are generated at all
+
+      - id: local_auth
+        ask: May resources keep key-based or connection-string auth?
+        type: enum
+        values: [disabled, allowed_where_unavoidable]
+        default: disabled
+        confirm_in: [production]
+        why: >
+          Entra ID and RBAC are the baseline; a key bypasses both and is not
+          attributable in the audit log. `allowed_where_unavoidable` exists for a
+          consumer that genuinely cannot do managed identity, and names which
+          resource it applies to rather than relaxing the whole deployment.
+        renders: >
+          pre-answers shared_access_key_enabled, rbac_authorization, Entra-only
+          authentication and the equivalent switch per resource
+
+  - id: compliance
+    title: Mandates
+    questions:
+      - id: mandates
+        ask: Are there compliance or internal mandates this deployment has to satisfy?
+        type: list
+        default: []
+        why: >
+          Named here once so the decisions below can cite them, and so a reviewer
+          sees why an expensive option was chosen. Free text on purpose - PCI DSS,
+          BSI C5, TISAX, "group security baseline 2.1" are all legitimate entries,
+          and this plugin is not the place to enumerate regimes. An empty list is a
+          valid and common answer; it is not the same as nobody having asked.
+        renders: >
+          recorded in the spec under deployment.mandates, and cited by every
+          decision it forces
+
+      - id: key_protection
+        ask: Do keys have to be HSM-protected?
+        type: enum
+        values: [software, hsm]
+        default: software
+        why: >
+          The usual mandate with a hard technical consequence. HSM-backed keys are
+          not a flag on an existing vault: they require Key Vault **Premium**, or a
+          Managed HSM, and the SKU cannot be downgraded afterwards while a software
+          key cannot be converted into an HSM key in place. So it is a deployment
+          decision taken before the first vault exists, not a per-key one taken
+          later. Software protection is the right default where no mandate names
+          HSM - the keys are still platform-managed, rotated and encrypted.
+        renders: >
+          pre-answers Key Vault sku to `premium` and key_type to HSM-backed;
+          selects Managed HSM where a mandate requires a single-tenant boundary
+
+      - id: key_management
+        ask: Platform-managed keys, or customer-managed?
+        type: enum
+        values: [platform_managed, customer_managed]
+        default: platform_managed
+        confirm_in: [production]
+        why: >
+          Platform-managed is not a compromise - encrypted, rotated, free, no
+          operational burden. Customer-managed keys are warranted when a mandate
+          names them or when key revocation has to be a capability you actually
+          hold, and they pull in a Key Vault with purge protection, an identity with
+          wrap/unwrap and a rotation story. Choosing CMK without those is an
+          incomplete answer rather than a ready one.
+        renders: >
+          encryption.key_source and the CMK block on every resource that supports
+          it; combined with key_protection: hsm it also forces the vault SKU
+
+  - id: network
+    title: Network
+    questions:
+      - id: network_ownership
+        ask: Should this deployment build its own virtual network, reference an existing one, or does it need none?
+        type: enum
+        values: [create, reference, none]
+        default: create
+        why: >
+          Not a free choice: `private` and `private_with_exceptions` make a network
+          mandatory, because private endpoints, service endpoints and anything
+          subnet-scoped need one, and the posture is unimplementable without it.
+          Under those, `none` is not an available answer. Owning the network is
+          preferred - the deployment is then self-contained and reproducible in a
+          fresh subscription. `reference` is for a platform-owned hub or an
+          existing landing zone, and the word is literal: the network is read,
+          never managed. `none` exists for a genuinely public deployment whose
+          resources are all reached over their public endpoints - no endpoint, no
+          subnet, no network. The one thing never to do is create a network and
+          reference a foreign one in the same deployment: two sources of truth for
+          one address space.
+        forced_when: >
+          network_exposure in [private, private_with_exceptions] removes `none`;
+          network_exposure: public makes `none` the default
+        renders: >
+          terraform: azurerm_virtual_network resource vs. data "azurerm_virtual_network";
+          bicep: Microsoft.Network/virtualNetworks resource vs. an `existing` reference
+
+      - id: existing_vnet
+        ask: Which existing virtual network should the deployment reference?
+        type: ref
+        ref: virtual_network
+        required: true
+        depends_on: { question: network_ownership, equals: reference }
+        why: >
+          Read by name and resource group, never by a hardcoded resource id - an id
+          pins a subscription into the template. A pattern skill normally supplies
+          this from the platform it knows about.
+        renders: data source / existing reference the subnets are resolved from
+
+      - id: address_space
+        ask: Which address space should the new virtual network use?
+        type: string
+        required: true
+        depends_on: { question: network_ownership, equals: create }
+        why: >
+          Cannot be defaulted: an overlapping CIDR is invisible until the first
+          peering and expensive to change afterwards, because every subnet in it has
+          to be rebuilt. Ask for the range the address-management owner assigned.
+        renders: azurerm_virtual_network.address_space / properties.addressSpace.addressPrefixes
+
+      - id: private_endpoint_subnet
+        ask: Which existing subnet should private endpoints live in?
+        type: ref
+        ref: subnet
+        required: true
+        depends_on: { question: network_ownership, equals: reference }
+        why: >
+          One subnet carries the deployment's private endpoints, so no resource
+          question set has to ask. Referenced, like the network around it.
+        renders: private endpoint subnet_id in every resource that generates one
+
+      - id: private_endpoint_subnet_prefix
+        ask: Which prefix should the private endpoint subnet get?
+        type: string
+        required: true
+        depends_on: { question: network_ownership, equals: create }
+        why: >
+          With the deployment owning the network there is nothing to reference yet -
+          the subnet is generated, so what is needed is its prefix out of the
+          address space above, not a pointer to something that does not exist. A
+          /27 holds 27 usable addresses and therefore 27 private endpoints, which
+          is the number to size against.
+        renders: azurerm_subnet.address_prefixes / properties.subnets[].addressPrefix
+
+  - id: dns
+    title: DNS
+    questions:
+      - id: private_dns_ownership
+        ask: Who owns the private DNS zones?
+        type: enum
+        values: [platform, deployment]
+        default: platform
+        why: >
+          Private DNS zones are shared infrastructure: two deployments each creating
+          `privatelink.blob.core.windows.net` is a conflict that only surfaces at
+          apply time. `platform` references existing zones and creates only the A
+          records, which is correct almost everywhere. `deployment` is for an
+          isolated environment that genuinely owns its own resolution.
+        renders: >
+          whether privatelink zones are created or referenced; the zone group on
+          every private endpoint either way
+
+  - id: observability
+    title: Observability
+    questions:
+      - id: observability_ownership
+        ask: Should this deployment build its own Log Analytics workspace, or reference an existing one?
+        type: enum
+        values: [create, reference]
+        default: reference
+        why: >
+          The same shape as the network question, and for the same reason: a
+          workspace either exists and is read, or it does not and something has to
+          create it. `reference` is right almost everywhere - a workspace per
+          deployment fragments exactly the correlation an incident needs. `create`
+          is for an isolated environment with no platform workspace to point at,
+          and makes the workspace this deployment's to own and pay for.
+        renders: >
+          azurerm_log_analytics_workspace resource vs. data source;
+          Microsoft.OperationalInsights/workspaces resource vs. existing reference
+
+      - id: diagnostics_destination
+        ask: Which existing Log Analytics workspace should receive diagnostics?
+        type: ref
+        ref: log_analytics_workspace
+        required: true
+        depends_on: { question: observability_ownership, equals: reference }
+        why: >
+          Every resource routes diagnostics somewhere, and a resource with no
+          setting is invisible exactly when someone needs to see it. Resolved here,
+          before the first resource question, because "the workspace does not exist
+          yet" is a prerequisite to settle rather than a gap to discover halfway
+          through a resource interview. A pattern skill normally supplies it.
+          Under `observability_ownership: create` this key still carries the
+          destination - the workspace the deployment generates - so a resource
+          inheriting it never has to know which way it was resolved.
+        renders: the diagnostic setting attached to every resource that supports one
+
+      - id: log_retention_days
+        ask: How long should logs be retained?
+        type: int
+        default: 30
+        depends_on: { question: observability_ownership, equals: create }
+        why: >
+          The cost guard, and therefore decided here rather than per workspace: a
+          deployment that owns its logging owns its logging bill. 30 days covers
+          incident investigation, which is what most logs are for, and it is also
+          where the retention line item starts - the first 31 days are included in
+          the ingestion price. Longer retention is an audit or regulatory
+          requirement rather than an operational one, and it is charged per
+          gigabyte per month for as long as it is set.
+        renders: azurerm_log_analytics_workspace.retention_in_days / properties.retentionInDays
+
+      - id: daily_quota_gb
+        ask: Should ingestion be capped per day?
+        type: int
+        default: -1
+        confirm_in: [production]
+        depends_on: { question: observability_ownership, equals: create }
+        why: >
+          The second cost screw on the same workspace, so it belongs beside the
+          first rather than in the resource set - asking them a level apart is how
+          one gets answered and the other forgotten. -1 means no cap. A cap
+          protects against a runaway logger emptying a budget, and it does it by
+          **dropping logs for the rest of the day** once hit, which is a blind spot
+          that arrives exactly when something is misbehaving loudly. In production
+          prefer an alert on ingestion volume; in a sandbox the cap is the cheaper
+          protection. If a cap is wanted, the number is the answer - "yes" is not.
+        renders: azurerm_log_analytics_workspace.daily_quota_gb / properties.workspaceCapping.dailyQuotaGb

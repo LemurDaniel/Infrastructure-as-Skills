@@ -4,6 +4,23 @@ One file per resource, at `questions/<resource>.yaml` inside its family skill. T
 are the actual content of this plugin — a family's `SKILL.md` is a router and a handful of
 family-wide truths.
 
+## Two scopes
+
+| Scope | Where | Answers |
+|---|---|---|
+| `resource` (default) | `resources/<family>/questions/<resource>.yaml` | One resource's decisions |
+| `deployment` | [`core/iac-authoring/questions/deployment.yaml`](../questions/deployment.yaml) | What holds for everything in one deployment |
+
+The deployment set is resolved **first**, and a resource question that would re-ask one of
+its decisions declares `from_deployment: <id>` instead of a default. Posture is one
+decision per system, not one per resource — asking "should this be reachable from the
+internet?" eight times in one run is the failure this prevents, and so is answering it
+differently the eighth time.
+
+A deployment set names no resource, so it carries no `resource:` and no `naming:` block,
+and the consistency script exempts it from those checks. Everything else — groups, ids,
+`why`, `renders`, `depends_on` — is identical.
+
 ## Shape
 
 ```yaml
@@ -12,10 +29,12 @@ schema_version: 1
 resource: Microsoft.Storage/storageAccounts
 title: Azure Storage Account
 
-# Both identifier forms, because the two targets spell them differently.
+# Both identifier forms, because the two targets spell them differently, plus the
+# abbreviation the Bicep side renders into a var (the naming modules are not shipped).
 naming:
   terraform: "Azure::Microsoft.Storage/storageAccounts"
   bicep: "Microsoft.Storage/storageAccounts"
+  abbreviation: "st"
 
 # What this resource cannot do, so the skill can hand off instead of improvising.
 boundaries:
@@ -63,8 +82,11 @@ groups:
 | `confirm_in` | no | Environments where the default is surfaced for confirmation rather than applied silently. |
 | `why` | yes | The reasoning. This is what a reviewer reads and what justifies the default. |
 | `renders` | yes | Which attribute(s) the answer drives, per target where they differ. Lets a review skill map code back to a decision. |
-| `depends_on` | no | `{ question: <id>, equals: <value> }` — skip unless the condition holds. |
+| `depends_on` | no | `{ question: <id>, equals: <value> }`, or `not_equals` — skip unless the condition holds. |
 | `ref` | for `ref` | What the value points at, e.g. `subnet`, `log_analytics_workspace`. Signals that a pattern usually supplies it. |
+| `from_deployment` | no | The deployment-set question whose answer this one takes. Mutually exclusive with `default` and `required`. |
+| `forced_when` | no | Which answer elsewhere removes a value from `values`, or determines this one. Prose, because the conditions are not uniform enough to encode. Recorded as `forced` with `forced_by` in the spec. |
+| `from_context` | no | The value comes from the spec's `context:` rather than being asked per resource. |
 
 ## Rules that matter
 
@@ -72,6 +94,18 @@ groups:
 the same direction. `public_network_access` and `shared_access_key_enabled` are the classic
 pair: Azure ships them permissive, and inheriting that as a baseline means every resource
 this plugin generates starts from the wrong end.
+
+**A decision that holds for more than one resource belongs in the deployment set.** The
+test is whether two resources could sensibly answer it differently. Posture, network
+ownership, key protection and the diagnostics destination fail that test — they are one
+answer per system. Replication, access tier and soft-delete windows pass it, and stay with
+the resource.
+
+**One answer may force another.** `key_protection: hsm` is not a flag; it requires Key
+Vault Premium, and a software key cannot be converted in place later. Where that happens,
+the forced value is pre-answered rather than asked, and the question that forced it is
+named in the spec. A question whose answer is already determined is noise, but a *silently*
+determined one is worse — say which mandate drove it.
 
 **`why` is not decoration.** It is the only artefact that survives into review. "Secure
 default" is not a `why`; the `why` is what breaks if the other value is chosen, or what it
@@ -96,6 +130,6 @@ pwsh -NoProfile -File scripts/Test-QuestionSet.ps1 <family-directory>
 
 Checks every `questions/*.yaml` in the family for the structural invariants: unique ids,
 `required` and `default` not both set, enum defaults within `values`, `depends_on` pointing
-at a question that exists, `why` and `renders` present, both naming forms declared, the
-Bicep identifier not carrying an `Azure::` prefix, and every resource reachable from the
-family skill's routing table.
+at a question that exists, `why` and `renders` present, both naming forms and the
+abbreviation declared, the Bicep identifier not carrying an `Azure::` prefix, and every
+resource reachable from the family skill's routing table.
