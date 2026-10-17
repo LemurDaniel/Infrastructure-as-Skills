@@ -124,9 +124,20 @@ Beyond the script:
 - **A question set's `why` is not optional.** It is the only artefact that
   survives into a review of generated infrastructure. A commit adding questions
   without it is incomplete, not minimal.
-- **Documented capabilities match reality.** `README.md` currently marks the two
-  validators and `patterns/` as not written. Do not let a commit quietly imply
-  otherwise — if it makes one of them true, say so; if not, leave the marker.
+- **Documented capabilities match reality.** `README.md` currently marks
+  `Test-QuestionSet.ps1` and `patterns/` as not written. Do not let a commit
+  quietly imply otherwise — if it makes one of them true, say so; if not, leave
+  the marker.
+- **`PROGRESS.md` is rewritten before a session's last commit.** Goal,
+  decisions and why, what is open, the one next thing — nothing else. It is
+  the handoff the next session starts from; a session that changed a decision
+  or closed an open item and did not write it there has not finished. Commit it
+  with the change that made it true, or on its own when the session only moved
+  the "next" line.
+- **`.claude/settings.json` is the gate.** It pre-approves the read-only checks
+  and denies force-push, `reset --hard`, `--no-verify`, `terraform apply` and
+  `terraform destroy`. A session does not widen it; the owner does, in a commit
+  that says why.
 
 ## 5. Branch and push
 
@@ -151,4 +162,6 @@ Beyond the script:
 - Putting a remote URL in a tracked file, a commit message, or output pasted
   back into a session. The `origin` URL embeds a personal access token.
 - Committing a generated `infra-spec.yaml` from a scratch run. Specs belong in
-  the consuming repo next to the code they produced, not here.
+  the consuming repo next to the code they produced, not here. The one exception
+  is `examples/<case>/`: a deliberate, reviewed fixture with its request and its
+  render beside it, never a spec that merely fell out of a run.
