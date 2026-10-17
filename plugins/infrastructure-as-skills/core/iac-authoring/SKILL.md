@@ -30,6 +30,52 @@ by-product: a backend renders *from* it, and the same spec can go to a different
 including `Infrastructure-by-Skill` for API-driven execution — which is what makes the two
 tracks comparable at all. Never generate code directly from the interview.
 
+## Phase 0 — Ask what is being built, in the user's own words
+
+The interview opens with one open question, not with the question set. Let the user
+describe what they are building, and let that description answer as much as it can.
+Only what it leaves open is asked afterwards.
+
+The reason is the order of cost. A paragraph of prose is cheap to write and typically
+settles the environment, the region, what the thing is for, who reaches it and from where,
+and whether a mandate applies — half the deployment set, before a single structured
+question. Starting with the question set instead asks those things one field at a time,
+and asks some that the user would have answered in passing.
+
+**Skip it when the request already is that description.** "Storage für die Rechnungsablage
+der Buchhaltung, Prod in West Europe, nur aus dem Firmennetz, BSI C5" needs no opening
+question. A bare resource name — "ich brauch ein storage account für terraform" — is not a
+description; it names the resource and nothing about the system around it.
+
+Ask in plain text, not through `AskUserQuestion`: the point is free prose, and options
+would turn it back into the structured interview it precedes. Give the user a short list
+of what is worth mentioning, so the description lands on the questions that matter:
+
+```
+Beschreib kurz, was du aufbauen willst. Hilfreich ist alles davon, nichts davon ist Pflicht:
+  - Wofür ist es da, und für welche Umgebung (dev / test / prod)?
+  - Region, Subscription, Resource Group — falls schon festgelegt
+  - Wer oder was greift zu, und von wo (Internet, Firmennetz, nur andere Azure-Dienste)?
+  - Gibt es Vorgaben (BSI C5, ISO 27001, interne Richtlinien)?
+  - Was existiert schon (VNet, Log Analytics Workspace, DNS) und soll genutzt werden?
+```
+
+Then map the answer onto the deployment set and every routed question set. Everything it
+settles is recorded with `source: stated` and is not asked again. Three rules for the
+mapping:
+
+- **A value is stated only if the user said it.** "Nur intern" settles
+  `network_exposure: private`; it does not settle an address range. An inferred value that
+  the text does not carry belongs to the normal resolution order, not to `stated`.
+- **A contradiction is asked, not resolved.** "Öffentlich erreichbar" next to "nur aus dem
+  Firmennetz" is one question in Phase 3, quoting both halves.
+- **The description may add resources.** "…mit Logs nach Log Analytics" routes a second
+  question set through [azure-resources](../azure-resources/SKILL.md) — the same request,
+  one interview, one spec.
+
+What remains open goes into Phase 3's batches. The description does not replace them; it
+shrinks them, and usually to the `required` questions nobody mentions unprompted.
+
 ## Phase 1 — Establish the target and the layout
 
 Terraform or Bicep. Do not ask if the repository answers it:
@@ -75,7 +121,7 @@ For each question, the answer then comes from the first source that has one:
 
 | # | Source | `source` recorded as |
 |---|---|---|
-| 1 | What the user already said in their request | `stated` |
+| 1 | What the user said — the request and the Phase 0 description | `stated` |
 | 2 | A pattern skill's pre-answers | `pattern` |
 | 3 | The deployment set's answer, for a `from_deployment` question | `deployment` |
 | 4 | An existing `infra-spec.yaml` in the target directory | `carried` |
@@ -94,6 +140,9 @@ Defaults are not invented per resource — they come from
 lives. Read it before choosing any default or justifying one.
 
 ## Phase 3 — Ask, in at most two batches
+
+Only what Phase 0's description left open reaches this phase. A question the user already
+answered in prose and is asked again tells them the description was not read.
 
 **Fold Phase 1's question into the first batch** when the repository did not answer it.
 Target and layout are two more questions, not a separate exchange — a round trip per
