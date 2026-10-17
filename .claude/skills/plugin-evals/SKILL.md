@@ -40,8 +40,8 @@ Each of these cost a run to discover.
 
 - **No shell on Windows.** A case that lists `Bash` or `PowerShell` in `allowed_tools` is
   refused before it starts: the eval sandbox has no Windows backend, and the run fails
-  closed. So `Test-Spec.ps1`, `New-Diagram.ps1` and the draw.io export cannot run inside a
-  case here. Cases list `[Read, Glob, Grep, Skill, Write, Edit]`; run `Test-Spec.ps1`
+  closed. So `check_spec.py`, `new_diagram.py` and the draw.io export cannot run inside a
+  case here. Cases list `[Read, Glob, Grep, Skill, Write, Edit]`; run `check_spec.py`
   yourself on the produced specs afterwards (section 4). Shell-dependent graders come back
   only on a Linux runner with bubblewrap.
 - **Write tools must be in the case, not only on the command line.** A grader that reads a
@@ -126,7 +126,7 @@ costs before starting it.
 Afterwards:
 
 ```powershell
-pwsh -NoProfile -File .claude/skills/plugin-evals/scripts/Show-EvalResult.ps1 <scratch>/eval.json
+python3 .claude/skills/plugin-evals/scripts/show_eval_result.py <scratch>/eval.json
 ```
 
 It lists failing graders with their explanation, flags a grader that passed in some runs
@@ -140,7 +140,7 @@ memory between runs: without it, a decision that went from 3/3 to 2/3 looks like
 that still passes. After reading a run and accepting it:
 
 ```powershell
-pwsh -NoProfile -File .claude/skills/plugin-evals/scripts/Show-EvalResult.ps1 <scratch>/eval.json -UpdateBaseline
+python3 .claude/skills/plugin-evals/scripts/show_eval_result.py <scratch>/eval.json --update-baseline
 ```
 
 and commit `baseline.json` with the change it measures. Never update it from a run you
@@ -150,7 +150,7 @@ with a harness error is refused as a baseline.
 Then validate the produced specs yourself, since the case cannot:
 
 ```powershell
-pwsh -NoProfile -File plugins/infrastructure-as-skills/core/iac-authoring/scripts/Test-Spec.ps1 <kept workspace>/infra/infra-spec.yaml
+python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_spec.py <kept workspace>/infra/infra-spec.yaml
 ```
 
 `--keep-temp` keeps each run's directory under `%TEMP%\claude-eval-*`. Everything in it
