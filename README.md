@@ -175,7 +175,10 @@ matching skill triggers.
 
 Early, and the shape matters more than the coverage right now. One interview has been run
 end to end; it produced a spec, and the spec is honest about what it could not resolve.
-Nothing has been rendered to Terraform or Bicep yet.
+One spec (`private-storage-on-platform`) has been rendered to Terraform against
+`azurerm` 5.10 and `LemurDaniel/naming` 1.0 — `fmt`, `validate` and a plan-only
+`terraform test` with a mocked platform pass. Nothing has been applied, and nothing has
+been rendered to Bicep.
 
 - [x] Plugin skeleton, marketplace manifest, grouped layout
 - [x] Shared contract: spec format, question-set format, the interview protocol
@@ -190,7 +193,10 @@ Nothing has been rendered to Terraform or Bicep yet.
 - [ ] **`Test-QuestionSet.ps1`** — still referenced by the docs and not written
 - [ ] **Reference pattern skill** — `patterns/` is empty, so composition is specified but
       unproven
-- [ ] **A rendered spec.** The interview is exercised; the renderer has never run
+- [x] A rendered spec: storage account on a referenced platform, Terraform, validated and
+      tested plan-only. Surfaced the `azurerm` 5.x renames and the two-target diagnostics
+- [ ] **A rendered spec in Bicep**, and the same spec through both — the cross-backend diff
+- [ ] **An applied render.** The plan has not been run against a subscription
 - [ ] Remaining families: `compute`, `data`, `security`
 - [ ] Remaining storage resources: blob container, file share, queue
 - [ ] Evals per pattern, plus a consistency run: same spec many times, measure the spread

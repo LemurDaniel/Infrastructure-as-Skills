@@ -165,8 +165,11 @@ Early, and deliberately honest in `README.md` about what is unproven:
 - Three resources exist: `storage/storage-account`, `network/virtual-network`,
   `observability/log-analytics-workspace`. The last two were written because a test run
   produced a spec that could not be rendered without them.
-- No spec has been rendered to Terraform or Bicep yet. The interview and the spec are
-  exercised; the renderer is not.
+- One spec has been rendered to Terraform (`private-storage-on-platform`, `azurerm` 5.10,
+  `LemurDaniel/naming` 1.0): `validate` and a plan-only `terraform test` with
+  `mock_provider "azurerm"` pass. Nothing has been applied; Bicep has not been rendered.
+- The storage-account rendering reference is written for `azurerm` **5.x**:
+  `public_network_access = "Disabled"` (string), not the deprecated 4.x bool.
 
 ## Repository Conventions
 
