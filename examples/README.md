@@ -20,7 +20,8 @@ harder case.
   infra-spec.yaml       # the interview's output - the artefact everything else follows from
   naming.yaml           # the convention, a full copy of naming.default.yaml
   *.tf, *.tfvars        # the Terraform render, one concern per file
-  tests/*.tftest.hcl    # plan-only, platform mocked, naming provider real
+  tests/*.tftest.hcl    # plan-only, platform mocked, naming provider real - one
+                        # assert per spec decision, checked by Test-RenderCoverage.ps1
   bicep/main.bicep      # the Bicep render of the same spec
   bicep/main.bicepparam # its parameters - the same values as terraform.tfvars
 ```
@@ -33,6 +34,7 @@ terraform init
 terraform fmt -check -recursive
 terraform validate
 terraform test
+pwsh -NoProfile -File ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/Test-RenderCoverage.ps1 ./infra-spec.yaml
 
 bicep build --stdout bicep/main.bicep > $null
 bicep build-params bicep/main.bicepparam --stdout > $null
