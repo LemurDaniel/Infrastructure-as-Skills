@@ -24,6 +24,11 @@ deployment:
   naming_convention:
     value: default
     source: default
+  module_source:
+    value: authored
+    source: stated          # rendered before AVM became the default; the committed
+                            # render is authored and stays so until re-rendered on
+                            # avm-res-storage-storageaccount / avm/res/storage/storage-account
   landing_zone:
     value: corp
     source: stated          # "nur aus dem Firmennetz" over an existing hub
