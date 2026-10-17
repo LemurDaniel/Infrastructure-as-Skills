@@ -133,6 +133,20 @@ It lists failing graders with their explanation, flags a grader that passed in s
 but not all as **UNSTABLE**, and reports a run that never started as a harness error
 rather than as fifteen grader failures.
 
+It also compares every grader against **`evals/baseline.json`** — the committed snapshot
+of the last accepted run, passed-of-total per case and grader — and marks a lower rate
+as **REGRESS** (exit 1, even when every case still passes on aggregate). That is the
+memory between runs: without it, a decision that went from 3/3 to 2/3 looks like a case
+that still passes. After reading a run and accepting it:
+
+```powershell
+pwsh -NoProfile -File .claude/skills/plugin-evals/scripts/Show-EvalResult.ps1 <scratch>/eval.json -UpdateBaseline
+```
+
+and commit `baseline.json` with the change it measures. Never update it from a run you
+have not read — a bad run written into the baseline hides the regression it carries. A run
+with a harness error is refused as a baseline.
+
 Then validate the produced specs yourself, since the case cannot:
 
 ```powershell
