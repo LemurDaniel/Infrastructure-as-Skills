@@ -1,0 +1,251 @@
+# Rendering with Azure Verified Modules
+
+Azure Verified Modules (AVM) are Microsoft's published, tested, versioned modules for
+Terraform and Bicep — one resource module per Azure resource type, a pattern module per
+common composition, both targets following one specification. **They are the primary
+rendering target of this plugin.** A resource that has an AVM module renders as a call to
+it; a resource that has none renders as authored code from the resource's own
+`terraform.md` / `bicep.md`, and the spec says so.
+
+The question sets do not change. The interview still resolves every decision, the spec
+still records every value with its source, and the module is where those values land.
+What changes is the shape of the output: a module call with the decisions as inputs,
+instead of resources with the decisions as attributes.
+
+## Why modules first, and what it costs
+
+- **The hard parts of a resource are already implemented.** Private endpoints with their
+  DNS zone groups, diagnostic settings per sub-resource, role assignments, locks,
+  customer-managed keys with the identity dance — every AVM module implements the same
+  shared interfaces for these, tested against Azure. The authored references in this repo
+  reinvent each of them per resource, and that is exactly where the first render had its
+  bugs (the account-level diagnostic setting that collects no blob logs, the private
+  endpoint named after the index).
+- **One contract across both targets.** The Bicep `privateEndpoints` array and the
+  Terraform `private_endpoints` map are the same interface. A spec rendered twice lands on
+  the same module surface, which is what makes the cross-backend diff small.
+- **What it costs: a module does not expose every decision.** The Terraform storage module
+  takes `public_network_access_enabled` as a bool, not the 5.x string; the Bicep workspace
+  module defaults `dataRetention` to 365 where the guardrails say 30. Every module call is
+  therefore rendered with the decisions **written out explicitly**, even where they match
+  the module default — the module default is not the guardrail's default, and a module
+  release can move it. A decision the module cannot carry at all is named in the handover
+  (see *Gaps*), never dropped.
+- **Versions move fast and are `0.y.z`.** Every AVM module today is pre-1.0; minor versions
+  may break. The pin is always explicit and the lookup is always live (below).
+
+## Which module
+
+The module is resolved **here**, in the renderer, from the resource type the question set
+names — never written into the spec (see
+[spec.md](../../iac-authoring/references/spec.md#reusing-an-existing-module)). The
+coordinate follows from the resource provider namespace and type:
+
+| | Terraform | Bicep |
+|---|---|---|
+| Resource module | `Azure/avm-res-<namespace>-<type>/azurerm` | `br/public:avm/res/<namespace>/<type>:<x.y.z>` |
+| Pattern module | `Azure/avm-ptn-<name>/azurerm` | `br/public:avm/ptn/<name>:<x.y.z>` |
+| Example | `Azure/avm-res-storage-storageaccount/azurerm` | `br/public:avm/res/storage/storage-account:0.33.1` |
+| Source of truth | [Terraform index](https://azure.github.io/Azure-Verified-Modules/indexes/terraform/) | [Bicep index](https://azure.github.io/Azure-Verified-Modules/indexes/bicep/) |
+| Code | `github.com/Azure/terraform-azurerm-avm-res-<namespace>-<type>` | `github.com/Azure/bicep-registry-modules`, `avm/res/<namespace>/<type>/` |
+
+The namespace and type are lowercased and, on the Bicep side, kebab-cased
+(`operationalinsights-workspace` ↔ `operational-insights/workspace`). The index is the
+only authoritative list; the two names do not always derive mechanically.
+
+### Status decides whether it is used
+
+The index carries a status per module. Read it before rendering:
+
+| Status | What to do |
+|---|---|
+| `Available` | Use it. The default path |
+| `Orphaned` | Published and working, but without an owner: use it, and say so in the handover — the next fix may be slow. The Terraform Key Vault module is in this state today |
+| `Proposed` | Not published. Render authored code for that resource and record `implementation: authored` with `source: forced`, `forced_by: no AVM module for <type>` |
+| `Deprecated` | Do not use. As `Proposed` |
+| Not in the index | As `Proposed`. Say out loud that no module exists; do not guess a coordinate |
+
+### Modules for the resources this plugin knows
+
+Looked up on 2026-10-17. **Versions are a snapshot, not a pin to copy** — resolve the
+current one before rendering (next section).
+
+| Resource | Terraform module | Bicep module | Notes |
+|---|---|---|---|
+| Storage account | `avm-res-storage-storageaccount` v0.10.0 | `avm/res/storage/storage-account` 0.33.1 | Terraform module is AzAPI-based since 0.7 — see *Provider requirements* |
+| Virtual network | `avm-res-network-virtualnetwork` v0.22.3 | `avm/res/network/virtual-network` 0.10.2 | Terraform module is AzAPI-based; subnets are a child module, usable alone for a referenced vnet |
+| Log Analytics workspace | `avm-res-operationalinsights-workspace` v0.5.1 | `avm/res/operational-insights/workspace` 0.16.1 | Terraform module still requires `azurerm` **4.x** (`>= 4.36, < 5.0`) |
+| Private endpoint | `avm-res-network-privateendpoint` v0.2.0 | `avm/res/network/private-endpoint` 0.12.1 | Rarely called directly — every resource module carries the interface |
+| Key Vault | `avm-res-keyvault-vault` v0.12.0, **Orphaned** | `avm/res/key-vault/vault` 0.14.2 | For `key_management: customer_managed` |
+| Resource group | `avm-res-resources-resourcegroup` v0.4.0 | `avm/res/resources/resource-group` 0.4.4 | Not rendered — the deployment set expects the group to exist |
+
+Pattern modules worth knowing when `patterns/` fills: `avm-ptn-network-private-link-private-dns-zones`
+/ `avm/ptn/network/private-link-private-dns-zones` (the privatelink zones a
+`private_dns_ownership: deployment` deployment owns), `avm-ptn-alz-connectivity-hub-and-spoke-vnet`
+/ `avm/ptn/network/hub-networking`.
+
+### Resolving the current version
+
+Never from memory, never from the table above. Three sources that need no credentials:
+
+```powershell
+# Bicep: the public registry's tag list. Highest semver wins.
+(Invoke-RestMethod 'https://mcr.microsoft.com/v2/bicep/avm/res/storage/storage-account/tags/list').tags |
+  Sort-Object { [version]$_ } | Select-Object -Last 1
+
+# Terraform: the module repository's tags (the registry mirrors them).
+git ls-remote --tags https://github.com/Azure/terraform-azurerm-avm-res-storage-storageaccount |
+  ForEach-Object { ($_ -split '/')[-1] } | Where-Object { $_ -notmatch '\^' } | Sort-Object { [version]($_ -replace '^v') } | Select-Object -Last 1
+
+# Either: the module's README, which is generated from the code and carries every input.
+# https://raw.githubusercontent.com/Azure/terraform-azurerm-avm-res-<ns>-<type>/main/README.md
+# https://raw.githubusercontent.com/Azure/bicep-registry-modules/main/avm/res/<ns>/<type>/README.md
+```
+
+Then pin **that** version: `version = "~> 0.10.0"` (patch-floating, minor-fixed, because
+`0.y` minors break) in Terraform, the exact `0.33.1` in Bicep (`br/public` references take
+no range). Say which version was resolved in the handover; the pin in the code is the
+record, the spec never carries it.
+
+Read the module's README **inputs section** for the version you pinned before writing the
+call. Inputs are renamed between minors; an argument from memory that no longer exists is
+the same failure as an invented provider attribute.
+
+## The shared interfaces
+
+Every AVM resource module implements the same optional interfaces, with the same names
+per target. This is the mapping the resource rendering references build on — a decision
+that lands in one of these lands the same way on every resource:
+
+| Decision in the spec | Terraform input | Bicep parameter |
+|---|---|---|
+| `private_endpoint_subnet`, `private_endpoint_subresources` | `private_endpoints = { <key> = { subnet_resource_id, subresource_name, name } }` | `privateEndpoints: [ { service, subnetResourceId, name } ]` |
+| `deployment.private_dns_records: policy` | `private_endpoints_manage_dns_zone_group = false` and no `private_dns_zone_resource_ids` | no `privateDnsZoneGroup` on the endpoint |
+| `deployment.private_dns_records: deployment` | `private_dns_zone_resource_ids = [<zone id>]` per endpoint | `privateDnsZoneGroup: { privateDnsZoneGroupConfigs: [ { privateDnsZoneResourceId } ] }` |
+| `diagnostic_workspace`, `diagnostic_categories`, `metrics_enabled` | `diagnostic_settings = { <key> = { workspace_resource_id, logs = [{ category_group }], metrics = [{ category }] } }` (per-service variants where the resource has them, e.g. `diagnostic_settings_blob`) | `diagnosticSettings: [ { workspaceResourceId, logCategoriesAndGroups: [ { categoryGroup } ], metricCategories: [ { category } ] } ]` (nested under the service object where the resource has them, e.g. `blobServices.diagnosticSettings`) |
+| `managed_identity` | `managed_identities = { system_assigned = true, user_assigned_resource_ids = [] }` | `managedIdentities: { systemAssigned: true, userAssignedResourceIds: [] }` |
+| `role_assignments` | `role_assignments = { <key> = { role_definition_id_or_name, principal_id, principal_type } }` | `roleAssignments: [ { roleDefinitionIdOrName, principalId, principalType } ]` |
+| `key_management: customer_managed` | `customer_managed_key = { key_vault_resource_id, key_name, user_assigned_identity = { resource_id } }` | `customerManagedKey: { keyVaultResourceId, keyName, userAssignedIdentityResourceId }` |
+| deletion lock (not a question yet) | `lock = { kind = "CanNotDelete" }` | `lock: { kind: 'CanNotDelete' }` |
+| `context.tags` | `tags = local.tags` | `tags: tags` |
+| `deployment.module_telemetry` | `enable_telemetry = true` / `false` | `enableTelemetry: true` / `false` |
+
+Map keys on the Terraform side are arbitrary and stable — use the decision's own key
+(`blob`, `file`) so the resource address reads as the decision does. Role assignments take
+the role **by name** in both targets (`"Storage Blob Data Contributor"`), which removes the
+GUID table the authored Bicep render needed.
+
+**Telemetry.** Every AVM module sends a deployment telemetry event to Microsoft unless
+told not to; the Terraform modules do it through the `Azure/modtm` provider, the Bicep
+modules through an empty nested deployment. It is a deployment decision
+(`deployment.module_telemetry`, default `enabled`) and is rendered explicitly on every call
+either way, so a reviewer sees it was decided.
+
+## Provider requirements (Terraform)
+
+An AVM Terraform module brings its own provider requirements, and the root has to satisfy
+the **union** of them. Read each module's README *Requirements* before writing
+`providers.tf`; today that means:
+
+- **AzAPI-based modules** (storage account, virtual network, more every quarter) require
+  `Azure/azapi ~> 2.12`, `Azure/modtm ~> 0.3`, `hashicorp/random`, and Terraform `>= 1.10`.
+  They take the resource group as `parent_id` — a resource **id**, not a name — and no
+  longer need `azurerm` at all. They authenticate with Entra ID always, so
+  `shared_access_key_enabled = false` costs nothing on the module side.
+- **azurerm-based modules** (Log Analytics workspace) still pin `azurerm`, and the
+  workspace module pins it to **4.x**. A root that needs that module cannot be on
+  `azurerm ~> 5.0` — the module's constraint wins, because the module is the primary path,
+  and the authored fallback code in that root follows the 4.x spelling (bool
+  `public_network_access_enabled`). Check [terraform-idiom.md](terraform-idiom.md) for
+  what differs between the two majors before mixing.
+- **The root keeps `azurerm` for what the modules do not do**: the `data` blocks that
+  reference the platform (`azurerm_subnet`, `azurerm_log_analytics_workspace`), and any
+  authored fallback resource. The `naming` provider stays as before; the module takes the
+  rendered name as `name`.
+
+So a typical root declares `azurerm`, `azapi`, `modtm`, `random` and `naming`. `modtm` and
+`random` are transitive: declaring them in the root is what lets `terraform init` resolve
+one version for the whole configuration, and what the lock file pins.
+
+## Rendering a call
+
+The decision set of a resource becomes one module block. Three rules carry over from the
+authored idiom and one is new:
+
+1. **Every decision is written, even at the module default.** The module default is not
+   the guardrail's, and a reviewer reads the call, not the module.
+2. **Context values stay variables; the name comes from the naming provider / vars.**
+   `name = data.naming_name.storage_account.name`, `location = var.location`,
+   `parent_id = data.azurerm_resource_group.this.id` (AzAPI module) or
+   `resource_group_name = var.resource_group_name` (azurerm module).
+3. **Wiring stays in the root.** The module's own interfaces (its private endpoints, its
+   role assignments) are inputs to that module; a role assignment *between* two modules is
+   root-level wiring as before.
+4. **New: comment the decision key on inputs whose name does not say it.** A bool
+   `public_network_access_enabled = false` under a spec that says
+   `public_network_access: disabled` carries `# decision: storage-account.networking.public_network_access`
+   on the line above, the same marker the tests use. A reviewer maps code to decision
+   without the question set open.
+
+Each resource's `terraform.md` and `bicep.md` opens with the decision → module input table
+and the rendered call for the current module version. The authored rendering follows it,
+for the `implementation: authored` case and for reading what the module does inside.
+
+## Gaps: what the module does not carry
+
+A module swallows a decision in one of three ways. Each has a rule:
+
+| The module… | Rule |
+|---|---|
+| **Has no input for it** (e.g. a question the module's authors did not think worth exposing) | Name it in the handover as *not carried by the module*, keep the decision in the spec, and if it matters for the deployment either add the attribute through the module's escape hatch (`_target_overrides`, with the module's `azapi` `ignore_body_changes` / `resource_types` where it has one) or render that resource authored. Never silently drop it |
+| **Fixes it the other way** (a default the module does not let you change) | A finding for the question set, not for the render: either the guardrail is wrong or the module is, and the spec records the value actually deployed with `source: forced`, `forced_by: <module>` |
+| **Exposes it under a different shape** (bool for a string, days-without-enabled, a nested object) | Normal rendering. The resource reference maps it, the test asserts the spec's value through the module's shape |
+
+The check is mechanical: walk the resource's spec decisions against the module's input
+list, once per module version. The resource references do this for the version they
+document; a newer version is re-walked, not assumed.
+
+## Tests with a module in the middle
+
+The contract from [terraform-idiom.md](terraform-idiom.md#tests) holds — one assert per
+spec decision, named by its key path, or a `# not-testable:` marker with a reason — but
+the root no longer owns the resource, so the assert target moves:
+
+- **Mock `azapi` as the platform is mocked.** An AzAPI-based module plans against a mocked
+  `azapi` provider the way the authored render plans against mocked `azurerm`; the naming
+  provider stays real. `modtm` is mocked too, or `enable_telemetry = false` in the test
+  `variables` block if the render parameterises it.
+- **Assert through the module's outputs.** Every AVM module outputs `resource_id`, `name`
+  and `resource` (the full resource object). For an AzAPI module `resource.body` is what
+  the root passed in and is known at plan time; `resource.body.properties.publicNetworkAccess`
+  is the assert target for `public_network_access`. For an azurerm module `resource.<attribute>`
+  plays the same role.
+- **What the root cannot observe is marked, not skipped.** A decision the module turns
+  into a sub-resource the output does not expose — a blob service's soft-delete days behind
+  a `blob_properties` input — is `# not-testable: <key> - set through the module's
+  blob_properties input; the module's own tests cover the mapping`. That sentence is the
+  honest state: the module's test suite is part of the verification story now, and the
+  marker says which decisions lean on it.
+- **The module's own tests are not re-run here.** They ran before the version was
+  published. What the render tests prove is that *this* root passes *these* decisions —
+  which is the part a module cannot test for you.
+
+The first AVM render will settle which decisions a plan can observe through `resource`;
+until then this section describes the intended contract, and `Test-RenderCoverage.ps1`
+accepts both an assert and a marker per decision.
+
+Bicep has no test runner in this repo yet (see `PROGRESS.md`); `bicep build` against the
+`br/public` reference is the check, and it resolves the module from the registry, so it
+needs network access to `mcr.microsoft.com`.
+
+## When not to use a module
+
+- **The repository already renders the resource authored** and the user did not ask to
+  migrate. Matching the repository beats the default (iac-rendering, *Order of work* 1);
+  moving a deployed resource into a module is a state migration (`moved` blocks in
+  Terraform, a redeploy with the same names in Bicep) and is its own task.
+- **The user named a module that is not AVM.** `implementation: reuse` with the
+  coordinate in `_target_overrides`, as before.
+- **A pattern skill owns the composition and an AVM pattern module overlaps it.** Prefer
+  the AVM pattern module when it covers the pattern; prefer the resource modules under the
+  skill's own wiring when it does not. Never both for one part.
