@@ -85,18 +85,102 @@ rather than indexing a list whose order is incidental.
 
 ## Tests
 
+Every decision in the question set, one assert each, named by its spec key path. The
+values are those of a spec with `address_space: 10.42.0.0/16`, an `endpoints` subnet of
+`10.42.1.0/27` and an `app` subnet of `10.42.2.0/24`; the asserts stay, the values follow
+the spec. The coverage rule and the markers are in
+[terraform-idiom.md](../../../core/iac-rendering/references/terraform-idiom.md#tests).
+
 ```hcl
-run "endpoint_subnet_is_large_enough" {
+run "naming" {
   command = plan
 
-  variables {
-    address_space = "10.42.0.0/16"
-    subnets       = { endpoints = { prefix = "10.42.1.0/27" } }
+  assert {
+    condition     = azurerm_virtual_network.this.name == "vnet-gwc-stg-telemetry-01"
+    error_message = "The name must come from naming.yaml, not from a literal."
+  }
+}
+
+run "addressing" {
+  command = plan
+
+  # decision: virtual-network.addressing.address_space
+  assert {
+    condition     = length(azurerm_virtual_network.this.address_space) == 1 && azurerm_virtual_network.this.address_space[0] == "10.42.0.0/16"
+    error_message = "The stated range, exactly - not rounded, not re-planned."
   }
 
+  # decision: virtual-network.addressing.subnets
   assert {
-    condition     = cidrnetmask(azurerm_subnet.this["endpoints"].address_prefixes[0]) != "255.255.255.248"
-    error_message = "A /29 leaves three usable addresses after Azure's five reserved."
+    condition     = length(azurerm_subnet.this) == 2 && azurerm_subnet.this["app"].address_prefixes[0] == "10.42.2.0/24"
+    error_message = "One azurerm_subnet per stated subnet, with its stated prefix."
+  }
+
+  # decision: virtual-network.addressing.private_endpoint_subnet_prefix
+  assert {
+    condition     = azurerm_subnet.this["endpoints"].address_prefixes[0] == "10.42.1.0/27" && cidrnetmask(azurerm_subnet.this["endpoints"].address_prefixes[0]) != "255.255.255.248"
+    error_message = "The endpoint subnet carries the stated prefix; a /29 leaves three usable addresses."
+  }
+
+  # decision: virtual-network.addressing.dns_servers
+  assert {
+    condition     = length(azurerm_virtual_network.this.dns_servers) == 0
+    error_message = "Azure-provided DNS: it resolves privatelink zones without setup."
+  }
+}
+
+run "subnet_policy" {
+  command = plan
+
+  # decision: virtual-network.subnet_policy.private_endpoint_network_policies
+  assert {
+    condition     = alltrue([for s in azurerm_subnet.this : s.private_endpoint_network_policies == "Enabled"])
+    error_message = "Enabled: the subnet's NSG and routes apply to endpoint traffic."
+  }
+
+  # decision: virtual-network.subnet_policy.service_endpoints
+  assert {
+    condition     = alltrue([for s in azurerm_subnet.this : length(s.service_endpoints) == 0])
+    error_message = "No service endpoints: the weaker posture, used only where a private endpoint is not available."
+  }
+
+  # decision: virtual-network.subnet_policy.subnet_delegations
+  assert {
+    condition     = alltrue([for s in azurerm_subnet.this : length(s.delegation) == 0])
+    error_message = "No delegation unless a service was named."
+  }
+}
+
+run "security" {
+  command = plan
+
+  # decision: virtual-network.security.ddos_protection
+  assert {
+    condition     = length(azurerm_virtual_network.this.ddos_protection_plan) == 0
+    error_message = "No DDoS plan: a platform decision, not a workload one."
+  }
+
+  # not-testable: virtual-network.security.subnets_expecting_nsg - recorded in the spec;
+  # the association is rendered where the NSG is, which this module does not own
+}
+
+run "observability" {
+  command = plan
+
+  # decision: virtual-network.observability.diagnostic_workspace
+  assert {
+    condition     = azurerm_monitor_diagnostic_setting.network.log_analytics_workspace_id == azurerm_log_analytics_workspace.this.id
+    error_message = "Network diagnostics route to the deployment's workspace."
+  }
+
+  # decision: virtual-network.observability.flow_logs_enabled
+  assert {
+    condition     = length(azurerm_network_watcher_flow_log.this) == 0
+    error_message = "Flow logs off: a Network Watcher and a storage account are moving parts nobody asked for."
   }
 }
 ```
+
+With `observability_ownership: reference` the workspace id comes from
+`data.azurerm_log_analytics_workspace.platform.id` instead, and the data source is mocked
+with a parseable id.
