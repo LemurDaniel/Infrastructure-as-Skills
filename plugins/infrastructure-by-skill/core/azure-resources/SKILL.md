@@ -51,7 +51,7 @@ once and every family's questions inherit from it.
 
 ## Adding a family
 
-1. `resources/<family>/routing.md`, `questions/`, `references/` — copy an existing family
+1. `resources/<family>/routing.md`, and one `<resource>/` directory per resource holding`n   `questions.yaml`, `notes.md`, `terraform.md` and `bicep.md` — copy an existing family
 2. A row in the table above
 3. The family's terms in this skill's `description` — the terms people actually type, not
    the Azure resource provider names

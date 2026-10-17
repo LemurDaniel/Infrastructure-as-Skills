@@ -16,7 +16,7 @@ The Terraform provider takes `<Provider>::<Namespace>/<Type>[::<kind>]`, e.g.
 `Azure::Microsoft.Storage/storageAccounts`. The optional `kind` suffix selects a variant of
 the same type — `Microsoft.Compute/disks::os` abbreviates to `osdisk`, `::data` to `disk`.
 
-Each resource's `questions/<resource>.yaml` states that identifier under `naming:`, alongside
+Each resource's `questions.yaml` states that identifier under `naming:`, alongside
 the plain Bicep resource type and the **abbreviation** the Bicep vars render. Use those
 rather than constructing either yourself.
 
@@ -175,7 +175,7 @@ them where they bite:
 - **Key vaults**: 3–24 characters, hyphens allowed, must start with a letter.
 - **Most others**: hyphens are conventional (`vnet-we-dev-myapp-01`).
 
-Every resource's `references/<resource>/bicep.md` states its own limit. If a workload name
+Every resource's `bicep.md` states its own limit. If a workload name
 can push the rendered name past the limit, say so rather than letting the deployment fail
 at creation.
 

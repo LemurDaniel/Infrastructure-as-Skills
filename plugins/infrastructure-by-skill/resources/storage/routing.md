@@ -1,14 +1,14 @@
 # Azure storage
 
 A resource family, reached from the [azure-resources](../../core/azure-resources/SKILL.md)
-skill. The decisions live in per-resource question sets under [questions/](questions/);
+skill. Each resource is a directory holding its question set, notes and both renderings;
 this file routes to the right one and holds what is true across the family.
 
 ## Pick the question set
 
 | Request mentions | Question set | Notes |
 |---|---|---|
-| storage account, blob storage, ADLS Gen2, data lake, static website | `questions/storage-account.yaml` | [notes](references/storage-account/notes.md) |
+| storage account, blob storage, ADLS Gen2, data lake, static website | `storage-account/questions.yaml` | [notes](storage-account/notes.md) |
 | container, blob container | *not yet written* | A child of an account; ask whether the account exists |
 | file share, Azure Files, SMB share | *not yet written* | Needs an account with the right kind |
 | queue, storage queue | *not yet written* | Not Service Bus — check which the user means |
@@ -26,7 +26,7 @@ rules, and record in the spec that no question set backed it.
    [references/guardrails.md](../../core/iac-authoring/references/guardrails.md) for where
    the defaults come from
 2. [iac-rendering](../../core/iac-rendering/SKILL.md) — the spec into Terraform or Bicep,
-   plus `references/<resource>/terraform.md` or `.../bicep.md` for this resource's
+   plus `<resource>/terraform.md` or `<resource>/bicep.md` for this resource's
    specifics, and the validate step at the end of each idiom file
 
 ## True for the whole family
@@ -64,11 +64,11 @@ Use those rather than constructing either yourself. The Bicep naming modules
 
 ## Adding a resource to this family
 
-1. Write `questions/<resource>.yaml` — see
+1. Create `<resource>/` and write `<resource>/questions.yaml` — see
    [question-set-format](../../core/iac-authoring/references/question-set-format.md)
-2. Write `references/<resource>/notes.md` for what the question set cannot express:
+2. Write `<resource>/notes.md` for what the question set cannot express:
    decisions fixed at creation, dependency order, the pitfalls worth naming
-3. Write `references/<resource>/terraform.md` and `references/<resource>/bicep.md`
+3. Write `<resource>/terraform.md` and `<resource>/bicep.md`
 4. Add a row to the routing table above
 5. If the resource brings a term people would actually type that the
    [azure-resources](../../core/azure-resources/SKILL.md) description does not already

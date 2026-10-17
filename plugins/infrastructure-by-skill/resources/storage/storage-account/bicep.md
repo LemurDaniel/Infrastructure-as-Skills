@@ -2,7 +2,7 @@
 
 Mapping from the question set to `Microsoft.Storage/storageAccounts`. General layout,
 parameter and registry conventions are in
-[../../../../core/iac-rendering/references/bicep-idiom.md](../../../../core/iac-rendering/references/bicep-idiom.md).
+[../../../core/iac-rendering/references/bicep-idiom.md](../../../core/iac-rendering/references/bicep-idiom.md).
 
 Compile before handing anything over — `bicep build --stdout` rejects an unknown property
 immediately, which beats reasoning about whether it exists:
@@ -38,7 +38,7 @@ Terraform — where `blob_properties` makes them look like account attributes.
 
 The name is assembled from vars — the Bicep naming modules are not shipped. The pattern and
 its parts are in
-[../../../../core/iac-rendering/references/naming.md](../../../../core/iac-rendering/references/naming.md).
+[../../../core/iac-rendering/references/naming.md](../../../core/iac-rendering/references/naming.md).
 
 ```bicep
 @description('Deployment environment. Drives the rendered name, the tags and several security defaults.')

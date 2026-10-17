@@ -1,6 +1,6 @@
 # Storage account — what the question set cannot express
 
-Read alongside [questions/storage-account.yaml](../../questions/storage-account.yaml).
+Read alongside [questions.yaml](questions.yaml).
 
 ## Decisions fixed at creation
 

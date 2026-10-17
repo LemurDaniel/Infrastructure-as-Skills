@@ -2,7 +2,7 @@
 
 Mapping from the question set to `Microsoft.Network/virtualNetworks`. General layout,
 parameters and naming are in
-[../../../../core/iac-rendering/references/bicep-idiom.md](../../../../core/iac-rendering/references/bicep-idiom.md).
+[../../../core/iac-rendering/references/bicep-idiom.md](../../../core/iac-rendering/references/bicep-idiom.md).
 
 ```bash
 bicep build --stdout modules/network.bicep

@@ -44,7 +44,7 @@ than inferring the shape from an example spec.
    like its neighbours gets rewritten by hand, and then the spec is stale.
 2. **Read the target idiom** — [terraform-idiom](references/terraform-idiom.md) or
    [bicep-idiom](references/bicep-idiom.md), not both.
-3. **Read the resource's own rendering reference**, `resources/<family>/references/<resource>/{terraform,bicep}.md`.
+3. **Read the resource's own rendering reference**, `resources/<family>/<resource>/{terraform,bicep}.md`.
    It holds what the spec cannot: which decisions are fixed at creation, which live on a
    nested resource, the shape differences between the two targets.
 4. **Render names from the right mechanism** — [naming.md](references/naming.md). The

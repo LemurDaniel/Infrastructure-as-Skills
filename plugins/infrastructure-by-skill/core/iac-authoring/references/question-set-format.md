@@ -1,14 +1,14 @@
 # The question set format
 
-One file per resource, at `questions/<resource>.yaml` inside its family under `resources/`. These files
-are the actual content of this plugin — a family's `SKILL.md` is a router and a handful of
-family-wide truths.
+One file per resource, at `resources/<family>/<resource>/questions.yaml` — beside the
+resource's `notes.md`, `terraform.md` and `bicep.md`. These files are the actual content of
+this plugin; a family's `routing.md` is a router and a handful of family-wide truths.
 
 ## Two scopes
 
 | Scope | Where | Answers |
 |---|---|---|
-| `resource` (default) | `resources/<family>/questions/<resource>.yaml` | One resource's decisions |
+| `resource` (default) | `resources/<family>/<resource>/questions.yaml` | One resource's decisions |
 | `deployment` | [`core/iac-authoring/questions/deployment.yaml`](../questions/deployment.yaml) | What holds for everything in one deployment |
 
 The deployment set is resolved **first**, and a resource question that would re-ask one of
@@ -128,7 +128,7 @@ public access is disabled. Gate them rather than asking and discarding.
 pwsh -NoProfile -File scripts/Test-QuestionSet.ps1 <family-directory>
 ```
 
-Checks every `questions/*.yaml` in the family for the structural invariants: unique ids,
+Checks every resource's `questions.yaml` in the family for the structural invariants: unique ids,
 `required` and `default` not both set, enum defaults within `values`, `depends_on` pointing
 at a question that exists, `why` and `renders` present, both naming forms and the
 abbreviation declared, the Bicep identifier not carrying an `Azure::` prefix, and every

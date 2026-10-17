@@ -1,7 +1,7 @@
 # The guardrails every default comes from
 
 The rules that hold across every resource, so no question set has to restate them and no
-two restate them differently. A resource's `questions/<resource>.yaml` sets its defaults
+two restate them differently. A resource's `questions.yaml` sets its defaults
 *from* these rules; this file is where the reasoning lives. Read it before choosing a
 default, before justifying one, and when a resource seems to need an exception.
 

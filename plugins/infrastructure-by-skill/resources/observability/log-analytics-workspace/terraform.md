@@ -2,7 +2,7 @@
 
 Mapping from the question set to `azurerm_log_analytics_workspace`. General layout,
 variables and tagging are in
-[../../../../core/iac-rendering/references/terraform-idiom.md](../../../../core/iac-rendering/references/terraform-idiom.md).
+[../../../core/iac-rendering/references/terraform-idiom.md](../../../core/iac-rendering/references/terraform-idiom.md).
 
 ## Decision → argument
 

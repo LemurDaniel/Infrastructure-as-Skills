@@ -22,7 +22,7 @@
          scope: deployment set names no resource and is exempt from the
          naming checks.
 
-      6. Routing coverage: every questions/*.yaml reachable from its family's
+      6. Routing coverage: every resource's questions.yaml reachable from its family's
          routing.md (or the SKILL.md of the skill holding it), every family's
          routing.md linked from core/azure-resources, and no row pointing at a
          missing file.
@@ -284,7 +284,14 @@ try {
     $questionSets = @()
     if (Test-Path -LiteralPath $pluginRoot) {
         $questionSets = @(Get-ChildItem -LiteralPath $pluginRoot -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -replace '\\', '/' -match '/questions/[^/]+\.ya?ml$' })
+            # Two shapes: a resource directory holding questions.yaml
+            # (resources/<family>/<resource>/questions.yaml), and a set held by a
+            # skill (core/iac-authoring/questions/deployment.yaml). Missing the
+            # first shape makes every resource check pass vacuously.
+            Where-Object {
+                $p = $_.FullName -replace '\\', '/'
+                $p -match '/questions/[^/]+\.ya?ml$' -or $p -match '/[^/]+/questions\.ya?ml$'
+            })
     }
 
     if ($questionSets.Count -eq 0) {
@@ -411,19 +418,31 @@ try {
 
             $body = Get-Content -LiteralPath $router -Raw
             foreach ($qs in @($questionSets | Where-Object { (Split-Path -Parent (Split-Path -Parent $_.FullName)) -eq $famDir })) {
-                $leaf = $qs.Name
-                if ($body -notmatch [regex]::Escape($leaf)) {
-                    $routeIssues.Add("$famRel/$routerLeaf never mentions questions/$leaf - the resource is unreachable")
+                # Every resource set is named questions.yaml, so the file name
+                # alone matches any row; the resource directory is what identifies it.
+                $token = if ($qs.Name -match '^questions\.ya?ml$') {
+                    "$(Split-Path -Leaf (Split-Path -Parent $qs.FullName))/$($qs.Name)"
+                } else {
+                    "questions/$($qs.Name)"
+                }
+                if ($body -notmatch [regex]::Escape($token)) {
+                    $routeIssues.Add("$famRel/$routerLeaf never mentions $token - the resource is unreachable")
                 }
             }
-            # Rows pointing at a questions/ file that does not exist. The
-            # lookbehind keeps a path-qualified reference out of this - a link to
-            # core/iac-authoring/questions/deployment.yaml names another skill's
-            # set and is not a route into this family.
+            # Rows pointing at a question set that does not exist, in either
+            # shape. The lookbehind keeps a path-qualified reference out - a link
+            # to core/iac-authoring/questions/deployment.yaml names another
+            # skill's set and is not a route into this family.
             foreach ($m in [regex]::Matches($body, '(?<![\w./-])questions/([A-Za-z0-9._-]+\.ya?ml)')) {
                 $target = Join-Path $famDir (Join-Path 'questions' $m.Groups[1].Value)
                 if (-not (Test-Path -LiteralPath $target)) {
                     $routeIssues.Add("$famRel/$routerLeaf routes to questions/$($m.Groups[1].Value), which does not exist")
+                }
+            }
+            foreach ($m in [regex]::Matches($body, '(?<![\w./-])([a-z0-9][a-z0-9-]*)/questions\.ya?ml')) {
+                $target = Join-Path $famDir (Join-Path $m.Groups[1].Value 'questions.yaml')
+                if (-not (Test-Path -LiteralPath $target)) {
+                    $routeIssues.Add("$famRel/$routerLeaf routes to $($m.Groups[1].Value)/questions.yaml, which does not exist")
                 }
             }
         }

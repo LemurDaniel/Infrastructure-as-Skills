@@ -5,8 +5,8 @@ description: The interview protocol behind every skill here — how a question s
 
 # Authoring infrastructure from a question set
 
-Each resource family under `resources/` carries a question set per resource under
-`questions/`: the decisions that resource forces, grouped by concern. This file is the
+Each resource family under `resources/` holds one directory per resource, and its
+`questions.yaml` carries the decisions that resource forces, grouped by concern. This file is the
 protocol for turning a question set into a spec, and the spec into code. Follow it rather
 than improvising — the value of the plugin is that two runs of the same skill ask the same
 things and record them the same way.
@@ -251,7 +251,7 @@ today, `compute`, `data`, `security` planned. Families are not skills; the singl
 [azure-resources](../azure-resources/SKILL.md) skill routes into all of them. Inside the
 family:
 
-1. Write `questions/<resource>.yaml`. Copy an existing one and keep the group order:
+1. Create `<resource>/` in the family and write `<resource>/questions.yaml`. Copy an existing one and keep the group order:
    placement, networking, identity, security, data_protection, observability. The order is
    the review order, and a reviewer reading three resources should not relearn the layout.
 2. Fill `why` and `renders` for every question. `why` is what a reviewer reads; `renders`
@@ -261,9 +261,9 @@ family:
    inheriting.
 4. Mark `required: true` only where no safe default exists. Every extra required question
    is a tax on every future run.
-5. Write `references/<resource>/notes.md` for what the question set cannot express:
+5. Write `<resource>/notes.md` for what the question set cannot express:
    decisions fixed at creation, dependency order, the pitfalls worth naming out loud.
-6. Write `references/<resource>/terraform.md` and `references/<resource>/bicep.md` — the
+6. Write `<resource>/terraform.md` and `<resource>/bicep.md` — the
    rendering, not the decisions. Anything true for both belongs in the shared references
    instead.
 7. Add a row to the family's `routing.md`, so the resource is reachable.

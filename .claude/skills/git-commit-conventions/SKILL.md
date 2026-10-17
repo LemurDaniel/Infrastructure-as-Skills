@@ -48,7 +48,7 @@ path.>
 Split a mixed change set rather than committing it in one go. The splits that
 matter here:
 
-- **Question sets** (`resources/*/questions/*.yaml`) separate from the **core
+- **Question sets** (`resources/*/*/questions.yaml`) separate from the **core
   contract** (`core/`). A change to the interview protocol or the guardrails
   affects every resource and is reviewed differently from one resource's
   decisions.
@@ -60,7 +60,7 @@ matter here:
   **except** when adding the first skill to a new group — then the `skills` array
   entry and the skill go together, because a declared path that does not exist
   fails to load the whole plugin and the two are useless apart.
-- **Rendering references** (`references/*/terraform.md`, `bicep.md`) separate from
+- **Rendering references** (`resources/*/*/terraform.md`, `bicep.md`) separate from
   the question set, when the change is only to the rendering. They are read by a
   different reader at a different time.
 - **`README.md` and `CLAUDE.md`** separate from skill content, unless the skill
@@ -97,8 +97,9 @@ It verifies, read-only:
   ids, `required`/`default`/`from_deployment` not combined, and `why`/`renders`
   present. Error on the naming rules, warning on the rest. A `scope: deployment`
   set names no resource and is exempt from the naming checks.
-- **routing table coverage**: every `questions/*.yaml` reachable from its family
-  `SKILL.md`, and no row pointing at a file that does not exist. Warning.
+- **routing table coverage**: every resource's `questions.yaml` reachable from its
+  family's `routing.md`, every `routing.md` linked from `core/azure-resources`,
+  and no row pointing at a file that does not exist. Warning.
 - **no `CLAUDE.md` inside the plugin directory** — it is not loaded as context
   there and `claude plugin validate` warns about it. Error.
 - **no broken relative links** in tracked Markdown, and **no spaces in tracked
@@ -115,8 +116,9 @@ structural mistakes that actually happen; they do not prove a question set is
 valid YAML.
 
 Beyond the script:
-- **Never add a skill per Azure resource.** A resource goes into an existing
-  family's `questions/`. A commit that adds a skill directory needs a sentence in
+- **Never add a skill for a resource or a family.** A resource is a directory under
+  an existing family in `resources/`, which is not a skill and costs no listing
+  budget. A commit that adds a skill directory needs a sentence in
   the body justifying the listing-budget cost, because the cost lands on every
   user of the plugin and on their other skills.
 - **A question set's `why` is not optional.** It is the only artefact that

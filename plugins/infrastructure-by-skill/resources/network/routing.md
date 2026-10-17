@@ -5,7 +5,7 @@ skill. Routing table — the request picks the question set:
 
 | Request mentions | Question set | Notes |
 |---|---|---|
-| virtual network, vnet, address space, subnets | `questions/virtual-network.yaml` | [notes](references/virtual-network/notes.md) |
+| virtual network, vnet, address space, subnets | `virtual-network/questions.yaml` | [notes](virtual-network/notes.md) |
 | network security group, NSG, security rules | *not yet written* | A separate resource; the vnet set only records which subnets expect one |
 | peering, hub, spoke | *not yet written* | Needs both sides; usually a pattern, not a resource |
 | route table, UDR, forced tunneling | *not yet written* | — |

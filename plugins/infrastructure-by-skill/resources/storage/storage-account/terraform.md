@@ -2,7 +2,7 @@
 
 Mapping from the question set to `azurerm`. General file layout, variable and tagging
 conventions are in
-[../../../../core/iac-rendering/references/terraform-idiom.md](../../../../core/iac-rendering/references/terraform-idiom.md).
+[../../../core/iac-rendering/references/terraform-idiom.md](../../../core/iac-rendering/references/terraform-idiom.md).
 
 Verify argument names against the installed provider rather than this file where they
 disagree — `azurerm` renames arguments across major versions, and the examples below are
