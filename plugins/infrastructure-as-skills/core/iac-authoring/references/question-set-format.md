@@ -48,7 +48,7 @@ groups:
       - id: environment
         ask: Which environment is this for?
         type: enum
-        values: [development, test, acceptance, production]
+        values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         why: >
           Drives the rendered name, the tags, and the strictness of several

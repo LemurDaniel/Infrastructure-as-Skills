@@ -20,7 +20,7 @@ groups:
       - id: environment
         ask: Which environment is this for?
         type: enum
-        values: [development, test, acceptance, production]
+        values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         why: >
           The first question of any run. It drives every rendered name, the
@@ -48,6 +48,27 @@ groups:
           searching the portal recognises. Short, because several resource types
           cap the whole name at 24 characters.
         renders: context.workload - and the name of every resource
+
+      - id: naming_convention
+        ask: Should resource names follow the default convention, or does your organisation have its own?
+        type: enum
+        values: [default, custom]
+        default: default
+        why: >
+          The plugin's convention (core/iac-rendering/references/naming.default.yaml:
+          CAF abbreviations, AVM region codes, per-type patterns where Azure's
+          limits force them) is copied into the repository as naming.yaml beside
+          the spec. `custom` means the user stated a departure - a pattern, an
+          abbreviation, an environment code - and it is written into that file,
+          never into a template. An existing naming.yaml or naming provider
+          block in the repository is carried and never replaced. Not asked
+          unless the user raises it: a convention is a deployment-wide decision,
+          and most names cannot change after creation, so a run that offered it
+          per resource would be offering a way to get two.
+        renders: >
+          naming.yaml beside infra-spec.yaml; terraform: the naming provider's
+          `naming` argument; bicep: the generated location/environment maps and
+          name vars
 
       - id: subscription_id
         ask: Which subscription does this deploy into?

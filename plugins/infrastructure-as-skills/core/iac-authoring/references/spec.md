@@ -316,6 +316,7 @@ infra/                       # or wherever the repository's IaC root already is
   infra-spec.yaml            # the decisions
   infra-diagram.drawio       # drawn from it
   infra-diagram.drawio.png
+  naming.yaml                # the naming convention - the customer edits it
   main.tf | main.bicep ...   # rendered from it
 ```
 
@@ -371,6 +372,7 @@ changed, not the whole spec again.
 | A resource added | New key under `resources:`, a `composition.modules` entry or an existing module's `contains` extended, `wiring:` entries if it connects to something |
 | A decision changed | The new value with `source: overridden` and a comment naming the old value. Consequences re-derived |
 | A resource removed | Its key, its `contains` entry and every `wiring:` entry naming it are deleted. Say before rendering that the plan will **destroy** it — a removal in the spec is a deletion in Azure |
+| `naming.yaml` | Carried, never regenerated. A naming change the user asks for is an edit to that file, and the plan will show it as a rename — most Azure resources cannot be renamed, so say that it destroys and recreates them |
 | A question added to the set since | Absent, resolves from its default, recorded as `default`. Name the additions |
 
 Never rewrite a value the user did not touch. Reformatting, reordering keys or

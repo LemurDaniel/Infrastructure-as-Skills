@@ -1,14 +1,61 @@
 # Rendering names
 
-Never hardcode a resource name. The two targets get there differently:
+Never hardcode a resource name. Every name comes from **one convention file**, and the two
+targets read it differently:
 
 | Target | How a name is produced |
 |---|---|
-| Terraform | The `LemurDaniel/naming` provider resolves the CAF convention |
-| Bicep | **Assembled from `var`s in the template.** The Bicep naming modules are not shipped yet |
+| Terraform | The `LemurDaniel/naming` provider renders it, reading the repository's `naming.yaml` |
+| Bicep | **Assembled from `var`s in the template**, generated from the same `naming.yaml`. The Bicep naming modules are not shipped yet |
 
-Same convention and same abbreviations either way — on the Bicep side the author renders
-them instead of a function.
+## The convention
+
+[naming.default.yaml](naming.default.yaml) is the plugin's convention: the one the
+`LemurDaniel/naming` provider bundles as `default` — CAF abbreviations, AVM region codes,
+one pattern per type where Azure's limits demand it. It is the default the guardrails
+prescribe; see [guardrails.md](../../iac-authoring/references/guardrails.md#1-naming-and-tags).
+
+What it produces, with `location: westeurope`, `environment: production`,
+`name: payments`:
+
+| Type | Pattern | Name |
+|---|---|---|
+| Resource group | `<TYPE>-<LOCATION>-<ENVIRONMENT>-<NAME>-<INDEX>` | `rg-we-prod-payments-01` |
+| Virtual network | same | `vnet-we-prod-payments-01` |
+| Subnet | `<TYPE>-<ENVIRONMENT>-<NAME>-<INDEX>` | `snet-prod-payments-01` |
+| Log Analytics | Azure default, `<?SUBNAME;-%s>` optional | `log-we-prod-payments-01` |
+| Storage account | `<TYPE><LOCATION><ENVIRONMENT><NAME><INDEX>`, lowercase | `stweprodpayments01` |
+| Key vault | `<TYPE>-<ENVIRONMENT>-<NAME>-<UNIQUE_ID_4>` | `kv-prod-payments-a1b2` |
+
+### `naming.yaml` in the user's repository
+
+The first run writes a **full copy** of the default as `naming.yaml` next to
+`infra-spec.yaml`. From then on that file is the user's convention: they edit it, every
+later run reads it, and **no run overwrites it**.
+
+A full copy rather than an empty override file, for two reasons:
+
+- **Names are part of the deployed state.** Most Azure resources cannot be renamed — a
+  changed name is a destroy and a create. A convention that silently followed the plugin's
+  or the provider's default would rename resources on an upgrade. The copy pins it.
+- **The user can see what they are editing.** An override file of three lines hides the
+  five hundred it is merged over.
+
+When the user states a departure — a different pattern, their own abbreviation, an
+environment the convention lacks — it goes **into `naming.yaml`**, never into a template
+literal, and the spec records `deployment.naming_convention: custom`. A literal name in
+one resource is a second convention nobody maintains.
+
+When the repository already has a `naming.yaml`, or a provider block already pointing at
+one, that file is the convention. Read it; do not replace it with the default.
+
+### What every name needs from the spec
+
+`<LOCATION>` is `context.location` through `mappings.location`, `<ENVIRONMENT>` is
+`context.environment` through `mappings.environment`, `<NAME>` is `context.workload`.
+An environment or region missing from the mappings is a render blocker, not a fallback:
+add the mapping to `naming.yaml`, or ask. The environment question's values mirror the
+default's `mappings.environment` for that reason.
 
 ## The resource identifier
 
@@ -44,9 +91,14 @@ terraform {
   }
 }
 
-# The convention is declared once, for the whole configuration.
+# The convention is declared once, for the whole configuration. `naming` points at
+# the repository's own copy, so a provider upgrade cannot change a name.
 provider "naming" {
-  convention = "default"
+  convention  = "default"
+  naming      = "${path.module}/naming.yaml"
+  # Read only by <UNIQUE_ID_n> - the key vault pattern. Key vault names are global,
+  # so the seed carries the deployment scope, not just the workload.
+  random_seed = "${var.subscription_id}/${var.resource_group_name}"
 
   parameters = {
     location    = var.location
@@ -60,7 +112,7 @@ data "naming_name" "storage_account" {
 }
 
 resource "azurerm_storage_account" "this" {
-  name = data.naming_name.storage_account.name # stwedevmyapp01
+  name = data.naming_name.storage_account.name # stwedevmyapp01 (environment: development)
   # ...
 }
 ```
@@ -102,7 +154,7 @@ resource "azurerm_virtual_network" "this" {
 | Argument | Notes |
 |---|---|
 | `convention` | Bundled convention name. Defaults to `"default"` (CAF abbreviations). |
-| `naming` | Path to a YAML file partially overriding the convention. Merged per key, so an override may set one abbreviation without restating the block. |
+| `naming` | Path to a YAML file overriding the convention, merged per key. Always `naming.yaml` beside the spec — a full copy, see above. |
 | `parameters` | `location`, `environment`, `name`, … that the patterns render from. |
 | `random_seed` | Only needed if a pattern you use contains the `<UNIQUE_ID_n>` token. The same seed always resolves to the same id, so names stay stable with nothing in state. |
 
@@ -118,52 +170,74 @@ under `modules/utility/naming/` (`schema` + `generator`, exporting `genName` /
 it.** It is not ready to ship, and a template importing it is a template that breaks when
 its interface moves. Never import `utility/naming/*`, never call `genName` or `genNameId`.
 
-Assemble the name from `var`s instead, in the template, from the same parts the convention
-uses:
+Assemble the name from `var`s instead, **generated from the repository's `naming.yaml`** —
+never typed from memory, or the two targets name the same resource differently:
+
+- the two maps hold exactly the `mappings.location` and `mappings.environment` entries the
+  deployment uses, copied from `naming.yaml`;
+- each name follows the pattern `naming.yaml` gives its type (`patterns.Azure.<type>`, else
+  `patterns.Azure.default`), with the abbreviation from `abbreviations.Azure`;
+- `@allowed` on `environment` lists the keys of `mappings.environment`, so the template
+  rejects what the convention cannot name.
 
 ```bicep
-@allowed(['development', 'test', 'acceptance', 'production'])
+@allowed(['development', 'test', 'staging', 'production']) // keys of mappings.environment in use
 param environment string
 param location string = resourceGroup().location
 
 @description('Workload short name, rendered into the resource name.')
 param workload string
 
-@description('Instance number, for a second account beside the first.')
+@description('Instance number, for a second instance beside the first.')
 param index int = 1
 
-// CAF convention, assembled here until the naming modules ship.
-var environmentAbbreviations = {
+// Generated from naming.yaml (mappings). Regenerate, do not edit here.
+var environmentCodes = {
   development: 'dev'
   test: 'tst'
-  acceptance: 'acc'
-  production: 'prd'
+  staging: 'stg'
+  production: 'prod'
 }
-var locationAbbreviations = {
+var locationCodes = {
   westeurope: 'we'
-  northeurope: 'ne'
   germanywestcentral: 'gwc'
 }
 
-var affix = '${locationAbbreviations[location]}${environmentAbbreviations[environment]}'
+var loc = locationCodes[location]
+var env = environmentCodes[environment]
+var idx = padLeft(index, 2, '0')
 
-// st + we + dev + objects + 01  ->  stwedevobjects01
-var storageAccountName = toLower('st${affix}${workload}${padLeft(index, 2, '0')}')
+// <TYPE><LOCATION><ENVIRONMENT><NAME><INDEX>, lowercase  ->  stwedevobjects01
+var storageAccountName = toLower('st${loc}${env}${workload}${idx}')
+
+// <TYPE>-<LOCATION>-<ENVIRONMENT>-<NAME>-<INDEX>  ->  vnet-we-dev-objects-01
+var virtualNetworkName = 'vnet-${loc}-${env}-${workload}-${idx}'
+
+// <TYPE>-<ENVIRONMENT>-<NAME>-<UNIQUE_ID_4>  ->  kv-dev-objects-a1b2
+var keyVaultName = 'kv-${env}-${workload}-${take(uniqueString(resourceGroup().id), 4)}'
 ```
 
 ### The parts
 
 | Part | Source |
 |---|---|
-| Abbreviation (`st`, `vnet`, `kv`, …) | `naming.abbreviation` in the resource's question set — never guessed |
-| Location short code | A `var` map in the template, keyed by the region the deployment uses |
-| Environment short code | A `var` map, from the `environment` parameter |
+| Abbreviation (`st`, `vnet`, `kv`, `log`, …) | `abbreviations.Azure` in `naming.yaml`; the question set's `naming.abbreviation` mirrors the default |
+| Pattern | `patterns.Azure.<type>` in `naming.yaml`, else `patterns.Azure.default` |
+| Location short code | `mappings.location` in `naming.yaml` |
+| Environment short code | `mappings.environment` in `naming.yaml` |
 | Workload | A parameter |
 | Index | `padLeft(index, 2, '0')`, so `01` rather than `1` |
+| `<UNIQUE_ID_n>` | `take(uniqueString(resourceGroup().id), n)` — scoped like the Terraform seed, since the names it disambiguates are global |
 
-Declare the two maps once per deployment — in `main.bicep`, or in a shared `naming.bicep`
+**`<UNIQUE_ID_n>` is the one part the targets do not share.** The provider derives it from
+`random_seed`, Bicep from `uniqueString()`; the same spec therefore names a key vault
+differently in Terraform and in Bicep. Say so when a spec is rendered to both, and do not
+paper over it with a literal.
+
+Declare the maps once per deployment — in `main.bicep`, or in a shared `naming.bicep`
 with `@export()`ed vars if more than two modules need them — and pass the rendered name
-down as a parameter rather than repeating the maps per module.
+down as a parameter rather than repeating the maps per module. When `naming.yaml` changes,
+regenerate the block.
 
 ### The rules the engine used to enforce
 
@@ -181,7 +255,7 @@ at creation.
 
 ### When the engine ships
 
-This is a swap of the `var` block for two imports, with the identifier form changing (the
+This is a swap of the generated `var` block for two imports reading the same `naming.yaml`, with the identifier form changing (the
 Bicep function takes the resource type *without* the `Azure::` prefix the Terraform
 provider needs). Keeping the assembly in one `var` block per deployment — not inlined into
 each resource's `name:` — is what makes that swap a small change.

@@ -150,8 +150,10 @@ variable "environment" {
   type        = string
 
   validation {
-    condition     = contains(["development", "test", "acceptance", "production"], var.environment)
-    error_message = "environment must be one of development, test, acceptance, production."
+    # The keys of mappings.environment in naming.yaml that this deployment uses -
+    # an environment the convention cannot abbreviate cannot be named.
+    condition     = contains(["development", "test", "staging", "production"], var.environment)
+    error_message = "environment must be one of development, test, staging, production."
   }
 }
 ```

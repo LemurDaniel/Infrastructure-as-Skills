@@ -137,7 +137,7 @@ Every parameter carries `@description`. Constrain what the question set constrai
 
 ```bicep
 @description('Deployment environment. Drives the rendered name, the tags and several security defaults.')
-@allowed(['development', 'test', 'acceptance', 'production'])
+@allowed(['development', 'test', 'staging', 'production']) // keys of mappings.environment in use
 param environment string
 
 @description('Azure region. Defaults to the resource group\'s location.')
@@ -168,15 +168,14 @@ type storageConfig = {
 
 The registry's naming modules (`utility/naming/schema`, `utility/naming/generator`,
 `genName`) are **not ready to ship** — do not import them and do not call them. On the
-Bicep side the name is assembled from `var`s, from the abbreviation the question set
-declares plus short codes for location and environment. See [naming.md](naming.md) for the
-full pattern and the character limits that come with doing it by hand.
+Bicep side the name is assembled from `var`s generated from the repository's `naming.yaml`:
+its pattern for the type, its abbreviation, its location and environment codes. See
+[naming.md](naming.md) for the full pattern and the character limits that come with doing
+it by hand.
 
 ```bicep
-var affix = '${locationAbbreviations[location]}${environmentAbbreviations[environment]}'
-
 // Storage accounts: lowercase alphanumeric, no separators, max 24 characters.
-var storageAccountName = toLower('st${affix}${workload}${padLeft(index, 2, '0')}')
+var storageAccountName = toLower('st${locationCodes[location]}${environmentCodes[environment]}${workload}${padLeft(index, 2, '0')}')
 ```
 
 Keep the assembly in one place per deployment and pass the finished name into modules.

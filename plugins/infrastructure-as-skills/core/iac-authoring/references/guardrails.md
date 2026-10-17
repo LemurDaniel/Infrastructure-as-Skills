@@ -15,10 +15,26 @@ measures the wrong thing.
 
 ## 1. Naming and tags
 
-Never hardcode a resource name, and never hand-write a tag per resource. Both are
-mechanical rules; **neither prescribes content.**
+Never hardcode a resource name, and never hand-write a tag per resource.
 
-Which tags exist is an organisation's decision, not this plugin's. Take the set from the
+**Names follow the plugin's convention unless the customer specifies another.** The
+convention is [naming.default.yaml](../../iac-rendering/references/naming.default.yaml) —
+CAF abbreviations, AVM region codes, `<TYPE>-<LOCATION>-<ENVIRONMENT>-<NAME>-<INDEX>` with
+per-type patterns where Azure's limits force them (`stweprodpayments01`,
+`kv-prod-payments-a1b2`). It is copied into the customer's repository as `naming.yaml`
+beside the spec on the first run, and from then on that file is the convention:
+
+- **The customer's word wins.** A different pattern, abbreviation or environment code goes
+  into their `naming.yaml` and the spec records `naming_convention: custom`. A repository
+  that already has a naming file or a naming provider block keeps it.
+- **No run overwrites `naming.yaml`**, and no run renames a deployed resource to match a
+  newer default. Most Azure names are immutable; a changed name is a destroy.
+- **No name outside the convention.** Not a literal in one template, not a suffix added by
+  hand to dodge a collision. A second convention in one file is one nobody maintains.
+
+Rendering per target is in [naming.md](../../iac-rendering/references/naming.md).
+
+**Tags prescribe no content.** Which tags exist is an organisation's decision, not this plugin's. Take the set from the
 repository — an existing `locals.tags`, a `var tags` in `main.bicep`, what the resources
 already carry — and apply the same one. Where the repository has none and the user has not
 said, ask once and record the answer in the spec's `context.tags`, which is then what every
@@ -26,8 +42,7 @@ resource gets. A tag set invented by a generator is a tag set nobody queries.
 
 The applying is the mechanical part: one merged local or variable, passed everywhere. A
 resource with its own tag literal drifts from its siblings the first time the set changes.
-How that looks per target is in the idiom files; names are in
-[naming.md](../../iac-rendering/references/naming.md).
+How that looks per target is in the idiom files.
 
 ## 2. Network exposure
 

@@ -187,7 +187,7 @@ Say so and propose the defaults instead.
 **Never offer an invented value as an option.** Grouped options work for an `enum`, where
 the values come from the question set. They are wrong for a `ref`, an address range, a
 subscription id, a workspace name — anything only the user's environment knows. Offering
-`law-we-prd-platform-01` as a choice does not help someone decide; it invites them to pick
+`log-we-prod-platform-01` as a choice does not help someone decide; it invites them to pick
 a plausible-looking identifier that does not exist, and a wrong ref surfaces at apply time.
 
 For those, ask whether the value is already assigned, and let the answer come as text:
@@ -225,7 +225,7 @@ Deployment-wide:
   exposure        private - every resource gets a private endpoint, no public surface
   network         own vnet, 10.42.0.0/16
   mandates        BSI C5 -> HSM key protection -> Key Vault Premium
-  diagnostics     law-we-prod-platform-01
+  diagnostics     log-we-prod-platform-01
 
 Defaulted (guardrail baseline):
   Security        TLS 1.2 floor, shared-key auth off, infrastructure encryption on
