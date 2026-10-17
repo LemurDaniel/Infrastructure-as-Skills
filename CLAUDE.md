@@ -61,6 +61,7 @@ it by full path, or let the check script find it.
 | `.../core/iac-rendering/` | The other side of the spec: how it becomes Terraform or Bicep |
 | `.../core/iac-rendering/references/naming.md` | The Terraform and Bicep naming interfaces |
 | `.../core/iac-rendering/references/{terraform,bicep}-idiom.md` | File layout, modules, variables, tagging, tests per target |
+| `.../core/iac-diagram/` | The spec as an editable draw.io PNG for the customer. Exports through the draw.io desktop CLI |
 | `.../core/azure-resources/` | The single trigger for every resource: request → family. Its description is the keyword surface for all of them |
 | `.../resources/<family>/routing.md` | Routing table: request → question set. **Not** a `SKILL.md` — see below |
 | `.../resources/<family>/<resource>/questions.yaml` | **The content.** One per resource |

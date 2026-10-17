@@ -94,6 +94,7 @@ Infrastructure-as-Skills/
     │   │   ├── references/guardrails.md      # where the defaults come from
     │   │   └── scripts/Test-Spec.ps1         # validates an infra-spec.yaml
     │   ├── iac-rendering/          # spec -> Terraform or Bicep: naming, layout, idiom
+    │   ├── iac-diagram/            # spec -> infra-diagram.drawio.png for the customer
     │   └── azure-resources/        # the one trigger for every resource -> family
     ├── resources/                  # NOT skills - undeclared, read by azure-resources
     │   ├── storage/
