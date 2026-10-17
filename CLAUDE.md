@@ -47,12 +47,13 @@ script and `claude plugin validate` are the whole verification story.
 | `.claude-plugin/marketplace.json` | Marketplace manifest — this repo is its own marketplace |
 | `plugins/infrastructure-by-skill/.claude-plugin/plugin.json` | Plugin manifest. The `skills` array is what makes the grouped layout work |
 | `.../core/iac-authoring/` | The interview protocol: resolution order, what gets asked, the spec |
-| `.../core/iac-authoring/references/naming.md` | The Terraform and Bicep naming interfaces |
-| `.../core/iac-authoring/references/spec.md` | `infra-spec.yaml` schema and the `source` field |
+| `.../core/iac-authoring/questions/deployment.yaml` | The deployment-wide set: posture, network ownership, mandates. Resolved before any resource |
+| `.../core/iac-authoring/references/spec.md` | `infra-spec.yaml` schema, the `source` field, `composition` |
 | `.../core/iac-authoring/references/question-set-format.md` | How to author a `questions/<resource>.yaml` |
-| `.../core/iac-authoring/references/{terraform,bicep}-idiom.md` | File layout, variables, tagging, tests per target |
-| `.../core/azure-guardrails/` | The rules every question set takes its defaults from |
-| `.../core/iac-plan-review/` | validate / plan / what-if, policy scan, explain the plan |
+| `.../core/iac-authoring/references/guardrails.md` | The rules every question set takes its defaults from |
+| `.../core/iac-rendering/` | The other side of the spec: how it becomes Terraform or Bicep |
+| `.../core/iac-rendering/references/naming.md` | The Terraform and Bicep naming interfaces |
+| `.../core/iac-rendering/references/{terraform,bicep}-idiom.md` | File layout, modules, variables, tagging, tests per target |
 | `.../resources/<family>/SKILL.md` | Routing table: request → question set |
 | `.../resources/<family>/questions/<resource>.yaml` | **The content.** One file per resource |
 | `.../resources/<family>/references/<resource>/notes.md` | What the question set cannot express |
@@ -103,10 +104,12 @@ first skill in that group.
 
 ## Gotchas
 
-- **The Terraform and Bicep resource identifiers differ.** The provider wants
-  `Azure::Microsoft.Storage/storageAccounts`; the Bicep `genName` function wants
-  `Microsoft.Storage/storageAccounts` with no cloud prefix. Every question set declares both
-  forms under `naming:` — use those rather than constructing one.
+- **The two targets render names differently.** Terraform uses the `LemurDaniel/naming`
+  provider with the `Azure::Microsoft.Storage/storageAccounts` identifier. Bicep assembles
+  the name from `var`s in the template — the `utility/naming` modules and `genName` are
+  **not ready to ship** and generated Bicep must never import them. Every question set
+  declares the identifier, the plain Bicep resource type and the `abbreviation` the vars
+  render — use those rather than constructing one.
 - **The naming provider supersedes the two naming modules.** `LemurDaniel/naming` replaces
   `LemurDaniel/naming-schema/random` + `LemurDaniel/naming/random` — same engine, ported and
   tested against their fixtures. New generated code uses the provider; a repo already on the
@@ -122,6 +125,10 @@ first skill in that group.
 - **Defaults come from the guardrails, not from the Azure portal.** They diverge routinely
   and in the same direction: public network access, shared-key auth and anonymous blob access
   all ship enabled. Inheriting that is how exposure findings happen.
+- **A decision that holds for more than one resource belongs in the deployment set.** The
+  test is whether two resources could sensibly answer it differently. Exposure, network
+  ownership, key protection and the diagnostics destination cannot; a resource question
+  that re-asks one of them carries `from_deployment` instead of a `default`.
 - **A missing question set is said out loud, never improvised.** Generating a resource from
   generic rules while the routing table claims a question set backs it removes the one
   property that makes this plugin worth using, silently.
@@ -130,11 +137,16 @@ first skill in that group.
 
 Early, and deliberately honest in `README.md` about what is unproven:
 
-- `Test-QuestionSet.ps1` and `Test-Spec.ps1` are referenced by three documents and **not
-  written**. `Test-RepoConsistency.ps1` covers part of what they would.
+- `Test-Spec.ps1` exists at `core/iac-authoring/scripts/` and needs a YAML parser
+  (`powershell-yaml`, or python with PyYAML); without one it exits 2 rather than passing a
+  file it could not read. `Test-QuestionSet.ps1` is still referenced and **not written** —
+  `Test-RepoConsistency.ps1` covers part of what it would.
 - `patterns/` is empty, so composition is specified on paper only.
-- One resource exists (`storage/storage-account`). The shape matters more than the coverage
-  right now.
+- Three resources exist: `storage/storage-account`, `network/virtual-network`,
+  `observability/log-analytics-workspace`. The last two were written because a test run
+  produced a spec that could not be rendered without them.
+- No spec has been rendered to Terraform or Bicep yet. The interview and the spec are
+  exercised; the renderer is not.
 
 ## Repository Conventions
 

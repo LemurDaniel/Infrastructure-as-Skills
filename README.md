@@ -58,7 +58,10 @@ is how the two halves drift apart.
 Rendering targets this author's own naming stack:
 
 - **Terraform** → the [`LemurDaniel/naming`](https://registry.terraform.io/providers/LemurDaniel/naming/latest) provider
-- **Bicep** → the `utility/naming` modules in `BICEP__Module-Registry`
+- **Bicep** → names assembled from `var`s in the template. The
+  [`utility/naming` modules](https://github.com/LemurDaniel/BICEP__Registry/tree/master/modules/utility/naming)
+  in `LemurDaniel/BICEP__Registry` are not ready to ship, so generated Bicep does not
+  import them
 
 ## The spec is the interface
 
@@ -84,18 +87,22 @@ Infrastructure-by-Skill/
 └── plugins/infrastructure-by-skill/
     ├── .claude-plugin/plugin.json
     ├── core/                       # the shared contract
-    │   ├── iac-authoring/          # interview protocol, spec, rendering idioms
-    │   ├── azure-guardrails/       # naming, tagging, exposure, identity, encryption
-    │   └── iac-plan-review/        # validate, policy-scan, explain the plan
+    │   ├── iac-authoring/          # interview protocol, the spec, question-set format
+    │   │   ├── questions/deployment.yaml     # posture, network, mandates — asked once
+    │   │   ├── references/guardrails.md      # where the defaults come from
+    │   │   └── scripts/Test-Spec.ps1         # validates an infra-spec.yaml
+    │   └── iac-rendering/          # spec -> Terraform or Bicep: naming, layout, idiom
     ├── resources/                  # one skill per resource FAMILY
-    │   └── storage/
-    │       ├── SKILL.md            # routes to the right question set
-    │       ├── questions/
-    │       │   └── storage-account.yaml      # the decisions — this is the content
-    │       └── references/storage-account/
-    │           ├── notes.md        # what the question set cannot express
-    │           ├── terraform.md
-    │           └── bicep.md
+    │   ├── storage/
+    │   │   ├── SKILL.md            # routes to the right question set
+    │   │   ├── questions/
+    │   │   │   └── storage-account.yaml      # the decisions — this is the content
+    │   │   └── references/storage-account/
+    │   │       ├── notes.md        # what the question set cannot express
+    │   │       ├── terraform.md
+    │   │       └── bicep.md
+    │   ├── network/                # virtual-network
+    │   └── observability/          # log-analytics-workspace
     └── patterns/                   # compositions of resource families
 ```
 
@@ -149,20 +156,25 @@ matching skill triggers.
 
 ## Status
 
-Early, and the shape matters more than the coverage right now. One resource skill exists to
-prove the question-set format carries its weight; nothing has been run end to end yet.
+Early, and the shape matters more than the coverage right now. One interview has been run
+end to end; it produced a spec, and the spec is honest about what it could not resolve.
+Nothing has been rendered to Terraform or Bicep yet.
 
 - [x] Plugin skeleton, marketplace manifest, grouped layout
-- [x] Shared contract: naming interfaces, spec format, Terraform and Bicep idiom
-- [x] Guardrails: the rules every question set takes its defaults from
-- [x] Plan review: validate, policy-scan, explain
-- [x] Question-set format, documented
-- [x] Reference family skill: `storage`, with `storage-account` (~30 decisions in six groups)
-- [ ] **Validators** — `Test-QuestionSet.ps1` and `Test-Spec.ps1` are referenced by the
-      docs but not written yet
+- [x] Shared contract: spec format, question-set format, the interview protocol
+- [x] Deployment-wide question set: posture, network ownership, mandates — resolved once,
+      inherited by every resource via `from_deployment`
+- [x] Rendering: naming interfaces, module layout and idiom per target
+- [x] Guardrails: the rules every question set takes its defaults from, shared with
+      `Infrastructure-as-Skills`
+- [x] Three resources: `storage-account`, `virtual-network`, `log-analytics-workspace`
+- [x] `Test-Spec.ps1` — validates a spec against the contract, and separately whether it
+      is applyable at all
+- [ ] **`Test-QuestionSet.ps1`** — still referenced by the docs and not written
 - [ ] **Reference pattern skill** — `patterns/` is empty, so composition is specified but
       unproven
-- [ ] Remaining families: `network`, `compute`, `data`, `security`, `observability`
+- [ ] **A rendered spec.** The interview is exercised; the renderer has never run
+- [ ] Remaining families: `compute`, `data`, `security`
 - [ ] Remaining storage resources: blob container, file share, queue
 - [ ] Evals per pattern, plus a consistency run: same spec many times, measure the spread
 - [ ] Cross-backend check: one spec through both backends, diff the result
