@@ -22,7 +22,9 @@ per family spent it by the sixth family.
 
 ```
 question set  ──interview──>  infra-spec.yaml  ──render──>  Terraform / Bicep  ──validate──>  explained plan
-                 [here]                       [iac-rendering]
+                 [here]             │         [iac-rendering]
+                                    └──draw──>  infra-diagram.drawio.png
+                                                [iac-diagram]
 ```
 
 The spec in the middle is the load-bearing part. It is the handover interface, not a
@@ -228,13 +230,19 @@ argue with, and they can only do that if they see the chain.
 This is the step that keeps the plugin honest. Someone who disagrees with a default needs
 to see it to disagree with it, and the ones they never look at cost one glance.
 
-## Phase 5 — Write the spec, then render
+## Phase 5 — Write the spec, draw it, then render
 
 Write `infra-spec.yaml` first, then render from it. Doing it in that order is not
 bookkeeping: it forces the decisions to be expressible in the backend-neutral vocabulary,
 and a decision that will not fit is usually one that absorbed a backend's spelling.
 
+Between the two, draw the spec with [iac-diagram](../iac-diagram/SKILL.md) and hand the
+user `infra-diagram.drawio.png`. It is the one artefact the customer can read, and it comes
+before rendering on purpose: an objection to the picture is a one-line change to the spec
+now, and a regenerated module later.
+
 - Spec schema and the `source` field: [references/spec.md](references/spec.md)
+- Drawing it: [iac-diagram](../iac-diagram/SKILL.md)
 - Rendering it, for either target: [iac-rendering](../iac-rendering/SKILL.md)
 
 ## Phase 6 — Validate and explain
@@ -315,7 +323,8 @@ family:
 6. Write `<resource>/terraform.md` and `<resource>/bicep.md` — the
    rendering, not the decisions. Anything true for both belongs in the shared references
    instead.
-7. Add a row to the family's `routing.md`, so the resource is reachable.
+7. Add a row to the family's `routing.md`, so the resource is reachable, and its icon to the
+   `$Icons` table of [iac-diagram](../iac-diagram/SKILL.md#icons), so it is drawable.
 8. If people would ask for it with a term the
    [azure-resources](../azure-resources/SKILL.md) description does not carry, add the term
    there — that description is the only trigger the resource has.
@@ -336,4 +345,5 @@ Read as needed, not up front:
 | [references/spec.md](references/spec.md) | Writing or reading `infra-spec.yaml` |
 | [references/question-set-format.md](references/question-set-format.md) | Authoring or extending a `questions.yaml` |
 | [references/guardrails.md](references/guardrails.md) | Choosing or justifying any default, or weighing an exception |
+| [iac-diagram](../iac-diagram/SKILL.md) | Drawing the spec as `infra-diagram.drawio.png` for the customer |
 | [iac-rendering](../iac-rendering/SKILL.md) | Turning the spec into Terraform or Bicep — naming, layout, idiom |
