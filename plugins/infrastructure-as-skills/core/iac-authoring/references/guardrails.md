@@ -13,6 +13,61 @@ Shared deliberately with `Infrastructure-by-Skill`: a GUI-driven run and a gener
 Terraform run should reach the same posture, or the comparison between the two tracks
 measures the wrong thing.
 
+## 0. Platform model: Azure landing zone
+
+The plugin authors a **workload into an application landing zone** — one subscription
+under the *Landing zones* management group of the Cloud Adoption Framework's
+[Azure landing zone](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/)
+architecture. The platform around it already exists and belongs to someone else:
+
+| Platform part | Where it lives | What the plugin does with it |
+|---|---|---|
+| Hub network, firewall, gateways, DNS resolver | Connectivity subscription | Peers a spoke to it — never creates or changes it |
+| Private DNS zones (`privatelink.*`) | Connectivity subscription | References them, or leaves the records to policy — never creates them |
+| Central Log Analytics workspace | Management subscription | Sends diagnostics to it — never creates it |
+| Management groups, policy and role assignments | Tenant root and below | Works within them — never assigns them |
+| Subscriptions | Subscription vending | Expects one — never creates it |
+
+That is where three defaults come from, and why they hold for every resource:
+`network_ownership: create` builds a **spoke**, `private_dns_ownership: platform`, and
+`observability_ownership: reference`. "Nothing exists yet" from a user describes their
+workload, not the platform; a run does not read it as licence to build hub
+infrastructure.
+
+**The archetype decides the posture.** `landing_zone` in the deployment set is asked
+first, and its answer pre-answers exposure and network:
+
+| `landing_zone` | Meaning | Pre-answers |
+|---|---|---|
+| `standalone` | **No landing zone platform.** Nothing shared exists to reference | `network_exposure: private`, `network_ownership: create` (standalone, not a spoke), `private_dns_ownership: deployment` (zones and their records created here), `observability_ownership: create` |
+| `corp` | Internal workload, connected to the hub | `network_exposure: private`, `network_ownership: create` (spoke) |
+| `online` | Internet-facing workload, not connected to the hub | `network_exposure: public` with a firewall allowlist (§2, rung 3), `network_ownership: none` unless a private backend needs one |
+| `sandbox` | Experiments, no hub, looser policy | `network_exposure: public` allowed, `network_ownership: none`; `environment: production` is refused |
+
+A user statement overrides a pre-answer, recorded as `overridden` — a corp workload with
+one internet-facing endpoint is `private_with_exceptions`, not `online`.
+
+`standalone` keeps every other guardrail. It moves ownership, not posture: without a platform
+the deployment owns its DNS zones and its workspace, and is still private by default. It
+also has no policy to lean on — nothing denies a public endpoint and nothing writes DNS
+records — so the generated code has to do what the platform would have done.
+
+**Platform policies act on what the workload deploys.** ALZ assigns `Deny` policies (public
+network access, for instance) that make a non-compliant deployment fail, and
+`DeployIfNotExists` policies that add resources after the deployment — most importantly
+the DNS records for private endpoints. Whatever a `DeployIfNotExists` policy deploys, the
+generated code must not deploy as well: two writers to the same record means a plan that
+never stops showing drift, and the policy re-applying what the code removed.
+`private_dns_records` decides which writer owns the records.
+
+The plugin never builds the platform. Hub, management groups, policy assignments and
+subscription vending belong to the ALZ accelerator modules; a workload deployment that
+creates any of them is a second source of truth for the platform.
+
+Where an organisation has no landing zone platform, that is `landing_zone: standalone` — an
+answer, not an exception, so its consequences are pre-answers rather than `overridden`
+values.
+
 ## 1. Naming and tags
 
 Never hardcode a resource name, and never hand-write a tag per resource.
@@ -61,8 +116,8 @@ The posture ladder, in order of preference:
 4. **Public, unrestricted** — only with a stated reason recorded in the spec as
    `overridden`.
 
-Private DNS zones are shared infrastructure. No resource question set creates one — a pattern
-skill or the platform owns them, because two deployments each creating
+Private DNS zones are shared infrastructure. No resource question set creates one — the
+platform owns them (§0), because two deployments each creating
 `privatelink.blob.core.windows.net` is a conflict that only shows up at apply time.
 
 ## 3. Identity over keys
@@ -110,8 +165,8 @@ invisible exactly when someone needs to see it.
   handling regulated data; be deliberate in production where volume has a price.
 - **Metrics**: `AllMetrics`, which is cheap.
 
-The workspace is shared infrastructure, like DNS zones — referenced, not created, by a
-resource question set.
+The workspace is shared infrastructure, like DNS zones — the platform's, in the management
+subscription (§0), referenced and not created by a resource question set.
 
 ## 6. Exceptions
 

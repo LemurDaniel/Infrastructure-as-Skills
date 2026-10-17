@@ -95,12 +95,47 @@ groups:
   - id: posture
     title: Posture
     questions:
+      - id: landing_zone
+        ask: Is there a landing zone platform at all (standalone if not), and if so, which kind of landing zone does this workload go into - internal (corp), internet-facing (online) or a sandbox?
+        type: enum
+        values: [standalone, corp, online, sandbox]
+        default: corp
+        confirm_in: [production]
+        why: >
+          The workload lands in an application landing zone of the CAF Azure
+          landing zone architecture (guardrails.md, section 0), and the archetype
+          decides the posture before any single resource does. `corp` is an
+          internal workload whose network is a spoke peered to the connectivity
+          hub. `online` is internet-facing and not connected to the hub.
+          `sandbox` is for experiments - no hub, looser policy, and never
+          production. `standalone` means the organisation has no landing zone platform:
+          nothing shared exists, so the deployment owns its network (standalone,
+          not a spoke), its private DNS zones and records, and its workspace -
+          and stays private by default, since a missing platform moves
+          ownership, not posture. Asked first because one answer pre-answers
+          exposure, network, DNS and workspace ownership; a user who says "nur
+          aus dem Firmennetz", "öffentlich erreichbar" or "wir haben keine
+          Landing Zone" has usually answered it already.
+        forced_when: >
+          landing_zone: sandbox refuses environment: production - a production
+          workload in a sandbox is a contradiction to ask about, not a value to
+          record
+        renders: >
+          pre-answers network_exposure and network_ownership, and under `standalone`
+          also private_dns_ownership and
+          observability_ownership (guardrails.md, section 0); recorded so a
+          reviewer sees which platform rules the deployment was written against
+
       - id: network_exposure
         ask: Should this infrastructure be reachable from the internet?
         type: enum
         values: [private, private_with_exceptions, public]
         default: private
         confirm_in: [production]
+        forced_when: >
+          landing_zone pre-answers it - corp and standalone: private; online and sandbox: public.
+          A stated exception overrides the pre-answer (a corp workload with one
+          internet-facing endpoint is private_with_exceptions)
         why: >
           The single decision most resource defaults hang off. `private` means every
           resource that supports a private endpoint gets one and has no public
@@ -206,7 +241,9 @@ groups:
           one address space.
         forced_when: >
           network_exposure in [private, private_with_exceptions] removes `none`;
-          network_exposure: public makes `none` the default
+          network_exposure: public makes `none` the default; landing_zone: corp
+          pre-answers `create` (a spoke), landing_zone: standalone pre-answers `create`
+          (standalone, no peering), online and sandbox pre-answer `none`
         renders: >
           terraform: azurerm_virtual_network resource vs. data "azurerm_virtual_network";
           bicep: Microsoft.Network/virtualNetworks resource vs. an `existing` reference
@@ -266,6 +303,11 @@ groups:
         type: enum
         values: [platform, deployment]
         default: platform
+        forced_when: >
+          landing_zone: standalone pre-answers `deployment` - there is no platform to
+          own the zones, so the deployment creates them and writes their records
+          itself; private_dns_records and private_dns_zone_scope are then not
+          reached
         why: >
           Private DNS zones are shared infrastructure: two deployments each creating
           `privatelink.blob.core.windows.net` is a conflict that only surfaces at
@@ -279,20 +321,40 @@ groups:
           whether privatelink zones are created or referenced; the zone group on
           every private endpoint either way
 
+      - id: private_dns_records
+        ask: Does a platform policy create the DNS records for private endpoints, or does this deployment?
+        type: enum
+        values: [policy, deployment]
+        default: policy
+        depends_on: { question: private_dns_ownership, equals: platform }
+        why: >
+          In an Azure landing zone a DeployIfNotExists policy usually attaches
+          every new private endpoint to the platform's privatelink zone and
+          writes its record. If the generated code attaches a zone group as
+          well, two writers own one record: the plan shows drift on every run,
+          and the policy re-applies what the code removes. `policy` therefore
+          renders no zone group at all and leaves the record to the platform.
+          `deployment` is for a platform without that policy, and needs the
+          zones' location (private_dns_zone_scope). Only reached when a private
+          endpoint exists.
+        renders: >
+          whether private_dns_zone_group (terraform) / privateDnsZoneGroups
+          (bicep) is rendered on every private endpoint
+
       - id: private_dns_zone_scope
         ask: In which subscription and resource group does the platform keep the private DNS zones?
         type: ref
         ref: resource_group
         required: true
-        depends_on: { question: private_dns_ownership, equals: platform }
+        depends_on: { question: private_dns_records, equals: deployment }
         why: >
           Referencing a zone needs its subscription and resource group, and in a
           hub-and-spoke platform that is the hub's, not the workload's - so it is
           never the context's subscription by assumption. One answer per
           platform, recorded as "subscription-id / resource-group" and carried by
           every later run; a pattern skill for a known platform supplies it.
-          Only reached when a private endpoint exists, i.e. under a private
-          posture.
+          Not needed when policy writes the records - then the code never
+          references a zone.
         renders: >
           terraform: data "azurerm_private_dns_zone" with resource_group_name and a
           provider alias for the hub subscription; bicep: an `existing` zone with
@@ -306,6 +368,9 @@ groups:
         type: enum
         values: [create, reference]
         default: reference
+        forced_when: >
+          landing_zone: standalone pre-answers `create` - without a platform there is
+          no central workspace to reference
         why: >
           The same shape as the network question, and for the same reason: a
           workspace either exists and is read, or it does not and something has to
