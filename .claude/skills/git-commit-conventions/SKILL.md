@@ -23,6 +23,36 @@ It matches the owner's other repos: 57 commits across `terraform-provider-naming
 
 A commit message ends with its last content line. Nothing after it.
 
+### Author identity
+
+Commits are authored by the repository owner, not by the tool:
+
+```
+LemurDaniel <landau.daniel.1998@gmail.com>
+```
+
+This applies **only when a tool is committing** — a Claude Code cloud session,
+an agent run, anything whose git identity starts as
+`Claude <noreply@anthropic.com>` or is unset. There, before the first commit of
+the session, check `git config user.name` and `git config user.email` in the
+repo and, if they are missing or say `Claude`, set them **repo-locally**:
+`git config user.name "LemurDaniel"` and
+`git config user.email "landau.daniel.1998@gmail.com"`, never `--global`.
+
+On the owner's own machine the identity is already theirs: do not touch the
+git config there, and do not rewrite a configured identity that is not
+`Claude`.
+
+**No signing from a tool session.** Commits made here are unsigned: no key is
+set up, no `-S`, no `commit.gpgsign`. A signature from a key GitHub does not
+know shows the commit as *Unverified*, which is worse than no signature. If a
+tool session inherits `commit.gpgsign = true` from somewhere, turn it off
+repo-locally (`git config commit.gpgsign false`) rather than bypassing it per
+commit with a flag (section 6). Signing on the owner's own machine is theirs
+to decide and is left as configured. A commit that went out under the wrong author is not amended if it
+is already pushed (section 6); say so and let the owner decide whether to
+rewrite the branch.
+
 ## 2. Message format
 
 ```
@@ -121,12 +151,29 @@ Beyond the script:
   budget. A commit that adds a skill directory needs a sentence in
   the body justifying the listing-budget cost, because the cost lands on every
   user of the plugin and on their other skills.
+- **A rendering reference or an example changes with its tests.** Terraform
+  rendered here carries one assert per spec decision (`# decision:` markers);
+  `core/iac-rendering/scripts/Test-RenderCoverage.ps1 <spec>` must pass on every
+  example, and `terraform test` with it. A commit that adds a decision to a
+  question set without the assert in that resource's `terraform.md` is
+  incomplete.
 - **A question set's `why` is not optional.** It is the only artefact that
   survives into a review of generated infrastructure. A commit adding questions
   without it is incomplete, not minimal.
-- **Documented capabilities match reality.** `README.md` currently marks the two
-  validators and `patterns/` as not written. Do not let a commit quietly imply
-  otherwise — if it makes one of them true, say so; if not, leave the marker.
+- **Documented capabilities match reality.** `README.md` currently marks
+  `Test-QuestionSet.ps1` and `patterns/` as not written. Do not let a commit
+  quietly imply otherwise — if it makes one of them true, say so; if not, leave
+  the marker.
+- **`PROGRESS.md` is rewritten before a session's last commit.** Goal,
+  decisions and why, what is open, the one next thing — nothing else. It is
+  the handoff the next session starts from; a session that changed a decision
+  or closed an open item and did not write it there has not finished. Commit it
+  with the change that made it true, or on its own when the session only moved
+  the "next" line.
+- **`.claude/settings.json` is the gate.** It pre-approves the read-only checks
+  and denies force-push, `reset --hard`, `--no-verify`, `terraform apply` and
+  `terraform destroy`. A session does not widen it; the owner does, in a commit
+  that says why.
 
 ## 5. Branch and push
 
@@ -151,4 +198,6 @@ Beyond the script:
 - Putting a remote URL in a tracked file, a commit message, or output pasted
   back into a session. The `origin` URL embeds a personal access token.
 - Committing a generated `infra-spec.yaml` from a scratch run. Specs belong in
-  the consuming repo next to the code they produced, not here.
+  the consuming repo next to the code they produced, not here. The one exception
+  is `examples/<case>/`: a deliberate, reviewed fixture with its request and its
+  render beside it, never a spec that merely fell out of a run.

@@ -1,0 +1,168 @@
+schema_version: 1
+
+spec:
+  id: invoicing-prod
+  target: terraform
+  generated_by: infrastructure-as-skills
+  skill: azure-resources
+  skill_version: 0.1.0
+  at: 2026-10-17T18:50:00Z
+
+# Values every resource inherits. Resolved once, not per resource.
+# All stated in the request - nothing here was guessed.
+context:
+  environment: production
+  location: westeurope
+  workload: invoicing
+  subscription_id: 11111111-2222-3333-4444-555555555555
+  resource_group_name: rg-invoicing-prod-we
+  # Not stated, repository has none, nobody to ask (headless run) - see open:.
+  tags: {}
+
+# The deployment set's answers. Resolved once; every resource inherits them.
+deployment:
+  naming_convention:
+    value: default
+    source: default
+  landing_zone:
+    value: corp
+    source: stated          # "nur aus dem Firmennetz" over an existing hub
+  network_exposure:
+    value: private
+    source: stated          # "Zugriff nur aus dem Firmennetz"
+  local_auth:
+    value: disabled
+    source: default         # confirm_in production - applied, nobody to confirm
+  mandates:
+    value: [BSI C5]
+    source: stated
+  key_protection:
+    value: software
+    source: default         # BSI C5 names no HSM requirement; not inferred
+  key_management:
+    value: platform_managed
+    source: default         # confirm_in production
+  network_ownership:
+    value: reference
+    source: stated
+  existing_vnet:
+    value:
+      name: vnet-hub-prod-we
+      resource_group_name: rg-network-prod-we
+    source: stated
+  private_endpoint_subnet:
+    value: snet-privatelink
+    source: stated
+  private_dns_ownership:
+    value: platform
+    source: default
+  private_dns_records:
+    value: policy
+    source: default
+  observability_ownership:
+    value: reference
+    source: stated
+  diagnostics_destination:
+    value:
+      name: log-platform-prod-we
+      resource_group_name: rg-observability-prod-we
+    source: stated
+
+# One resource, no modules/ in the repository -> one root.
+composition:
+  granularity: single
+  source: default
+
+resources:
+  storage-account:
+    networking:
+      public_network_access:
+        value: disabled
+        source: deployment        # network_exposure: private
+      private_endpoint_subnet:
+        value: snet-privatelink
+        source: deployment
+      private_endpoint_subresources:
+        value: [blob]
+        source: default
+      allow_azure_services_bypass:
+        value: true
+        source: default
+    identity:
+      managed_identity:
+        value: system_assigned
+        source: default
+      role_assignments:
+        # Consumer not named in the request. With shared keys off the account is
+        # unreadable until one is assigned - see open:.
+        value: []
+        source: default
+    security:
+      shared_access_key_enabled:
+        value: false
+        source: deployment        # local_auth: disabled
+      min_tls_version:
+        value: TLS1_2
+        source: default
+      https_traffic_only:
+        value: true
+        source: default
+      allow_blob_public_access:
+        value: false
+        source: default
+      infrastructure_encryption_enabled:
+        value: true
+        source: default
+      key_management:
+        value: platform_managed
+        source: deployment
+      sftp_enabled:
+        value: false
+        source: default
+    data_protection:
+      replication:
+        value: ZRS
+        source: default           # confirm_in production
+      access_tier:
+        value: Hot
+        source: default
+      blob_soft_delete_days:
+        value: 7
+        source: default
+      container_soft_delete_days:
+        value: 7
+        source: default
+      versioning_enabled:
+        value: true
+        source: default
+      change_feed_enabled:
+        value: false
+        source: default
+      point_in_time_restore_days:
+        value: 0
+        source: default
+      immutability:
+        value: none
+        source: default
+    observability:
+      diagnostic_workspace:
+        value:
+          name: log-platform-prod-we
+          resource_group_name: rg-observability-prod-we
+        source: deployment
+      diagnostic_categories:
+        value: [audit]
+        source: default
+      metrics_enabled:
+        value: true
+        source: default
+
+open:
+  - key: context.tags
+    question: Which tag set does the organisation apply? Nothing in the request, no repository to read it from.
+    owner: workload owner
+    blocks: apply
+  - key: resources.storage-account.identity.role_assignments
+    question: Which principal reads and writes the invoices, and which data-plane role does it need? Shared-key auth is off, so an account with no assignment is working as specified and unusable.
+    owner: workload owner
+    blocks: apply

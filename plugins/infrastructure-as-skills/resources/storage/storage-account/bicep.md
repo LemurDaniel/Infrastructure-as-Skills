@@ -228,21 +228,40 @@ nothing, which presents as a connection timeout rather than a DNS error — so u
 
 ## Role assignments
 
-Use the `utility/role` module from the registry — it carries the built-in role definition
-ids, so the GUID does not get hand-copied:
+With a `br/modules` alias in `bicepconfig.json`, the registry's `utility/role` module
+carries the built-in role definition ids (check its `var.builtIn.bicep` for the names).
+Without one — the usual case in a fresh consumer repository — do not invent the alias;
+render the assignment directly, with the ids of the data-plane roles the question set
+allows kept in one map. The GUIDs are Azure's built-in ones, identical in every tenant:
 
 ```bicep
-module roleAssignment 'br/modules:utility/role:1.0.0' = {
-  name: 'ra-${storageAccount.name}-blob'
-  params: {
-    principalId: consumerPrincipalId
-    roleDefinitionName: 'Storage Blob Data Contributor'
-    scope: storageAccount.id
-  }
+type roleAssignment = {
+  principalId: string
+  role: 'Storage Blob Data Reader' | 'Storage Blob Data Contributor' | 'Storage Blob Data Owner'
 }
+
+var roleDefinitionIds = {
+  'Storage Blob Data Reader': '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'
+  'Storage Blob Data Contributor': 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+  'Storage Blob Data Owner': 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
+}
+
+resource dataRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
+  for ra in roleAssignments: {
+    name: guid(storageAccount.id, ra.principalId, ra.role)
+    scope: storageAccount
+    properties: {
+      principalId: ra.principalId
+      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionIds[ra.role])
+    }
+  }
+]
 ```
 
-Check `var.builtIn.bicep` in that module for the available role names before using one.
+`name` must be a deterministic GUID — `guid()` over the scope, principal and role — or a
+second deployment creates a second assignment. The union type on `role` is what Terraform's
+`role_definition_name` string lacks: a typo there is an apply-time error, here a compile
+error.
 
 Data access needs the **data-plane** roles — `Storage Blob Data Reader`,
 `Storage Blob Data Contributor`. `Contributor` is control-plane and grants no data access
@@ -251,25 +270,45 @@ storage account still cannot read a blob.
 
 ## Diagnostics
 
-Use the `utility/diagnostic` module rather than hand-writing the setting:
+Two settings, because the account and its blob service are two diagnostic targets. The
+account itself emits **no log categories** — a `logs` entry on the account is rejected at
+deployment — so `diagnostic_categories` renders on the blob service and the account gets
+metrics only. The same split as the Terraform render, which is the point:
 
 ```bicep
-module diagnostics 'br/modules:utility/diagnostic:1.0.0' = {
-  name: 'diag-${storageAccount.name}'
-  params: {
-    targetResourceId: storageAccount.id
-    workspaceId: diagnosticWorkspaceId
-    categoryGroups: diagnosticCategories
+resource storageDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'diag'
+  scope: storageAccount
+  properties: {
+    workspaceId: platformWorkspace.id
+    metrics: [
+      { category: 'AllMetrics', enabled: true }
+    ]
+  }
+}
+
+// Blob data-plane logs attach to blobServices/default. A setting on the account
+// alone collects no StorageRead/Write/Delete while looking configured.
+resource blobDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'diag'
+  scope: blobService
+  properties: {
+    workspaceId: platformWorkspace.id
+    logs: [
+      { categoryGroup: 'audit', enabled: true }
+    ]
+    metrics: [
+      { category: 'AllMetrics', enabled: true }
+    ]
   }
 }
 ```
 
-Check the module's parameter names against its own `module.bicep` before generating — this
-is a local module and its interface is not a public contract.
-
-Blob data-plane logs attach to `${storageAccount.id}/blobServices/default`, not to the
-account. A setting on the account alone collects no `StorageRead` or `StorageWrite` events
-while looking fully configured.
+`scope:` on the setting is the Bicep spelling of Terraform's `target_resource_id`; pointing
+it at the nested `blobService` resource is what appends `/blobServices/default`. With a
+`br/modules` alias the registry's `utility/diagnostic` module can replace the two blocks —
+check its `module.bicep` for the parameter names first, its interface is not a public
+contract — but never invent the alias to use it.
 
 ## Outputs
 

@@ -153,6 +153,13 @@ costs budget, and a family's routing table is a `routing.md` that the azure-reso
 reads by path. A declared path that does not exist fails to load the plugin, which is why
 `./patterns/` is not listed yet.
 
+## Examples
+
+[`examples/`](examples/README.md) holds complete runs — request, spec, render, tests — as
+the reference for what a good output looks like. `private-storage-on-platform` is the
+first: one storage account on a referenced platform, rendered to Terraform and to Bicep
+from the one spec, with the diff between the two written down.
+
 ## Install
 
 On Claude Code 2.1.275 or later, one step:
@@ -175,7 +182,9 @@ matching skill triggers.
 
 Early, and the shape matters more than the coverage right now. One interview has been run
 end to end; it produced a spec, and the spec is honest about what it could not resolve.
-Nothing has been rendered to Terraform or Bicep yet.
+One spec (`private-storage-on-platform`) has been rendered to both targets — Terraform
+against `azurerm` 5.10 and `LemurDaniel/naming` 1.0 with plan-only tests, Bicep compiled
+and linted with CLI 0.48 — and the two renders diffed. Nothing has been applied.
 
 - [x] Plugin skeleton, marketplace manifest, grouped layout
 - [x] Shared contract: spec format, question-set format, the interview protocol
@@ -187,10 +196,18 @@ Nothing has been rendered to Terraform or Bicep yet.
 - [x] Three resources: `storage-account`, `virtual-network`, `log-analytics-workspace`
 - [x] `Test-Spec.ps1` — validates a spec against the contract, and separately whether it
       is applyable at all
+- [x] `Test-RenderCoverage.ps1` — every spec decision asserted by the rendered Terraform
+      tests, or marked not-testable with a reason. Bicep has no equivalent yet
 - [ ] **`Test-QuestionSet.ps1`** — still referenced by the docs and not written
 - [ ] **Reference pattern skill** — `patterns/` is empty, so composition is specified but
       unproven
-- [ ] **A rendered spec.** The interview is exercised; the renderer has never run
+- [x] A rendered spec: storage account on a referenced platform, Terraform, validated and
+      tested plan-only, committed under `examples/`. Surfaced the `azurerm` 5.x renames
+      and the two-target diagnostics
+- [x] The same spec rendered to Bicep, compiled and linted, and diffed against the
+      Terraform render — one real divergence found (private endpoint naming) and fixed,
+      the rest documented in `examples/README.md`
+- [ ] **An applied render.** Neither plan nor what-if has run against a subscription
 - [ ] Remaining families: `compute`, `data`, `security`
 - [ ] Remaining storage resources: blob container, file share, queue
 - [ ] Evals per pattern, plus a consistency run: same spec many times, measure the spread
