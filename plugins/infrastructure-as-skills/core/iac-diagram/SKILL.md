@@ -14,7 +14,8 @@ infra-spec.yaml  ──New-Diagram──>  infra-diagram.drawio  ──Export-Di
 ```
 
 It draws **from the spec, never from rendered code**. That is what lets the diagram come
-before rendering: the customer signs off on the picture while changing a decision is
+before rendering — iac-authoring offers it once the spec is written, and asks about code
+only after: the customer signs off on the picture while changing a decision is
 still one line in the spec, not a regenerated module. It also keeps the diagram identical
 for Terraform and Bicep, as the spec is.
 

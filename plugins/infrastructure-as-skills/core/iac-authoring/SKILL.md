@@ -245,17 +245,49 @@ argue with, and they can only do that if they see the chain.
 This is the step that keeps the plugin honest. Someone who disagrees with a default needs
 to see it to disagree with it, and the ones they never look at cost one glance.
 
-## Phase 5 — Write the spec, draw it, then render
+## Phase 5 — Write the spec, then ask twice before rendering
 
 Write `infra-spec.yaml` into the user's repository first — the IaC root, or `infra/` —
-then render from it, into the same directory. Doing it in that order is not
-bookkeeping: it forces the decisions to be expressible in the backend-neutral vocabulary,
-and a decision that will not fit is usually one that absorbed a backend's spelling.
+and validate it with `Test-Spec.ps1`. Doing that before any code is not bookkeeping: it
+forces the decisions to be expressible in the backend-neutral vocabulary, and a decision
+that will not fit is usually one that absorbed a backend's spelling.
 
-Between the two, draw the spec with [iac-diagram](../iac-diagram/SKILL.md) and hand the
-user `infra-diagram.drawio.png`. It is the one artefact the customer can read, and it comes
-before rendering on purpose: an objection to the picture is a one-line change to the spec
-now, and a regenerated module later.
+Then stop and ask. The spec is a finished artefact on its own, and the two steps after it
+are the user's to start — each one produces files in their repository.
+
+**First: a diagram?** Ask whether to draw the spec with
+[iac-diagram](../iac-diagram/SKILL.md). Recommend it when someone other than the person in
+the conversation has to sign off, or when the spec holds more than one resource; skip the
+recommendation for a single resource the user clearly understands.
+
+```
+Die Spec liegt in infra/infra-spec.yaml. Soll ich daraus ein Diagramm erstellen?
+  - Ja (empfohlen)  -> infra-diagram.drawio.png, zum Prüfen oder Weitergeben
+  - Nein            -> weiter zur Prüfung der Spec
+```
+
+**Second: does it match, and should the code be generated?** Show what the user is
+confirming — the diagram if there is one, otherwise the Phase 4 summary — and ask whether
+it meets the requirements:
+
+```
+Passt das so zu euren Anforderungen?
+  - Ja, Terraform-Code erzeugen  -> render into the same directory
+  - Etwas ändern                 -> the user says what; change the spec, redraw, ask again
+  - Noch nicht                   -> stop here; the spec stays and the next run extends it
+```
+
+The order is the point. An objection to the picture is a one-line change to the spec now,
+and a regenerated module later. "Etwas ändern" therefore loops back to the spec, never
+into the code: change the decision there, as `overridden` where it replaces an answer,
+regenerate the diagram if one exists, and ask the second question again.
+
+Never offer code generation as already decided. If the spec still holds `open:` entries or
+`assumed` values, say so in the question — the code will then `plan` but not `apply` —
+rather than letting "Ja" read as "ready to deploy".
+
+A spec extended by a later run asks the same two questions; the diagram and the code are
+regenerated from the whole spec, so the diff shows what the extension moved.
 
 - Spec schema and the `source` field: [references/spec.md](references/spec.md)
 - Drawing it: [iac-diagram](../iac-diagram/SKILL.md)
