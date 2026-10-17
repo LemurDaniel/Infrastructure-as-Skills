@@ -233,6 +233,39 @@ secret.
 Generate a `.tftest.hcl` alongside, asserting the decisions the question set recorded.
 Plan-only (`command = plan`) so it needs no credentials.
 
+**Coverage is the contract, not the example.** Every decision under `resources:` in the
+spec gets exactly one `assert`, and the assert names it in a comment on the line above:
+
+```hcl
+  # decision: storage-account.security.min_tls_version
+  assert {
+    condition     = azurerm_storage_account.this.min_tls_version == "TLS1_2"
+    error_message = "TLS 1.2 is the floor."
+  }
+```
+
+`<resource>.<group>.<question>` — the key path in the spec. One `run` per question-set
+group (`networking`, `security`, `data_protection`, `observability`, …) plus one for
+naming, so a failure names the concern before the attribute. A decision whose consequence
+a plan cannot observe — a firewall bypass that is only rendered when public access is on,
+a provider `features` setting — is still named, with its reason, so the gap is a
+sentence rather than a silence:
+
+```hcl
+# not-testable: storage-account.networking.allow_azure_services_bypass - network_rules is
+# not rendered with public access disabled; nothing in the plan carries the bypass
+```
+
+`core/iac-rendering/scripts/Test-RenderCoverage.ps1 <spec>` reads the spec and the
+`tests/` beside it and fails on a decision that is neither asserted nor marked, and on a
+marker naming a decision the spec no longer has. Run it with `terraform test`; a render
+that passes one and not the other is half done.
+
+Assert the value the spec records, through the attribute `renders` names. A decision
+rendered as an absent block (`immutability: none`, `point_in_time_restore_days: 0`,
+`key_management: platform_managed`) is asserted as `length(...) == 0` — the absence is the
+decision.
+
 A referenced platform (`network_ownership: reference`, `observability_ownership:
 reference`) is `data` blocks, and a plan reads those from Azure — so the test would need
 credentials after all. Mock the `azurerm` provider for the test and give every mocked data
@@ -290,7 +323,8 @@ element-wise.
 ```bash
 terraform fmt -recursive
 terraform validate
-terraform test        # if tests were generated
+terraform test
+pwsh -NoProfile -File <plugin>/core/iac-rendering/scripts/Test-RenderCoverage.ps1 ./infra-spec.yaml
 ```
 
 `fmt` is not optional — unformatted generated code is the fastest way to make a reviewer
