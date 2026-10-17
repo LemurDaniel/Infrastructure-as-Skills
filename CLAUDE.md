@@ -13,6 +13,13 @@ and the attribute it renders to. A storage account is not hard because the HCL i
 carries about forty decisions, and generic generation gets the syntax right and the
 decisions wrong.
 
+The decisions render **to Azure Verified Modules (AVM) first** — a resource with an
+`Available` module in the [Terraform](https://azure.github.io/Azure-Verified-Modules/indexes/terraform/)
+or [Bicep](https://azure.github.io/Azure-Verified-Modules/indexes/bicep/) index becomes a
+call to it with every decision as an explicit input; authored resources are the fallback
+for a type without one, or for a repository that already renders that way. The contract
+is `core/iac-rendering/references/avm.md`.
+
 | Layer | Role |
 |---|---|
 | **Resource families** (`resources/<family>/`) | Reference material, not skills. One directory per resource, its decisions in `<resource>/questions.yaml`; the `azure-resources` skill routes into them |
@@ -58,6 +65,7 @@ it by full path, or let the check script find it.
 | `.../core/iac-authoring/references/question-set-format.md` | How to author a resource's `questions.yaml` |
 | `.../core/iac-authoring/references/guardrails.md` | The rules every question set takes its defaults from |
 | `.../core/iac-rendering/` | The other side of the spec: how it becomes Terraform or Bicep |
+| `.../core/iac-rendering/references/avm.md` | AVM first: which module, status, live version lookup, the shared interfaces, provider requirements, gaps, the test contract with a module in the middle |
 | `.../core/iac-rendering/references/naming.md` | The Terraform and Bicep naming interfaces |
 | `.../core/iac-rendering/references/{terraform,bicep}-idiom.md` | File layout, modules, variables, tagging, tests per target |
 | `.../core/iac-diagram/` | The spec as an editable draw.io PNG for the customer |
@@ -106,6 +114,21 @@ fails on it.
 
 ## Gotchas
 
+- **AVM versions are `0.y.z` and are looked up live, never recalled.** Bicep: the MCR tag
+  list; Terraform: the module repo's git tags. The tables in `avm.md` and the resource
+  references are dated snapshots. Pin the minor in Terraform (`~> 0.10.0`), the exact
+  version in Bicep; re-read the module README's inputs for the version pinned.
+- **AVM Terraform modules are moving to AzAPI.** Storage account and virtual network take
+  the resource group as `parent_id` (an id) and need `Azure/azapi`, `Azure/modtm` and
+  `random` in the root; the Log Analytics module is still `azurerm`-based and pins
+  `azurerm` to **4.x** — a root calling it cannot be on 5.x. The root's provider set is
+  the union of its modules' requirements.
+- **A module default is not the guardrail's default.** Bicep storage defaults to
+  `Standard_GRS`, the Bicep workspace to 365 days retention and public access `Enabled`,
+  the Terraform storage module to `infrastructure_encryption_enabled = false`. Every
+  decision is written on the call, even where it matches.
+- **The Terraform storage module's `account_sku_name` overrides tier + replication.**
+  Render the SKU name, as Bicep does; the pair is ignored while it is set.
 - **The two targets render names differently.** Terraform uses the `LemurDaniel/naming`
   provider with the `Azure::Microsoft.Storage/storageAccounts` identifier. Bicep assembles
   the name from `var`s — the `utility/naming` modules and `genName` are **not ready to
@@ -113,9 +136,11 @@ fails on it.
   identifier, the Bicep resource type and the `abbreviation`; use those.
 - **The naming provider supersedes the two naming modules.** New generated code uses the
   provider; a repo already on the modules keeps them. Never mix both in one configuration.
-- **Rendering references target `azurerm` 5.x.** `public_network_access = "Disabled"`
-  (string); the 4.x bool is deprecated and `validate` does not warn. Check arguments against
-  `terraform providers schema -json` rather than memory.
+- **Authored rendering references target `azurerm` 5.x.** `public_network_access = "Disabled"`
+  (string); the 4.x bool is deprecated and `validate` does not warn. The AVM storage
+  module takes a **bool** `public_network_access_enabled` — a module input, not the
+  provider argument. Check arguments against `terraform providers schema -json` and module
+  inputs against the module README rather than memory.
 - **A `CLAUDE.md` inside the plugin directory is not loaded as context.** Instructions that
   must reach Claude belong in a skill. This file is at the repo root and does load.
 - **Frontmatter `name` must equal the skill's directory name.**
