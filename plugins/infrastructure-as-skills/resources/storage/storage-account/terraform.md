@@ -129,14 +129,21 @@ One endpoint per sub-resource, in `storage.network.tf`. The DNS zone is referenc
 created:
 
 ```hcl
+# One name per sub-resource through the convention's <?SUBNAME;-%s> token, so
+# the index stays last: pep-we-prod-invoicing-blob-01. Appending the sub-resource
+# to a finished name puts it after the index, and the Bicep render of the same
+# spec then names the endpoint differently.
 data "naming_name" "private_endpoint" {
-  resource = "Azure::Microsoft.Network/privateEndpoints"
+  for_each = toset(var.private_endpoint_subresources)
+
+  resource   = "Azure::Microsoft.Network/privateEndpoints"
+  parameters = { subname = each.key }
 }
 
 resource "azurerm_private_endpoint" "storage" {
   for_each = toset(var.private_endpoint_subresources)
 
-  name                = "${data.naming_name.private_endpoint.name}-${each.key}"
+  name                = data.naming_name.private_endpoint[each.key].name
   resource_group_name = var.resource_group_name
   location            = var.location
   subnet_id           = var.private_endpoint_subnet_id
