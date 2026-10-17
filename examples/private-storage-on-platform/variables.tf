@@ -16,8 +16,13 @@ variable "location" {
 }
 
 variable "workload" {
-  description = "Workload short name, rendered into every resource name."
+  description = "Workload short name, rendered into every resource name. 15 characters at most, or the storage account name exceeds 24."
   type        = string
+
+  validation {
+    condition     = length(var.workload) <= 15
+    error_message = "workload must be 15 characters or fewer: st + region + environment + index leave no more room in a 24-character storage account name."
+  }
 }
 
 variable "subscription_id" {

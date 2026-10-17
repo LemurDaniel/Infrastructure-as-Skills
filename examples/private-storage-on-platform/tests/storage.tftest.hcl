@@ -69,7 +69,7 @@ run "name_follows_the_convention" {
   }
 
   assert {
-    condition     = azurerm_private_endpoint.storage["blob"].name == "pep-we-prod-invoicing-01-blob"
+    condition     = azurerm_private_endpoint.storage["blob"].name == "pep-we-prod-invoicing-blob-01"
     error_message = "Private endpoint name must come from naming.yaml."
   }
 }
