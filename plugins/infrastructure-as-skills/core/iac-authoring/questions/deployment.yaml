@@ -8,6 +8,12 @@ title: Deployment-wide decisions
 # resource question marked `from_deployment` reads its answer from here instead of
 # asking again - the posture of a system is one decision, not one per resource.
 
+# `parameterized: true` marks a context value that is never asked and never written
+# into the template: the rendered code takes it as an input variable (Terraform
+# `variable`, Bicep `param`) with no default. Whoever deploys supplies it. The
+# person is often only designing, and an interview that demands a subscription id
+# or a region before they have a deployment target overruns them.
+
 boundaries:
   - "Does not create the subscription or the resource group; expects both from the context."
   - "Does not decide a single resource's exceptions - a resource may depart, and then records why."
@@ -31,23 +37,26 @@ groups:
       - id: location
         ask: Which Azure region?
         type: string
-        required: true
+        parameterized: true
         why: >
-          Also a naming input, which makes it a render blocker rather than an
-          apply blocker: without it no name can be produced at all. Asked here
-          because every resource in a deployment shares it - and because a run
-          that forgets it gets all the way to rendering before noticing.
-        renders: context.location - and the region abbreviation in every name
+          Always an input variable of the template, never asked: every resource
+          in a deployment shares it, it is supplied at deploy time, and a region
+          demanded during design is a value the user may not have chosen yet.
+          It is still a naming input, so the region abbreviation in every name
+          is computed from the variable at plan time, not at render time.
+        renders: variable location / param location - and the region abbreviation in every name
 
       - id: workload
         ask: Which workload is this for? (short name, goes into every resource name)
         type: string
-        required: true
+        parameterized: true
         why: >
-          The one human-chosen part of a rendered name, and the part someone
-          searching the portal recognises. Short, because several resource types
-          cap the whole name at 24 characters.
-        renders: context.workload - and the name of every resource
+          Always an input variable of the template, never asked. It is the one
+          human-chosen part of a rendered name, and the part someone searching the
+          portal recognises - so the variable carries a validation (short, because
+          several resource types cap the whole name at 24 characters) instead of
+          a value.
+        renders: variable workload / param workload - and the name of every resource
 
       - id: naming_convention
         ask: Should resource names follow the default convention, or does your organisation have its own?
@@ -74,23 +83,24 @@ groups:
         ask: Which subscription does this deploy into?
         type: ref
         ref: subscription
-        required: true
+        parameterized: true
         why: >
-          Never guessed, and a context value rather than a template one so the
-          same spec can be rendered against another subscription without editing
-          anything else.
-        renders: provider subscription_id / the deployment's target scope
+          Always an input variable of the template, never asked and never
+          guessed. The same rendered code deploys into any subscription without
+          editing it.
+        renders: variable subscription_id (provider subscription_id) / the deployment's target scope
 
       - id: resource_group_name
         ask: Which resource group?
         type: ref
         ref: resource_group
-        required: true
+        parameterized: true
         why: >
-          Expected, not created - every question set here declares that as a
-          boundary. A network often belongs in a platform group rather than the
-          application's, which is a placement decision worth making once.
-        renders: resource_group_name / scope
+          Always an input variable of the template, never asked. Expected, not
+          created - every question set here declares that as a boundary. A
+          network that belongs in a platform group is a separate, asked decision
+          (network_ownership), not this value.
+        renders: variable resource_group_name / param resourceGroupName / scope
 
   - id: posture
     title: Posture
@@ -99,9 +109,14 @@ groups:
         ask: Is there a landing zone platform at all (standalone if not), and if so, which kind of landing zone does this workload go into - internal (corp), internet-facing (online) or a sandbox?
         type: enum
         values: [standalone, corp, online, sandbox]
-        default: corp
+        default: standalone
         confirm_in: [production]
         why: >
+          `standalone` is the default and listed first: it needs no knowledge of
+          landing zones and builds everything the deployment needs itself, while
+          `corp` presumes a platform the user may not know exists - recommending
+          it would steer people who never heard of a landing zone into an
+          unmet assumption (a hub, shared DNS, a shared workspace).
           The workload lands in an application landing zone of the CAF Azure
           landing zone architecture (guardrails.md, section 0), and the archetype
           decides the posture before any single resource does. `corp` is an

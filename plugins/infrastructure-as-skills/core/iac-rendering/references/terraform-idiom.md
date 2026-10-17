@@ -66,6 +66,13 @@ module "storage_network" {
 }
 ```
 
+### Context values are always variables
+
+`subscription_id`, `resource_group_name`, `location` and `workload` are root `variable`s
+with no default, in every rendering. Never a literal in a `.tf` file, and never a value the
+interview invented. The provider block reads `var.subscription_id`; `workload` carries a
+`validation` for the length limit. Values the user stated go into a `*.tfvars.example`.
+
 ### What does not port to Bicep unchanged
 
 - **A provider is configured in the root, never in a module.** A module deploying into a

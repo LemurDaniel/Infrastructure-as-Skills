@@ -79,6 +79,7 @@ groups:
 | `values` | for `enum` | Allowed values. |
 | `default` | no | The opinionated value. Its presence is what makes the question not get asked. |
 | `required` | no | `true` means no default exists and it must be asked. Mutually exclusive with `default`. |
+| `parameterized` | no | `true` means the value is never asked and never rendered as a literal: the template takes it as an input variable (Terraform `variable`, Bicep `param`) without a default. Used for deployment context that is supplied at deploy time. Mutually exclusive with `default` and `required`. |
 | `confirm_in` | no | Environments where the default is surfaced for confirmation rather than applied silently. |
 | `why` | yes | The reasoning. This is what a reviewer reads and what justifies the default. |
 | `renders` | yes | Which attribute(s) the answer drives, per target where they differ. Lets a review skill map code back to a decision. |
@@ -132,4 +133,5 @@ Checks every resource's `questions.yaml` in the family for the structural invari
 `required` and `default` not both set, enum defaults within `values`, `depends_on` pointing
 at a question that exists, `why` and `renders` present, both naming forms and the
 abbreviation declared, the Bicep identifier not carrying an `Azure::` prefix, and every
-resource reachable from the family's outing.md.
+resource reachable from the family's 
+outing.md.

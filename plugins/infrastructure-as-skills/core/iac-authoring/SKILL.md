@@ -65,7 +65,6 @@ of what is worth mentioning, so the description lands on the questions that matt
 ```
 Beschreib kurz, was du aufbauen willst. Hilfreich ist alles davon, nichts davon ist Pflicht:
   - Wofür ist es da, und für welche Umgebung (dev / test / prod)?
-  - Region, Subscription, Resource Group — falls schon festgelegt
   - Wer oder was greift zu, und von wo (Internet, Firmennetz, nur andere Azure-Dienste)?
   - Gibt es Vorgaben (BSI C5, ISO 27001, interne Richtlinien)?
   - Was existiert schon (VNet, Log Analytics Workspace, DNS) und soll genutzt werden?
@@ -114,8 +113,12 @@ and six Bicep files, and comparing the two outputs stops meaning anything. See
 resource question set. It holds what is one decision per system rather than one per
 resource, in two halves:
 
-- **The context** — environment, region, workload, subscription, resource group. All
-  `required`, because nothing can be guessed and everything downstream reads them. A
+- **The context** — environment, region, workload, subscription, resource group. Only
+  the environment is asked. Region, workload, subscription and resource group are
+  `parameterized`: never asked, rendered as input variables, supplied at deploy time —
+  a user who is only designing has no deployment target yet. Use them from the
+  description if stated (as the variable's documentation/example, not a baked-in value).
+  The environment is `required`, because nothing can be guessed and everything downstream reads them. A
   resource question marked `from_context: true` points here; without this group that field
   pointed at nothing, and a run could reach the renderer with no region and therefore no
   name.

@@ -164,6 +164,13 @@ type storageConfig = {
 }
 ```
 
+### Context values are always parameters
+
+`location`, `workload` and `resourceGroupName` are `param`s without a default, and the
+subscription is the deployment's target (`az deployment group create --subscription ... -g ...`),
+never a literal. Values the user stated go into `main.bicepparam`, not into the template.
+`workload` carries `@minLength`/`@maxLength` for the name-length limit.
+
 ## Names come from vars
 
 The registry's naming modules (`utility/naming/schema`, `utility/naming/generator`,

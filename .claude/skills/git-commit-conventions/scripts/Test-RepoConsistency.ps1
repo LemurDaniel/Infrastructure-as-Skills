@@ -369,6 +369,8 @@ try {
                 $hasRequired = [regex]::IsMatch($b, '(?m)^\s+required:\s*true')
                 # Inherited from the deployment set, so it needs no default of its own.
                 $hasInherit  = [regex]::IsMatch($b, '(?m)^\s+from_deployment:')
+                # Supplied at deploy time as an input variable, so it is never asked either.
+                if ([regex]::IsMatch($b, '(?m)^\s+parameterized:\s*true')) { $hasInherit = $true }
                 if ($hasDefault -and $hasRequired) {
                     $qErrors.Add("$rel - '$qid' sets both required: true and a default. A required question is one with no safe default.")
                 }

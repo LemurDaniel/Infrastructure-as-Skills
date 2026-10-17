@@ -12,7 +12,7 @@ variables and tagging are in
 | `daily_quota_gb` | `daily_quota_gb` — `-1` for no cap |
 | `sku` | `sku` — `PerGB2018`, or `CapacityReservation` with `reservation_capacity_in_gb_per_day` |
 | `public_network_access: disabled` | `internet_ingestion_enabled = false` **and** `internet_query_enabled = false` |
-| `local_auth: disabled` | `local_authentication_disabled = true` |
+| `local_auth: disabled` | `local_authentication_enabled = false` (`local_authentication_disabled` is deprecated and goes in azurerm 5.0) |
 | `rbac_only_access` | `allow_resource_only_permissions = false` — note the inversion |
 | `immediate_purge_protection` | provider-side `permanently_delete_on_destroy` in the `features` block, inverted |
 
@@ -33,7 +33,7 @@ resource "azurerm_log_analytics_workspace" "this" {
   internet_query_enabled     = false
 
   # Access is via Entra ID; the workspace key is a non-expiring bearer credential.
-  local_authentication_disabled = true
+  local_authentication_enabled = false
 
   # false means RBAC on the workspace governs reads, rather than permissions
   # inherited from whichever resource emitted the row.
