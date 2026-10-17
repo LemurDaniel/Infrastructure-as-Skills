@@ -26,10 +26,13 @@ Note the shape difference from Terraform: the two access switches are string enu
 ## The workspace
 
 ```bicep
-var affix = '${locationAbbreviations[location]}${environmentAbbreviations[environment]}'
+// locationCodes, environmentCodes and the index param as in naming.md, generated from naming.yaml.
+// patterns.Azure.default, abbreviation `log`:
+// <TYPE>-<LOCATION>-<ENVIRONMENT>-<NAME>-<INDEX>  ->  log-we-dev-platform-01
+var workspaceName = 'log-${locationCodes[location]}-${environmentCodes[environment]}-${workload}-${padLeft(index, 2, '0')}'
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: 'law-${affix}-${workload}-01'
+  name: workspaceName
   location: location
   tags: tags
 

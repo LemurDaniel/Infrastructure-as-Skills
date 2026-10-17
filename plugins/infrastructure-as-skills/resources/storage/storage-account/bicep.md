@@ -42,7 +42,7 @@ its parts are in
 
 ```bicep
 @description('Deployment environment. Drives the rendered name, the tags and several security defaults.')
-@allowed(['development', 'test', 'acceptance', 'production'])
+@allowed(['development', 'test', 'staging', 'production']) // keys of mappings.environment in use
 param environment string
 
 @description('Azure region. ZRS is unavailable in regions without availability zones.')
@@ -60,23 +60,21 @@ param index int = 1
 
 param tags object
 
-// CAF convention, assembled here until the naming modules ship.
-var environmentAbbreviations = {
+// Generated from naming.yaml (mappings). Regenerate, do not edit here.
+var environmentCodes = {
   development: 'dev'
   test: 'tst'
-  acceptance: 'acc'
-  production: 'prd'
+  staging: 'stg'
+  production: 'prod'
 }
-var locationAbbreviations = {
+var locationCodes = {
   westeurope: 'we'
-  northeurope: 'ne'
   germanywestcentral: 'gwc'
 }
 
-var affix = '${locationAbbreviations[location]}${environmentAbbreviations[environment]}'
-
-// st + we + dev + objects + 01  ->  stwedevobjects01
-var storageAccountName = toLower('st${affix}${workload}${padLeft(index, 2, '0')}')
+// patterns.Azure."Microsoft.Storage/storageAccounts":
+// <TYPE><LOCATION><ENVIRONMENT><NAME><INDEX>, lowercase  ->  stwedevobjects01
+var storageAccountName = toLower('st${locationCodes[location]}${environmentCodes[environment]}${workload}${padLeft(index, 2, '0')}')
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
