@@ -1,46 +1,35 @@
----
-name: azure-guardrails
-description: The central Azure rules every question set takes its defaults from — CAF naming, the mandatory tag set, no public network access, RBAC over access keys, encryption and key management, diagnostic routing. Read before choosing or justifying any default, when a resource seems to need an exception, and when reviewing Terraform or Bicep for compliance with these rules.
----
-
-# Azure guardrails
+# The guardrails every default comes from
 
 The rules that hold across every resource, so no question set has to restate them and no
-two restate them differently. A resource skill's `questions.yaml` sets defaults *from*
-these rules; this file is where the reasoning lives.
+two restate them differently. A resource's `questions/<resource>.yaml` sets its defaults
+*from* these rules; this file is where the reasoning lives. Read it before choosing a
+default, before justifying one, and when a resource seems to need an exception.
+
+They are **not** the Azure portal's defaults. The two diverge routinely and in the same
+direction — public network access, shared-key auth and anonymous blob access all ship
+enabled — so inheriting the portal's posture is how an exposure finding happens.
 
 Shared deliberately with `Infrastructure-as-Skills`: a GUI-driven run and a generated
 Terraform run should reach the same posture, or the comparison between the two tracks
 measures the wrong thing.
 
-## 1. Naming
+## 1. Naming and tags
 
-Never hardcode or assemble a resource name. Both backends have a schema-driven engine that
-resolves the CAF convention, and the convention lives in exactly one place.
+Never hardcode a resource name, and never hand-write a tag per resource. Both are
+mechanical rules; **neither prescribes content.**
 
-The mechanics, and the identifier syntax that differs between Terraform and Bicep, are in
-[../iac-authoring/references/naming.md](../iac-authoring/references/naming.md). Read it
-before rendering a name — the `Azure::` prefix trap catches every first attempt.
+Which tags exist is an organisation's decision, not this plugin's. Take the set from the
+repository — an existing `locals.tags`, a `var tags` in `main.bicep`, what the resources
+already carry — and apply the same one. Where the repository has none and the user has not
+said, ask once and record the answer in the spec's `context.tags`, which is then what every
+resource gets. A tag set invented by a generator is a tag set nobody queries.
 
-## 2. Tags
+The applying is the mechanical part: one merged local or variable, passed everywhere. A
+resource with its own tag literal drifts from its siblings the first time the set changes.
+How that looks per target is in the idiom files; names are in
+[naming.md](../../iac-rendering/references/naming.md).
 
-Four tags are mandatory on every resource that supports them:
-
-| Tag | Value |
-|---|---|
-| `environment` | The spec's `context.environment` |
-| `workload` | The spec's `context.workload` |
-| `managed_by` | `terraform` or `bicep` — whichever generated it |
-| `cost_center` | Required in `production`, optional elsewhere |
-
-Applied from one merged local or variable, never written per resource. A resource with
-hand-written tags will drift from its siblings the first time the set changes.
-
-Resist adding more. Tags that encode something queryable from the resource itself — region,
-SKU, resource type — go stale and then actively mislead. `owner` is the usual mistake: it
-names a person who changes jobs, where a team or a service principal does not.
-
-## 3. Network exposure
+## 2. Network exposure
 
 **Default to no public network access.** Every resource that can be reached privately is
 generated that way, and public exposure is a decision somebody makes explicitly.
@@ -61,7 +50,7 @@ Private DNS zones are shared infrastructure. No resource skill creates one — a
 skill or the platform owns them, because two resource skills each creating
 `privatelink.blob.core.windows.net` is a conflict that only shows up at apply time.
 
-## 4. Identity over keys
+## 3. Identity over keys
 
 **Managed identity and RBAC, not connection strings and access keys.** Where a resource
 supports disabling local auth, disable it:
@@ -82,7 +71,7 @@ Role assignments are scoped as tightly as the consumer allows: the specific cont
 secret, not the subscription. A role assignment at subscription scope in generated code is
 a bug unless the resource genuinely operates subscription-wide.
 
-## 5. Encryption
+## 4. Encryption
 
 Platform-managed keys are the default, and that is not a compromise — they are encrypted,
 rotated and free, and the operational burden of customer-managed keys is real.
@@ -95,7 +84,7 @@ asks for CMK without those, the answer is incomplete rather than ready.
 Encryption in transit is never negotiable: TLS 1.2 as the floor, HTTPS-only where the
 resource has the switch.
 
-## 6. Diagnostics
+## 5. Diagnostics
 
 Every resource routes diagnostics somewhere. A resource with no diagnostic setting is
 invisible exactly when someone needs to see it.
@@ -109,7 +98,7 @@ invisible exactly when someone needs to see it.
 The workspace is shared infrastructure, like DNS zones — referenced, not created, by a
 resource skill.
 
-## 7. Exceptions
+## 6. Exceptions
 
 A guardrail that cannot be departed from gets worked around instead of discussed, which is
 worse. So exceptions are allowed, and the cost is recording them:
