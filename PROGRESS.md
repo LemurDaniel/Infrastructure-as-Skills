@@ -72,6 +72,11 @@ Verified Modules first, authored resources second.
   `resource.body` with `azapi` mocked, mark the rest `not-testable` with the module as the
   reason) and `Test-RenderCoverage.ps1` accepts either per decision.
 - `Test-QuestionSet.ps1` is referenced by the authoring docs and not written.
+- **Todo: an AVM version drift check.** The versions in `avm.md` and the six resource
+  references are dated snapshots. A scheduled check that compares them against the MCR
+  tag lists and the module repos' git tags and reports only what moved - never edits -
+  would keep the tables honest. Checkable goal, read-only gate, the dated table as its
+  memory; not set up yet (the owner's call, 2026-10-17).
 - `patterns/` is empty; composition is specified on paper only. AVM pattern modules
   (`private-link-private-dns-zones`, `hub-networking`) are candidates for what a pattern
   skill wraps rather than re-implements.
