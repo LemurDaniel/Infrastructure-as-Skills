@@ -10,7 +10,10 @@
       "Bash(terraform providers schema:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(pwsh -NoProfile -File plugins/infrastructure-as-skills/core/iac-rendering/scripts/Test-RenderCoverage.ps1:*)",
+      "Bash(bicep build:*)",
+      "Bash(bicep lint:*)"
     ],
     "deny": [
       "Bash(git push --force:*)",
