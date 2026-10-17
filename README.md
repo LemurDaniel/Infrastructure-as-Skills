@@ -73,7 +73,7 @@ backend then renders *from* the spec.
 
 That boundary is the load-bearing part of the design. It makes a review readable at the
 level decisions are actually made, turns a regeneration into a diff, and lets the same spec
-go to a different backend — including `Infrastructure-as-Skills` for API-driven execution,
+go to a different backend — including `Infrastructure-by-Skill` for API-driven execution,
 which is what makes the two tracks comparable at all.
 
 The spec names decisions, never a backend's attribute spelling:
@@ -182,7 +182,7 @@ Nothing has been rendered to Terraform or Bicep yet.
       inherited by every resource via `from_deployment`
 - [x] Rendering: naming interfaces, module layout and idiom per target
 - [x] Guardrails: the rules every question set takes its defaults from, shared with
-      `Infrastructure-as-Skills`
+      `Infrastructure-by-Skill`
 - [x] Three resources: `storage-account`, `virtual-network`, `log-analytics-workspace`
 - [x] `Test-Spec.ps1` — validates a spec against the contract, and separately whether it
       is applyable at all
@@ -198,12 +198,12 @@ Nothing has been rendered to Terraform or Bicep yet.
 Run `claude plugin validate ./plugins/infrastructure-as-skills` before trusting the manifest
 — the grouped `skills` array is the part most likely to be wrong.
 
-## Relation to `Infrastructure-as-Skills`
+## Relation to `Infrastructure-by-Skill`
 
 A sibling repo pointing the other way: it drives a GUI through an agent and records the
 run, where this one emits code for a provider to apply.
 
-The split is not simply "no API there, API here". `Infrastructure-as-Skills` is explicitly
+The split is not simply "no API there, API here". `Infrastructure-by-Skill` is explicitly
 an experiment, and part of that experiment is running it against systems that *do* have an
 API — otherwise there is no baseline. Without a comparable IaC path next to it, there is no
 way to tell whether a guided GUI run is merely slower or actually worse, and no honest

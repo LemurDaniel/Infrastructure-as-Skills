@@ -27,7 +27,7 @@ question set  ──interview──>  infra-spec.yaml  ──render──>  Terr
 
 The spec in the middle is the load-bearing part. It is the handover interface, not a
 by-product: a backend renders *from* it, and the same spec can go to a different backend —
-including `Infrastructure-as-Skills` for API-driven execution — which is what makes the two
+including `Infrastructure-by-Skill` for API-driven execution — which is what makes the two
 tracks comparable at all. Never generate code directly from the interview.
 
 ## Phase 1 — Establish the target and the layout

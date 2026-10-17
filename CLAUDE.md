@@ -21,7 +21,7 @@ Two layers, plus a handover file:
 | **Pattern skills** (`patterns/`) | Pre-answer most of a resource's questions and own the wiring between the parts |
 | **`infra-spec.yaml`** | The interview's output. A backend renders *from* it; it is not a by-product |
 
-The sibling repo `../Infrastructure-as-Skills` points the other way: it drives a GUI through
+The sibling repo `../Infrastructure-by-Skill` points the other way: it drives a GUI through
 an agent and records the run. The split is **not** "no API there, API here" — that repo is an
 experiment and is deliberately run against systems that do have an API, because without a
 comparable IaC path there is no baseline. Where both are possible, this repo is the

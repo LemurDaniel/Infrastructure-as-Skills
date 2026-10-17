@@ -9,7 +9,7 @@ They are **not** the Azure portal's defaults. The two diverge routinely and in t
 direction — public network access, shared-key auth and anonymous blob access all ship
 enabled — so inheriting the portal's posture is how an exposure finding happens.
 
-Shared deliberately with `Infrastructure-as-Skills`: a GUI-driven run and a generated
+Shared deliberately with `Infrastructure-by-Skill`: a GUI-driven run and a generated
 Terraform run should reach the same posture, or the comparison between the two tracks
 measures the wrong thing.
 
