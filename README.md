@@ -53,7 +53,7 @@ private-webapp
 ## Terraform and Bicep from one question set
 
 The questions are IaC-neutral. Only the rendering differs, so each resource has a
-`references/<resource>/terraform.md` and a `bicep.md` and Claude reads the one you need.
+`terraform.md` and a `bicep.md` beside its question set, and Claude reads the one you need.
 This is why both targets live in one repo: duplicating the decision knowledge per target
 is how the two halves drift apart.
 
@@ -98,9 +98,8 @@ Infrastructure-by-Skill/
     ├── resources/                  # NOT skills - undeclared, read by azure-resources
     │   ├── storage/
     │   │   ├── routing.md          # routes to the right question set
-    │   │   ├── questions/
-    │   │   │   └── storage-account.yaml      # the decisions — this is the content
-    │   │   └── references/storage-account/
+    │   │   └── storage-account/    # one directory per resource
+    │   │       ├── questions.yaml  # the decisions — this is the content
     │   │       ├── notes.md        # what the question set cannot express
     │   │       ├── terraform.md
     │   │       └── bicep.md

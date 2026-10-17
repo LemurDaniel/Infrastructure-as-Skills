@@ -17,7 +17,7 @@ Two layers, plus a handover file:
 
 | Layer | Role |
 |---|---|
-| **Resource families** (`resources/<family>/`) | Reference material, not skills. Each resolves one resource's decisions from `questions/<resource>.yaml`; the `azure-resources` skill routes into them |
+| **Resource families** (`resources/<family>/`) | Reference material, not skills. One directory per resource, its decisions in `<resource>/questions.yaml`; the `azure-resources` skill routes into them |
 | **Pattern skills** (`patterns/`) | Pre-answer most of a resource's questions and own the wiring between the parts |
 | **`infra-spec.yaml`** | The interview's output. A backend renders *from* it; it is not a by-product |
 
@@ -56,16 +56,16 @@ it by full path, or let the check script find it.
 | `.../core/iac-authoring/` | The interview protocol: resolution order, what gets asked, the spec |
 | `.../core/iac-authoring/questions/deployment.yaml` | The deployment-wide set: posture, network ownership, mandates. Resolved before any resource |
 | `.../core/iac-authoring/references/spec.md` | `infra-spec.yaml` schema, the `source` field, `composition` |
-| `.../core/iac-authoring/references/question-set-format.md` | How to author a `questions/<resource>.yaml` |
+| `.../core/iac-authoring/references/question-set-format.md` | How to author a resource's `questions.yaml` |
 | `.../core/iac-authoring/references/guardrails.md` | The rules every question set takes its defaults from |
 | `.../core/iac-rendering/` | The other side of the spec: how it becomes Terraform or Bicep |
 | `.../core/iac-rendering/references/naming.md` | The Terraform and Bicep naming interfaces |
 | `.../core/iac-rendering/references/{terraform,bicep}-idiom.md` | File layout, modules, variables, tagging, tests per target |
 | `.../core/azure-resources/` | The single trigger for every resource: request → family. Its description is the keyword surface for all of them |
 | `.../resources/<family>/routing.md` | Routing table: request → question set. **Not** a `SKILL.md` — see below |
-| `.../resources/<family>/questions/<resource>.yaml` | **The content.** One file per resource |
-| `.../resources/<family>/references/<resource>/notes.md` | What the question set cannot express |
-| `.../resources/<family>/references/<resource>/{terraform,bicep}.md` | The rendering per target |
+| `.../resources/<family>/<resource>/questions.yaml` | **The content.** One per resource |
+| `.../resources/<family>/<resource>/notes.md` | What the question set cannot express |
+| `.../resources/<family>/<resource>/{terraform,bicep}.md` | The rendering per target |
 | `.claude/skills/` | Repo maintenance. **Not** shipped with the plugin |
 
 ## The Two Structural Constraints
