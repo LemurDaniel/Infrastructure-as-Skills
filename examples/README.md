@@ -7,9 +7,11 @@ idiom, a reviewer sees what `source:` buys.
 
 | Example | Targets | Scenario | Why it is here |
 |---|---|---|---|
-| [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account, production, behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec, so the two can be diffed |
+| [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account, production, behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec, so the two can be diffed. **Authored render** — it predates the AVM-first rule and stands for `implementation: authored` until re-rendered |
 
-Planned: `greenfield-telemetry` — three resources, created network and workspace, the
+Planned: the same spec re-rendered on the AVM modules (the primary path since the
+rendering references moved to it — each resource's `terraform.md` / `bicep.md` carries the
+call), and `greenfield-telemetry` — three resources, created network and workspace, the
 harder case.
 
 ## What each directory holds

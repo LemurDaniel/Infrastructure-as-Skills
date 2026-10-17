@@ -13,6 +13,13 @@ and the attribute it renders to. A storage account is not hard because the HCL i
 carries about forty decisions, and generic generation gets the syntax right and the
 decisions wrong.
 
+The decisions render **to Azure Verified Modules (AVM) first** — a resource with an
+`Available` module in the [Terraform](https://azure.github.io/Azure-Verified-Modules/indexes/terraform/)
+or [Bicep](https://azure.github.io/Azure-Verified-Modules/indexes/bicep/) index becomes a
+call to it with every decision as an explicit input; authored resources are the fallback
+for a type without one, or for a repository that already renders that way. The contract
+is `core/iac-rendering/references/avm.md`.
+
 | Layer | Role |
 |---|---|
 | **Resource families** (`resources/<family>/`) | Reference material, not skills. One directory per resource, its decisions in `<resource>/questions.yaml`; the `azure-resources` skill routes into them |
@@ -42,70 +49,61 @@ bicep build --stdout examples/private-storage-on-platform/bicep/main.bicep > $nu
 There is no build. The artefacts are Markdown and YAML; the scripts and the examples'
 Terraform tests are the whole verification story.
 
-**`claude` is not on `PATH` on this machine.** The CLI lives at
-`~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe`; invoke
-it by full path, or let the check script find it.
+On the owner's Windows machine `claude` is not on `PATH`: the CLI lives at
+`~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe`, and the
+check script finds it there. In a cloud session it is on `PATH` and nothing needs doing.
 
 ## Repository Layout
 
+The full tree is in [README.md](README.md#layout). What is not obvious from it:
+
 | Path | Role |
 |---|---|
-| `.claude-plugin/marketplace.json` | Marketplace manifest — this repo is its own marketplace |
-| `plugins/infrastructure-as-skills/.claude-plugin/plugin.json` | Plugin manifest. The `skills` array is what makes the grouped layout work |
-| `.../core/iac-authoring/` | The interview protocol: resolution order, what gets asked, the spec |
-| `.../core/iac-authoring/questions/deployment.yaml` | The deployment-wide set: posture, network ownership, mandates. Resolved before any resource |
-| `.../core/iac-authoring/references/spec.md` | `infra-spec.yaml` schema, the `source` field, `composition` |
-| `.../core/iac-authoring/references/question-set-format.md` | How to author a resource's `questions.yaml` |
-| `.../core/iac-authoring/references/guardrails.md` | The rules every question set takes its defaults from |
-| `.../core/iac-rendering/` | The other side of the spec: how it becomes Terraform or Bicep |
-| `.../core/iac-rendering/references/naming.md` | The Terraform and Bicep naming interfaces |
-| `.../core/iac-rendering/references/{terraform,bicep}-idiom.md` | File layout, modules, variables, tagging, tests per target |
-| `.../core/iac-diagram/` | The spec as an editable draw.io PNG for the customer |
-| `.../core/azure-resources/` | The single trigger for every resource: request → family. Its description is the keyword surface for all of them |
+| `.../core/` | The skills, declared in `plugin.json` as `"skills": ["./core/"]` — it sits beside `skills/`, not inside it |
+| `.../core/azure-resources/` | The single trigger for every resource. Its description is the keyword surface for all families |
+| `.../core/iac-authoring/questions/deployment.yaml` | The deployment-wide set, resolved before any resource |
+| `.../core/iac-authoring/references/{spec,question-set-format,guardrails}.md` | The spec schema; how to author a `questions.yaml`; where every default comes from |
+| `.../core/iac-rendering/references/avm.md` | AVM first: which module, status, live version lookup, interfaces, provider requirements, gaps, the test contract |
+| `.../core/iac-rendering/references/{naming,terraform-idiom,bicep-idiom}.md` | Naming interfaces; layout, modules, tests per target |
 | `.../resources/<family>/routing.md` | Routing table: request → question set. **Not** a `SKILL.md` — see below |
-| `.../resources/<family>/<resource>/questions.yaml` | **The content.** One per resource |
-| `.../resources/<family>/<resource>/notes.md` | What the question set cannot express |
-| `.../resources/<family>/<resource>/{terraform,bicep}.md` | The rendering per target |
-| `.../evals/` | `claude plugin eval` cases; graders read the spec |
-| `examples/<case>/` | A request, its spec and its render, end to end. What good looks like |
+| `.../resources/<family>/<resource>/{questions.yaml,notes.md,terraform.md,bicep.md}` | **The content**, one directory per resource; the rendering references open with the AVM call |
 | `.claude/skills/` | Repo maintenance. **Not** shipped with the plugin |
 
 ## The Two Structural Constraints
 
-Both are easy to violate by accident and both fail quietly.
+Both are easy to violate by accident and both fail quietly. The measurements behind them
+are in [README.md](README.md#why-one-trigger-and-families-that-are-not-skills).
 
-### One skill triggers every resource; families are not skills
-
-Claude Code keeps every skill's name and description in context under a **shared character
-budget** — about 1% of the model's context window — and drops descriptions when it overflows,
-starting with the least-used skills. The name survives; the description does not, and the
-description *is* the triggering mechanism. So the skill is installed, it appears in the
-listing, and nothing matches it. Nothing tells you this happened.
-
-A skill per family was the first answer and it did not hold: five skills cost 1,506 of
-~2,000 characters. Hence three units: **`azure-resources` is the triggering unit, the
-family the routing unit, the question set the knowledge unit.**
-
-The single description can afford to be long (per-entry cap 1,536 characters) and is kept
-separate from `iac-authoring` on purpose. Past ~1,200 characters prune the least-typed
-terms; never split it. `/context` shows the listing size after the budget is applied.
-
-### The groups are declared, not discovered
-
-`core/` sits **beside** `skills/`, not inside it, and is declared in `plugin.json` as
-`"skills": ["./core/"]`. `resources/` is **deliberately undeclared**: nothing in it is a
-skill, so nothing in it costs listing budget. A family has a `routing.md`, never a
-`SKILL.md` — an undeclared directory holding one loads nothing, and the consistency script
-fails on it.
-
-- The `skills/` scan is **one level deep and does not recurse**, and it **cannot be
-  switched off** — a group folder inside it is read as a skill without a `SKILL.md`.
-- A declared path that does not exist **fails to load the plugin**, which is why
-  `./patterns/` is absent from the array until it holds a skill. Add the entry in the same
-  commit as the first skill in that group.
+- **One skill triggers every resource; families are not skills.** Skill descriptions
+  share a character budget (~1% of the context window) and are dropped silently when it
+  overflows — the skill stays listed and stops matching. So `azure-resources` is the
+  triggering unit, the family the routing unit, the question set the knowledge unit.
+  Its description may be long (cap 1,536 characters); past ~1,200 prune the least-typed
+  terms, never split it. `/context` shows the listing after the budget.
+- **The groups are declared, not discovered.** `core/` is declared in `plugin.json`;
+  `resources/` is deliberately not, so nothing in it costs budget — a family has a
+  `routing.md`, never a `SKILL.md`, and the consistency script fails on one. The `skills/`
+  scan is one level deep, cannot be switched off, and a declared path that does not
+  exist fails to load the plugin: `./patterns/` enters the array in the same commit as
+  its first skill.
 
 ## Gotchas
 
+- **AVM versions are `0.y.z` and are looked up live, never recalled.** Bicep: the MCR tag
+  list; Terraform: the module repo's git tags. The tables in `avm.md` and the resource
+  references are dated snapshots. Pin the minor in Terraform (`~> 0.10.0`), the exact
+  version in Bicep; re-read the module README's inputs for the version pinned.
+- **AVM Terraform modules are moving to AzAPI.** Storage account and virtual network take
+  the resource group as `parent_id` (an id) and need `Azure/azapi`, `Azure/modtm` and
+  `random` in the root; the Log Analytics module is still `azurerm`-based and pins
+  `azurerm` to **4.x** — a root calling it cannot be on 5.x. The root's provider set is
+  the union of its modules' requirements.
+- **A module default is not the guardrail's default.** Bicep storage defaults to
+  `Standard_GRS`, the Bicep workspace to 365 days retention and public access `Enabled`,
+  the Terraform storage module to `infrastructure_encryption_enabled = false`. Every
+  decision is written on the call, even where it matches.
+- **The Terraform storage module's `account_sku_name` overrides tier + replication.**
+  Render the SKU name, as Bicep does; the pair is ignored while it is set.
 - **The two targets render names differently.** Terraform uses the `LemurDaniel/naming`
   provider with the `Azure::Microsoft.Storage/storageAccounts` identifier. Bicep assembles
   the name from `var`s — the `utility/naming` modules and `genName` are **not ready to
@@ -113,9 +111,11 @@ fails on it.
   identifier, the Bicep resource type and the `abbreviation`; use those.
 - **The naming provider supersedes the two naming modules.** New generated code uses the
   provider; a repo already on the modules keeps them. Never mix both in one configuration.
-- **Rendering references target `azurerm` 5.x.** `public_network_access = "Disabled"`
-  (string); the 4.x bool is deprecated and `validate` does not warn. Check arguments against
-  `terraform providers schema -json` rather than memory.
+- **Authored rendering references target `azurerm` 5.x.** `public_network_access = "Disabled"`
+  (string); the 4.x bool is deprecated and `validate` does not warn. The AVM storage
+  module takes a **bool** `public_network_access_enabled` — a module input, not the
+  provider argument. Check arguments against `terraform providers schema -json` and module
+  inputs against the module README rather than memory.
 - **A `CLAUDE.md` inside the plugin directory is not loaded as context.** Instructions that
   must reach Claude belong in a skill. This file is at the repo root and does load.
 - **Frontmatter `name` must equal the skill's directory name.**
@@ -148,3 +148,15 @@ with Claude Code"); English imperative subject; one concern per commit; default 
 
 The `origin` remote URL embeds a GitHub personal access token — never copy a remote URL into
 a tracked file, a commit message, or command output you paste back.
+
+## The 16-tips review
+
+Run on 2026-10-17 against
+https://raw.githubusercontent.com/aishwaryanr/awesome-generative-ai-guide/main/youtube/claude-code-16-tips.md.
+Already in place: identity file, examples, the interview, cited sources, progress file,
+checks separate from the doing, the deny gate. Changed on that day: the machine-specific
+PATH note made conditional, this file's layout and constraint sections cut to the rules
+with the derivation left to the README, AVM named in the manifests, the standard checks
+added to the allow list. Not applicable: prompt and session habits (T7, T8, T11) and
+loops (T13, T16) — the one loop candidate, an AVM version drift check, is a todo in
+`PROGRESS.md`.

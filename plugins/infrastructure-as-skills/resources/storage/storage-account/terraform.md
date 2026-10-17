@@ -13,6 +13,201 @@ terraform providers schema -json \
   | jq '.provider_schemas["registry.terraform.io/hashicorp/azurerm"].resource_schemas.azurerm_storage_account.block.attributes | keys'
 ```
 
+## With the AVM module
+
+`Azure/avm-res-storage-storageaccount/azurerm` — the primary rendering. Documented against
+**v0.10.0** (resolved 2026-10-17); resolve the current version and re-read its README
+inputs before rendering, as [avm.md](../../../core/iac-rendering/references/avm.md) says.
+Requires `azapi ~> 2.12`, `modtm ~> 0.3`, `random`, Terraform `>= 1.10`, and takes the
+resource group as `parent_id`. It does not use `azurerm` at all.
+
+### Decision → module input
+
+| Decision | Input | Note |
+|---|---|---|
+| `public_network_access: disabled` | `public_network_access_enabled = false` | A **bool** here, unlike the 5.x provider string. Comment the decision key above it |
+| `public_network_access: enabled_with_firewall` | `public_network_access_enabled = true` + `network_rules = { default_action = "Deny", … }` | |
+| `public_network_access: enabled` | `public_network_access_enabled = true` + `network_rules = { default_action = "Allow" }` | |
+| `allow_azure_services_bypass` | `network_rules.bypass = ["AzureServices"]` / `["None"]` | The module's `network_rules` default is already `Deny` + `AzureServices`; written anyway |
+| `shared_access_key_enabled` | `shared_access_key_enabled` | Module default `false` — same as the guardrail, written anyway |
+| `https_traffic_only` | `https_traffic_only_enabled` | |
+| `min_tls_version` | `min_tls_version` | |
+| `allow_blob_public_access` | `allow_nested_items_to_be_public` | |
+| `infrastructure_encryption_enabled` | `infrastructure_encryption_enabled` | Module default `false` — the guardrail says `true`; the one input that must not be left to the module |
+| `sftp_enabled` | `sftp_enabled` (+ `is_hns_enabled = true`) | |
+| `replication`, `access_tier` | `account_sku_name = "Standard_ZRS"`, `access_tier` | **Trap:** `account_sku_name` defaults to `Standard_ZRS` and overrides `account_tier` + `account_replication_type` unless set to `null`. Render the SKU name, as Bicep does; leave the pair alone |
+| `managed_identity` | `managed_identities = { system_assigned = true }` | |
+| `key_management: customer_managed` | `customer_managed_key = { key_vault_resource_id, key_name, user_assigned_identity = { resource_id } }` | The module applies it after creation (`azapi_update_resource`), so a system-assigned identity works too; the user-assigned one is still preferred for the wrap/unwrap grant to exist first |
+| `blob_soft_delete_days`, `container_soft_delete_days`, `versioning_enabled`, `change_feed_enabled`, `point_in_time_restore_days` | `blob_properties = { delete_retention_policy = { enabled, days }, container_delete_retention_policy = { … }, versioning_enabled, change_feed = { enabled }, restore_policy = { enabled, days } }` | `0` days renders as the block **absent**, not `days = 0` |
+| `private_endpoint_subnet`, `private_endpoint_subresources` | `private_endpoints = { <sub> = { name, subnet_resource_id, subresource_name } }` | One map entry per sub-resource; `name` from the naming provider with the `subname` parameter, as in the authored render |
+| `deployment.private_dns_records: policy` | `private_endpoints_manage_dns_zone_group = false` | Replaces the `lifecycle { ignore_changes }` of the authored render; `deployment` → `true` plus `private_dns_zone_resource_ids` per endpoint |
+| `diagnostic_workspace`, `metrics_enabled` | `diagnostic_settings_storage_account = { <key> = { workspace_resource_id, metrics = [{ category = "AllMetrics" }] } }` | Metrics only — the account emits no log categories, as the authored render notes |
+| `diagnostic_categories` | `diagnostic_settings_blob = { <key> = { workspace_resource_id, logs = [{ category_group = "audit" }], metrics = [...] } }` | One per service with an endpoint that is used: `_file`, `_queue`, `_table` |
+| `role_assignments` | `role_assignments = { <key> = { role_definition_id_or_name, principal_id } }` | Role by name; scoped to the account. A container-scoped assignment is on the `containers` input's own `role_assignments` |
+| `immutability` | `immutability_policy` | Account-level policy only; a container-level one is on `containers` |
+| `deployment.module_telemetry` | `enable_telemetry` | |
+| `context.tags` | `tags = local.tags` | |
+
+Not carried by the module at v0.10.0: nothing from this question set. `sas_policy`,
+`allowed_copy_scope` and `default_to_oauth_authentication` are inputs the question set
+has no decision for — leave them unset rather than inventing a default.
+
+### The call
+
+Rendered for the `private-storage-on-platform` spec — production, ZRS, private, platform
+referenced, `private_dns_records: policy`:
+
+```hcl
+data "azurerm_resource_group" "this" {
+  name = var.resource_group_name
+}
+
+data "naming_name" "storage_account" {
+  resource = "Azure::Microsoft.Storage/storageAccounts"
+}
+
+# One name per sub-resource through the convention's <?SUBNAME;-%s> token, so the
+# index stays last: pep-we-prod-invoicing-blob-01.
+data "naming_name" "private_endpoint" {
+  for_each = toset(var.private_endpoint_subresources)
+
+  resource   = "Azure::Microsoft.Network/privateEndpoints"
+  parameters = { subname = each.key }
+}
+
+module "storage" {
+  source  = "Azure/avm-res-storage-storageaccount/azurerm"
+  version = "~> 0.10.0"
+
+  name      = data.naming_name.storage_account.name
+  location  = var.location
+  parent_id = data.azurerm_resource_group.this.id
+
+  account_kind = "StorageV2"
+  # decision: storage-account.data_protection.replication - the SKU name carries it;
+  # account_tier / account_replication_type are ignored while this is set.
+  account_sku_name = "Standard_ZRS"
+  # decision: storage-account.data_protection.access_tier
+  access_tier = "Hot"
+
+  # decision: storage-account.networking.public_network_access - a bool on the module
+  public_network_access_enabled = false
+  # Present although public access is off: documents the posture, and the bypass is a
+  # recorded decision (storage-account.networking.allow_azure_services_bypass).
+  network_rules = {
+    default_action = "Deny"
+    bypass         = ["AzureServices"]
+  }
+
+  # Explicit although several match the module default: a reviewer reads the call,
+  # not the module, and a module minor can move a default.
+  https_traffic_only_enabled      = true
+  min_tls_version                 = "TLS1_2"
+  allow_nested_items_to_be_public = false
+  # Access is via Entra ID and RBAC; the module itself never uses a key.
+  shared_access_key_enabled = false
+  sftp_enabled              = false
+  # Settable only at creation. The module default is false.
+  infrastructure_encryption_enabled = true
+
+  managed_identities = {
+    system_assigned = true
+  }
+
+  blob_properties = {
+    versioning_enabled = true
+    change_feed        = { enabled = false }
+    delete_retention_policy = {
+      enabled = true
+      days    = 7
+    }
+    container_delete_retention_policy = {
+      enabled = true
+      days    = 7
+    }
+  }
+
+  # One endpoint per sub-resource, into the platform's private-endpoint subnet.
+  private_endpoints = {
+    for sub in var.private_endpoint_subresources : sub => {
+      name               = data.naming_name.private_endpoint[sub].name
+      subnet_resource_id = data.azurerm_subnet.private_endpoints.id
+      subresource_name   = sub
+    }
+  }
+  # deployment.private_dns_records: policy - the landing zone's DeployIfNotExists policy
+  # attaches the privatelink zone and writes the record. false means the module renders
+  # no zone group, so there is no second writer.
+  private_endpoints_manage_dns_zone_group = false
+
+  # Two targets: the account emits metrics only, the blob service carries the logs.
+  diagnostic_settings_storage_account = {
+    platform = {
+      workspace_resource_id = data.azurerm_log_analytics_workspace.platform.id
+      metrics               = [{ category = "AllMetrics" }]
+    }
+  }
+  diagnostic_settings_blob = {
+    platform = {
+      workspace_resource_id = data.azurerm_log_analytics_workspace.platform.id
+      logs                  = [{ category_group = "audit" }]
+      metrics               = [{ category = "AllMetrics" }]
+    }
+  }
+
+  # Data-plane roles on the account. Empty until the consumer is named (spec: open).
+  role_assignments = {
+    for ra in var.role_assignments : "${ra.principal_id}-${ra.role}" => {
+      role_definition_id_or_name = ra.role
+      principal_id               = ra.principal_id
+    }
+  }
+
+  enable_telemetry = true # deployment.module_telemetry: enabled
+  tags             = local.tags
+}
+
+output "id" { value = module.storage.resource_id }
+output "name" { value = module.storage.name }
+output "private_endpoints" { value = module.storage.private_endpoints }
+```
+
+`storage_use_azuread = true` on the `azurerm` provider stays, for any `azurerm` data-plane
+resource the root adds beside the module; the module itself authenticates with Entra ID
+regardless.
+
+### Tests
+
+The contract and the markers are unchanged
+([avm.md](../../../core/iac-rendering/references/avm.md#tests-with-a-module-in-the-middle)).
+`azapi` and `modtm` are mocked beside `azurerm`; the assert target is the module's
+`resource` output, whose `body` is what the call passed in:
+
+```hcl
+mock_provider "azapi" {}
+mock_provider "modtm" {}
+
+run "networking" {
+  command = plan
+
+  # decision: storage-account.networking.public_network_access
+  assert {
+    condition     = module.storage.resource.body.properties.publicNetworkAccess == "Disabled"
+    error_message = "Private: the module must send publicNetworkAccess Disabled."
+  }
+}
+```
+
+Decisions the module turns into sub-resources the output does not expose (blob
+properties, the diagnostic settings, the endpoints' DNS zone group) are marked
+`# not-testable: <key> - set through the module's <input>; the module's own tests cover
+the mapping` until the first AVM render settles which of them a plan can observe.
+
+## Authored rendering
+
+The fallback — `implementation: authored`, a repository that already renders the account
+this way, or reading what the module does inside.
+
 ## Decision → argument
 
 | Decision | Argument |

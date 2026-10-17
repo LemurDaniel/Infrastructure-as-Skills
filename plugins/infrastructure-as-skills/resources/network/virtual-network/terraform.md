@@ -4,6 +4,85 @@ Mapping from the question set to `azurerm_virtual_network` and `azurerm_subnet`.
 layout, variables and tagging are in
 [../../../core/iac-rendering/references/terraform-idiom.md](../../../core/iac-rendering/references/terraform-idiom.md).
 
+## With the AVM module
+
+`Azure/avm-res-network-virtualnetwork/azurerm` — the primary rendering for
+`network_ownership: create`. Documented against **v0.22.3** (resolved 2026-10-17); resolve
+the current version and re-read its README inputs before rendering, as
+[avm.md](../../../core/iac-rendering/references/avm.md) says. AzAPI-based: `azapi ~> 2.12`,
+`modtm`, `random`, and the resource group as `parent_id`.
+
+A referenced network (`network_ownership: reference`) stays a `data` block as below — the
+module has a `subnet` child module for adding a subnet to a vnet it does not own, which is
+the one case a referenced hub needs it, and that is a platform-team change, not this
+deployment's.
+
+### Decision → module input
+
+| Decision | Input | Note |
+|---|---|---|
+| `address_space` | `address_space = [var.address_space]` | A set, even with one entry |
+| `dns_servers` | `dns_servers = { dns_servers = [...] }` | Omit for Azure DNS |
+| `ddos_protection` | `ddos_protection_plan = { id, enable }` | |
+| `subnets` | `subnets = { <name> = { name, address_prefixes = [prefix], … } }` | A map keyed by subnet name — the module's own rule, same reason as the authored render's `for_each` |
+| `private_endpoint_network_policies` | `subnets.<name>.private_endpoint_network_policies = "Enabled"` | Module default is `Enabled` already; written anyway |
+| `service_endpoints` | `subnets.<name>.service_endpoints` | |
+| `subnet_delegations` | `subnets.<name>.delegations = [{ name, service_delegation = { name } }]` | A list, plural |
+| diagnostics (from the deployment set) | `diagnostic_settings = { <key> = { workspace_resource_id, metrics = [...] } }` | |
+| `deployment.module_telemetry` | `enable_telemetry` | |
+| `context.tags` | `tags = local.tags` | |
+
+The module also takes `peerings` — the spoke-to-hub peering a `landing_zone: corp` network
+needs is an input here rather than a separate resource, and a pattern skill supplies it.
+
+### The call
+
+```hcl
+module "network" {
+  source  = "Azure/avm-res-network-virtualnetwork/azurerm"
+  version = "~> 0.22.0"
+
+  name      = data.naming_name.virtual_network.name
+  location  = var.location
+  parent_id = data.azurerm_resource_group.this.id
+
+  # decision: virtual-network.addressing.address_space
+  address_space = [var.address_space]
+
+  subnets = {
+    for name, s in var.subnets : name => {
+      name             = name
+      address_prefixes = [s.prefix]
+      # Enabled, so the subnet's NSG and routes apply to private endpoint traffic.
+      private_endpoint_network_policies = "Enabled"
+      service_endpoints                 = lookup(s, "service_endpoints", [])
+    }
+  }
+
+  enable_telemetry = true
+  tags             = local.tags
+}
+
+output "id" { value = module.network.resource_id }
+
+# Keyed by subnet name, so a consumer writes module.network.subnets["endpoints"].
+output "subnet_ids" {
+  value = { for k, s in module.network.subnets : k => s.resource_id }
+}
+```
+
+### Tests
+
+`azapi` and `modtm` mocked; the address space asserted through `module.network.resource.body`,
+the subnets through `module.network.subnets` where the plan knows them, the rest marked as
+[avm.md](../../../core/iac-rendering/references/avm.md#tests-with-a-module-in-the-middle)
+describes.
+
+## Authored rendering
+
+The fallback — `implementation: authored`, a repository that already renders the network
+this way, or reading what the module does inside.
+
 ## Decision → argument
 
 | Decision | Argument |

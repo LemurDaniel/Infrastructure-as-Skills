@@ -76,12 +76,45 @@ Write it only for a dependency Bicep cannot see, with a comment saying what it i
 one-resource module whose params restate the resource's properties is a file that adds a
 hop and removes nothing.
 
-## Registry references, not relative paths
+## Azure Verified Modules from the public registry
 
-A spec module with `implementation: reuse` renders as a call to a published module, and
-resolving *which* one is this layer's job — the spec deliberately carries no coordinate.
-Modules come from the registry through the `br/modules:` alias that `bicepconfig.json`
-resolves:
+A resource renders as a call to its AVM module unless the spec says `implementation:
+authored` for it — which module, which version and how the shared interfaces map is in
+[avm.md](avm.md). The public registry alias `br/public:` is built into Bicep and needs no
+`bicepconfig.json`; the reference is exact-versioned, always:
+
+```bicep
+// Resolved 2026-10-17 from mcr.microsoft.com; br/public takes no range, so the pin is exact.
+module storageAccount 'br/public:avm/res/storage/storage-account:0.33.1' = {
+  name: 'storage'
+  params: {
+    name: storageAccountName // assembled from vars, see naming.md
+    location: location
+    tags: tags
+
+    // decision: storage-account.networking.public_network_access
+    publicNetworkAccess: 'Disabled'
+    // ...every other decision, written even where it matches the module default
+
+    enableTelemetry: true // deployment.module_telemetry
+  }
+}
+```
+
+Resolving the module needs `mcr.microsoft.com` at `bicep build` time; the restored module
+is cached under `~/.bicep`. An unpinned reference does not exist for `br/public`, so the
+unannounced-change failure is not possible here — but a copied version string is a stale
+one, so the version is looked up at render time, never recalled.
+
+Module outputs are the wiring surface: `storageAccount.outputs.resourceId`,
+`.outputs.systemAssignedMIPrincipalId`, `.outputs.privateEndpoints`. Every AVM module
+outputs `resourceId` and `name`; the rest is per module and in its README.
+
+### The owner's own registry
+
+`implementation: reuse` — a module the user named that is not AVM — renders through the
+`br/modules:` alias that the repository's `bicepconfig.json` resolves, pinned to the
+version `version.json` next to the module names:
 
 ```bicep
 module diagnostics 'br/modules:utility/diagnostic:1.0.0' = {
@@ -90,20 +123,15 @@ module diagnostics 'br/modules:utility/diagnostic:1.0.0' = {
 }
 ```
 
-Pin the version explicitly — read `version.json` next to the module in
-[`LemurDaniel/BICEP__Registry`](https://github.com/LemurDaniel/BICEP__Registry) for what is
-current rather than assuming. An unpinned or
-floating reference turns a module release into an unannounced change to every consumer.
-
 Relative imports (`'../../schema/module.bicep'`) are correct **inside**
-`BICEP__Registry`, where the modules import each other, and wrong everywhere else.
-Generating a relative path into a consumer repository produces a file that compiles on one
-machine and nowhere else.
+[`LemurDaniel/BICEP__Registry`](https://github.com/LemurDaniel/BICEP__Registry), where the
+modules import each other, and wrong everywhere else. Generating a relative path into a
+consumer repository produces a file that compiles on one machine and nowhere else.
 
 If `bicepconfig.json` has no `br/modules` alias, do not invent one. The registry behind it
 is a proof of concept and its address is not settled — writing a guessed ACR into a
-consumer repository bakes in a PoC that will move. Say the alias is missing and ask where
-the modules should come from, or render the resource directly instead of calling a module.
+consumer repository bakes in a PoC that will move. Say the alias is missing and fall back
+to the AVM module or to authored code.
 
 ## Referencing a network the deployment does not own
 

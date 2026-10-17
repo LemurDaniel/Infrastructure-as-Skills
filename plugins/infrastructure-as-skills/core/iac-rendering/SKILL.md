@@ -42,24 +42,33 @@ than inferring the shape from an example spec.
 1. **Match the repository before the defaults.** An existing layout, module granularity or
    API version wins over anything in the references here. Generated code that does not look
    like its neighbours gets rewritten by hand, and then the spec is stale.
-2. **Read the target idiom** — [terraform-idiom](references/terraform-idiom.md) or
+2. **Resolve the Azure Verified Module for each resource** — [avm.md](references/avm.md).
+   AVM is the primary rendering target: a resource with an `Available` module renders as a
+   call to it, with every decision written out as an input; a resource without one renders
+   authored, and the spec records `implementation: authored` with the reason. The module
+   version is looked up live and pinned in the code, never recalled. Skip only when the
+   spec's `deployment.module_source` is `authored` or the repository already renders the
+   resource authored.
+3. **Read the target idiom** — [terraform-idiom](references/terraform-idiom.md) or
    [bicep-idiom](references/bicep-idiom.md), not both.
-3. **Read the resource's own rendering reference**, `resources/<family>/<resource>/{terraform,bicep}.md`.
-   It holds what the spec cannot: which decisions are fixed at creation, which live on a
-   nested resource, the shape differences between the two targets.
-4. **Render names from the right mechanism** — [naming.md](references/naming.md). The
+4. **Read the resource's own rendering reference**, `resources/<family>/<resource>/{terraform,bicep}.md`.
+   It opens with the decision → module input mapping and the rendered call, and holds
+   what the spec cannot: which decisions are fixed at creation, which the module does not
+   expose, the shape differences between the two targets. The authored rendering follows
+   it, for the fallback case and for reading what the module does inside.
+5. **Render names from the right mechanism** — [naming.md](references/naming.md). The
    Terraform provider resolves them; in Bicep they are assembled from vars because the
    naming modules are not shipped.
-5. **Write the secure value explicitly**, even where it matches the provider or API
+6. **Write the secure value explicitly**, even where it matches the provider or API
    default. A default can move between versions and an absent attribute is invisible in
    review.
-6. **Render the tests with the code, not after it.** Every decision under `resources:`
+7. **Render the tests with the code, not after it.** Every decision under `resources:`
    in the spec is asserted by exactly one test, and a decision that cannot be observed in
    a plan is marked as such with its reason. A render without its tests is not finished —
    the tests are what make "the code matches the spec" a check instead of a claim, and
    what makes the next re-render a diff instead of a review. The shape per target is in
    the idiom file; `scripts/Test-RenderCoverage.ps1` fails on an unasserted decision.
-7. **Validate before handing over.** Syntactically valid is not done — `fmt` →
+8. **Validate before handing over.** Syntactically valid is not done — `fmt` →
    `validate` → `test` → `plan` / `what-if`, then say which diffs are service-affecting.
    The commands are at the end of each idiom file.
 
@@ -87,6 +96,7 @@ is spelled. A port that reads as a transliteration has usually lost one of them.
 
 | File | When |
 |---|---|
+| [references/avm.md](references/avm.md) | Always, before the idiom: which module, which version, the shared interfaces, the test contract with a module in the middle |
 | [references/naming.md](references/naming.md) | Always, before rendering a name |
 | [references/terraform-idiom.md](references/terraform-idiom.md) | Target is Terraform |
 | [references/bicep-idiom.md](references/bicep-idiom.md) | Target is Bicep |

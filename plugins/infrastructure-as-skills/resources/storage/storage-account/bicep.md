@@ -11,6 +11,146 @@ immediately, which beats reasoning about whether it exists:
 bicep build --stdout modules/storage.bicep
 ```
 
+## With the AVM module
+
+`br/public:avm/res/storage/storage-account:<version>` — the primary rendering. Documented
+against **0.33.1** (resolved 2026-10-17 from `mcr.microsoft.com`); resolve the current
+version and re-read its README parameters before rendering, as
+[avm.md](../../../core/iac-rendering/references/avm.md) says.
+
+### Decision → module parameter
+
+| Decision | Parameter | Note |
+|---|---|---|
+| `public_network_access: disabled` | `publicNetworkAccess: 'Disabled'` | Unset, the module picks `Disabled` only when endpoints are set and no `networkAcls` — never rely on that; write it |
+| `public_network_access: enabled_with_firewall` | `'Enabled'` + `networkAcls: { defaultAction: 'Deny', … }` | |
+| `public_network_access: enabled` | `'Enabled'` + `networkAcls: { defaultAction: 'Allow' }` | |
+| `allow_azure_services_bypass` | `networkAcls.bypass: 'AzureServices'` / `'None'` | A string, not an array |
+| `shared_access_key_enabled` | `allowSharedKeyAccess` | |
+| `https_traffic_only` | `supportsHttpsTrafficOnly` | |
+| `min_tls_version` | `minimumTlsVersion` | |
+| `allow_blob_public_access` | `allowBlobPublicAccess` | |
+| `infrastructure_encryption_enabled` | `requireInfrastructureEncryption` | Module default `true`; written anyway |
+| `sftp_enabled` | `enableSftp` (+ `enableHierarchicalNamespace: true`) | |
+| `replication`, `access_tier` | `skuName: 'Standard_ZRS'`, `accessTier` | Module default is **`Standard_GRS`** — the guardrail says ZRS; must be written |
+| `managed_identity` | `managedIdentities: { systemAssigned: true }` | |
+| `key_management: customer_managed` | `customerManagedKey: { keyVaultResourceId, keyName, userAssignedIdentityResourceId }` | |
+| `blob_soft_delete_days`, `container_soft_delete_days`, `versioning_enabled`, `change_feed_enabled`, `point_in_time_restore_days` | `blobServices: { deleteRetentionPolicyEnabled, deleteRetentionPolicyDays, containerDeleteRetentionPolicyEnabled, containerDeleteRetentionPolicyDays, isVersioningEnabled, changeFeedEnabled, restorePolicyEnabled, restorePolicyDays }` | The module's own `blobServices` default is 6 / 7 days — not the guardrail's; written anyway. `0` days renders `…Enabled: false` |
+| `private_endpoint_subnet`, `private_endpoint_subresources` | `privateEndpoints: [ { name, service, subnetResourceId } ]` | `service` is the sub-resource (`blob`); `name` from the vars with the sub-resource before the index |
+| `deployment.private_dns_records: policy` | no `privateDnsZoneGroup` on the entry | `deployment` → `privateDnsZoneGroup: { privateDnsZoneGroupConfigs: [ { privateDnsZoneResourceId } ] }` |
+| `diagnostic_workspace`, `metrics_enabled` | `diagnosticSettings: [ { workspaceResourceId, metricCategories: [ { category: 'AllMetrics' } ] } ]` | The account-level parameter is typed metrics-only — the module knows the account emits no logs |
+| `diagnostic_categories` | `blobServices.diagnosticSettings: [ { workspaceResourceId, logCategoriesAndGroups: [ { categoryGroup: 'audit' } ], metricCategories: [ … ] } ]` | One per service that is used: `fileServices`, `queueServices`, `tableServices` |
+| `role_assignments` | `roleAssignments: [ { principalId, roleDefinitionIdOrName, principalType } ]` | Role **by name** — the GUID table of the authored render goes away. Container scope is on `blobServices.containers[].roleAssignments` |
+| `immutability` | `immutableStorageWithVersioning` on the account, `immutabilityPolicyProperties` on a container | |
+| `deployment.module_telemetry` | `enableTelemetry` | |
+| `context.tags` | `tags` | |
+
+Not carried by the module at 0.33.1: nothing from this question set.
+
+### The call
+
+Rendered for the `private-storage-on-platform` spec. The params, the naming vars and the
+`existing` platform references are as in the authored render below; only the resource
+block changes:
+
+```bicep
+module storageAccount 'br/public:avm/res/storage/storage-account:0.33.1' = {
+  name: 'storage'
+  params: {
+    name: storageAccountName
+    location: location
+    tags: tags
+    kind: 'StorageV2'
+    // decision: storage-account.data_protection.replication - the module default is Standard_GRS
+    skuName: 'Standard_ZRS'
+    accessTier: 'Hot'
+
+    // decision: storage-account.networking.public_network_access
+    publicNetworkAccess: 'Disabled'
+    // Present although public access is off: documents the posture, and the bypass is a
+    // recorded decision (allow_azure_services_bypass: true).
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'AzureServices'
+    }
+
+    // Explicit although several match the module default: a reviewer reads the call.
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+    allowBlobPublicAccess: false
+    // Access is via Entra ID and RBAC. A key would bypass both.
+    allowSharedKeyAccess: false
+    enableSftp: false
+    // Settable only at creation.
+    requireInfrastructureEncryption: true
+
+    managedIdentities: {
+      systemAssigned: true
+    }
+
+    // Soft delete, versioning and the change feed live on the blob service - the module
+    // nests them, and the blob data-plane logs go with them.
+    blobServices: {
+      isVersioningEnabled: true
+      changeFeedEnabled: false
+      deleteRetentionPolicyEnabled: true
+      deleteRetentionPolicyDays: 7
+      containerDeleteRetentionPolicyEnabled: true
+      containerDeleteRetentionPolicyDays: 7
+      diagnosticSettings: [
+        {
+          workspaceResourceId: platformWorkspace.id
+          logCategoriesAndGroups: [{ categoryGroup: 'audit' }]
+          metricCategories: [{ category: 'AllMetrics' }]
+        }
+      ]
+    }
+
+    // One endpoint per sub-resource, into the platform's private-endpoint subnet.
+    // deployment.private_dns_records: policy - no privateDnsZoneGroup, the platform's
+    // policy writes the record.
+    privateEndpoints: [
+      for (sub, i) in privateEndpointSubresources: {
+        name: privateEndpointNames[i]
+        service: sub
+        subnetResourceId: privateEndpointSubnet.id
+      }
+    ]
+
+    // The account itself emits metrics only; the parameter is typed that way.
+    diagnosticSettings: [
+      {
+        workspaceResourceId: platformWorkspace.id
+        metricCategories: [{ category: 'AllMetrics' }]
+      }
+    ]
+
+    // Data-plane roles, by name. Empty until the consumer is named (spec: open).
+    roleAssignments: [
+      for ra in roleAssignments: {
+        principalId: ra.principalId
+        roleDefinitionIdOrName: ra.role
+      }
+    ]
+
+    enableTelemetry: true // deployment.module_telemetry: enabled
+  }
+}
+
+output id string = storageAccount.outputs.resourceId
+output name string = storageAccount.outputs.name
+output principalId string = storageAccount.outputs.?systemAssignedMIPrincipalId ?? ''
+output privateEndpoints array = storageAccount.outputs.privateEndpoints
+```
+
+`bicep build` resolves the module from `mcr.microsoft.com` on first use and caches it; a
+build without network access fails on the reference, not on the template.
+
+## Authored rendering
+
+The fallback — `implementation: authored`, a repository that already renders the account
+this way, or reading what the module does inside.
+
 ## Decision → property
 
 | Decision | Property |

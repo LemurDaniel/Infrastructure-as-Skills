@@ -8,6 +8,72 @@ parameters and naming are in
 bicep build --stdout modules/network.bicep
 ```
 
+## With the AVM module
+
+`br/public:avm/res/network/virtual-network:<version>` — the primary rendering for
+`network_ownership: create`. Documented against **0.10.2** (resolved 2026-10-17); resolve
+the current version and re-read its README parameters before rendering, as
+[avm.md](../../../core/iac-rendering/references/avm.md) says. A referenced network stays
+an `existing` reference as below.
+
+### Decision → module parameter
+
+| Decision | Parameter | Note |
+|---|---|---|
+| `address_space` | `addressPrefixes: [addressSpace]` | |
+| `dns_servers` | `dnsServers` | Omit for Azure DNS |
+| `ddos_protection` | `ddosProtectionPlanResourceId` | |
+| `subnets` | `subnets: [ { name, addressPrefix, … } ]` | The module declares them inline on the vnet — the safe form, as the authored render says — and still outputs `subnetResourceIds` |
+| `private_endpoint_network_policies` | `subnets[].privateEndpointNetworkPolicies: 'Enabled'` | |
+| `service_endpoints` | `subnets[].serviceEndpoints: ['Microsoft.Storage']` | Strings, not `{ service }` objects |
+| `subnet_delegations` | `subnets[].delegation: 'Microsoft.Web/serverFarms'` | A single string per subnet |
+| diagnostics (from the deployment set) | `diagnosticSettings: [ { workspaceResourceId, metricCategories } ]` | |
+| `deployment.module_telemetry` | `enableTelemetry` | |
+| `context.tags` | `tags` | |
+
+`peerings` is an input too — the spoke-to-hub peering of a `landing_zone: corp` network,
+supplied by a pattern skill.
+
+### The call
+
+```bicep
+module virtualNetwork 'br/public:avm/res/network/virtual-network:0.10.2' = {
+  name: 'network'
+  params: {
+    name: virtualNetworkName
+    location: location
+    tags: tags
+
+    // decision: virtual-network.addressing.address_space
+    addressPrefixes: [addressSpace]
+
+    subnets: [
+      for subnet in subnets: {
+        name: subnet.name
+        addressPrefix: subnet.prefix
+        // NSG and routes apply to private endpoint traffic.
+        privateEndpointNetworkPolicies: 'Enabled'
+        serviceEndpoints: subnet.?serviceEndpoints ?? []
+      }
+    ]
+
+    enableTelemetry: true
+  }
+}
+
+output id string = virtualNetwork.outputs.resourceId
+output subnetResourceIds array = virtualNetwork.outputs.subnetResourceIds
+```
+
+`subnetResourceIds` is an array in the order of `subnets`, like the authored render's
+loop output — index by position only where the list is fixed, otherwise look the subnet
+up as an `existing` child by name.
+
+## Authored rendering
+
+The fallback — `implementation: authored`, a repository that already renders the network
+this way, or reading what the module does inside.
+
 ## Decision → property
 
 | Decision | Property |

@@ -57,7 +57,24 @@ The questions are IaC-neutral. Only the rendering differs, so each resource has 
 This is why both targets live in one repo: duplicating the decision knowledge per target
 is how the two halves drift apart.
 
-Rendering targets this author's own naming stack:
+**The decisions land on [Azure Verified Modules](https://azure.github.io/Azure-Verified-Modules/)
+first.** A resource with a published AVM module — in the
+[Terraform](https://azure.github.io/Azure-Verified-Modules/indexes/terraform/) or
+[Bicep](https://azure.github.io/Azure-Verified-Modules/indexes/bicep/) index — renders as a
+call to it, every decision an explicit input, the version resolved at render time and
+pinned in the code. The modules already carry what every hand-written render gets wrong
+first: private endpoints with their DNS zone groups, diagnostic settings per sub-resource,
+role assignments, locks, customer-managed keys — with the same interface in both targets.
+Authored resources are the fallback: for a type without a module, or a repository that
+already renders that way. Each resource's rendering reference opens with the decision →
+module input mapping and keeps the authored rendering below it.
+
+```
+infra-spec.yaml ──> module "storage" { source = "Azure/avm-res-storage-storageaccount/azurerm" ... }
+                ──> module storageAccount 'br/public:avm/res/storage/storage-account:0.33.1' = { ... }
+```
+
+Rendering targets this author's own naming stack, and hands the rendered name to the module:
 
 - **Terraform** → the [`LemurDaniel/naming`](https://registry.terraform.io/providers/LemurDaniel/naming/latest) provider
 - **Bicep** → names assembled from `var`s in the template. The
@@ -191,6 +208,10 @@ and linted with CLI 0.48 — and the two renders diffed. Nothing has been applie
 - [x] Deployment-wide question set: posture, network ownership, mandates — resolved once,
       inherited by every resource via `from_deployment`
 - [x] Rendering: naming interfaces, module layout and idiom per target
+- [x] Azure Verified Modules as the primary rendering: the contract, the shared
+      interfaces, decision → module input per resource for both targets
+- [ ] The example re-rendered on AVM, with its tests — the authored render is what is
+      committed today
 - [x] Guardrails: the rules every question set takes its defaults from, shared with
       `Infrastructure-by-Skill`
 - [x] Three resources: `storage-account`, `virtual-network`, `log-analytics-workspace`

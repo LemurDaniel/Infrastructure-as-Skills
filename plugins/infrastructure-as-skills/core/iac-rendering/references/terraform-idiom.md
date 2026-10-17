@@ -85,23 +85,47 @@ interview invented. The provider block reads `var.subscription_id`; `workload` c
   (`for_each = toset(["blob", "file"])`) — the key lands in the resource address, and an
   index-keyed one renumbers everything when the list changes.
 
-### Reusing a published module
+### Azure Verified Modules are the default module
 
-A spec module with `implementation: reuse` renders as a call to a registry module instead
-of resources of its own. Which module that is, is resolved here — the spec carries no
-coordinate, on purpose.
+A resource renders as a call to its AVM module unless the spec says `implementation:
+authored` for it — which module, which version and how the shared interfaces map is in
+[avm.md](avm.md). The call takes the rendered name, the context variables and every
+decision as an explicit input:
 
 ```hcl
 module "storage" {
-  source  = "Azure/storage/azurerm"
-  version = "~> 0.5"
-  # ...
+  source  = "Azure/avm-res-storage-storageaccount/azurerm"
+  version = "~> 0.10.0" # resolved 2026-10-17; 0.y minors break, so the minor is fixed
+
+  name      = data.naming_name.storage_account.name
+  location  = var.location
+  parent_id = data.azurerm_resource_group.this.id # AzAPI-based module: the group's id, not its name
+
+  # decision: storage-account.networking.public_network_access
+  public_network_access_enabled = false
+  # ...every other decision, written even where it matches the module default
+
+  enable_telemetry = true # deployment.module_telemetry
+  tags             = local.tags
 }
 ```
 
-Pin `version` always. `source` without `version` re-resolves on every `init` and turns a
-module release into an unannounced change. A local path (`./modules/storage`) takes no
-`version` and is the other half of the same rule: those two forms, nothing in between.
+Pin `version` always, to the version resolved at render time. `source` without `version`
+re-resolves on every `init` and turns a module release into an unannounced change. A
+local path (`./modules/storage`) takes no `version` and is the other half of the same
+rule: those two forms, nothing in between. `implementation: reuse` — a module the user
+named that is not AVM — takes the same shape with the user's coordinate.
+
+The module's provider requirements become the root's: an AzAPI-based module needs
+`Azure/azapi`, `Azure/modtm` and `hashicorp/random` declared in `required_providers`
+beside `azurerm` and `naming`, and an azurerm-based module may pin `azurerm` to a major
+the root did not plan on. Read the module README's *Requirements* before writing
+`providers.tf`; the details are in [avm.md](avm.md#provider-requirements-terraform).
+
+With AVM the module split is mostly decided: one module call per resource, the
+resource's own private endpoints, diagnostics and role assignments as its inputs, and the
+root holding the wiring between modules. `composition.granularity: per-concern` describes
+the authored layout; under AVM it collapses to `single` unless a pattern says otherwise.
 
 ### Do not generate a module per resource by reflex
 

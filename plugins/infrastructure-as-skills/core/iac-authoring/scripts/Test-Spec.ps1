@@ -19,7 +19,7 @@
          names decisions; one backend's vocabulary in it breaks the others.
       6. composition: unique module ids, every resource contained exactly once,
          `needs` pointing at declared modules and acyclic, `implementation`
-         being authored|reuse rather than a module path.
+         being avm|authored|reuse rather than a module path.
 
     Parsing needs a YAML reader. powershell-yaml if present, otherwise python
     with PyYAML. Without either the script says so and exits 2 rather than
@@ -241,8 +241,8 @@ if (Test-Key $spec 'composition') {
     foreach ($m in $modules) {
         $mid  = Get-Val $m 'id'
         $impl = Get-Val $m 'implementation'
-        if ($impl -and $impl -notin @('authored', 'reuse')) {
-            $errors.Add("composition.$mid.implementation '$impl' is not authored or reuse. A module path belongs in the renderer.")
+        if ($impl -and $impl -notin @('avm', 'authored', 'reuse')) {
+            $errors.Add("composition.$mid.implementation '$impl' is not avm, authored or reuse. A module path belongs in the renderer.")
         }
         foreach ($n in @(Get-Val $m 'needs')) {
             if ($n -and $n -notin $ids) { $errors.Add("composition.$mid needs '$n', which is not a declared module") }
