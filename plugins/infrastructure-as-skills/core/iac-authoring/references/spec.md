@@ -31,7 +31,7 @@ schema_version: 1
 spec:
   id: payments-api-prod
   target: terraform          # terraform | bicep | api  (api => Infrastructure-as-Skills)
-  generated_by: infrastructure-by-skill
+  generated_by: infrastructure-as-skills
   skill: private-webapp
   skill_version: 0.1.0
   at: 2026-10-17T09:14:00Z

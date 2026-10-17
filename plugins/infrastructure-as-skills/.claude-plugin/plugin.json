@@ -1,12 +1,12 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
-  "name": "infrastructure-by-skill",
+  "name": "infrastructure-as-skills",
   "description": "Author Azure infrastructure as Terraform or Bicep by answering the decisions each resource actually has. Each resource carries a grouped question set (placement, networking, identity, security, data protection, observability), and a deployment-wide set settles posture, network ownership and mandates once for everything in a deployment.",
   "version": "0.1.0",
   "author": {
     "name": "LemurDaniel"
   },
-  "repository": "https://github.com/LemurDaniel/Infrastructure-by-Skill",
+  "repository": "https://github.com/LemurDaniel/Infrastructure-as-Skills",
   "license": "MIT",
   "keywords": [
     "azure",

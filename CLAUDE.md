@@ -37,7 +37,7 @@ pwsh -NoProfile -File .claude/skills/git-commit-conventions/scripts/Test-RepoCon
 
 # Validates a generated spec. -RequireApplyable also fails on assumed values and
 # open items. Needs powershell-yaml or python with PyYAML.
-pwsh -NoProfile -File plugins/infrastructure-by-skill/core/iac-authoring/scripts/Test-Spec.ps1 <spec>
+pwsh -NoProfile -File plugins/infrastructure-as-skills/core/iac-authoring/scripts/Test-Spec.ps1 <spec>
 ```
 
 There is no build and no test runner. The artefacts are Markdown and YAML, so these two
@@ -52,7 +52,7 @@ it by full path, or let the check script find it.
 | Path | Role |
 |---|---|
 | `.claude-plugin/marketplace.json` | Marketplace manifest — this repo is its own marketplace |
-| `plugins/infrastructure-by-skill/.claude-plugin/plugin.json` | Plugin manifest. The `skills` array is what makes the grouped layout work |
+| `plugins/infrastructure-as-skills/.claude-plugin/plugin.json` | Plugin manifest. The `skills` array is what makes the grouped layout work |
 | `.../core/iac-authoring/` | The interview protocol: resolution order, what gets asked, the spec |
 | `.../core/iac-authoring/questions/deployment.yaml` | The deployment-wide set: posture, network ownership, mandates. Resolved before any resource |
 | `.../core/iac-authoring/references/spec.md` | `infra-spec.yaml` schema, the `source` field, `composition` |

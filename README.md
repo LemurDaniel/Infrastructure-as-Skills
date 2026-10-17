@@ -1,4 +1,4 @@
-# Infrastructure by Skill
+# Infrastructure as Skills
 
 > Azure infrastructure authored from the decisions it actually has — rendered as Terraform or Bicep.
 
@@ -84,9 +84,9 @@ reference.
 ## Layout
 
 ```
-Infrastructure-by-Skill/
+Infrastructure-as-Skills/
 ├── .claude-plugin/marketplace.json
-└── plugins/infrastructure-by-skill/
+└── plugins/infrastructure-as-skills/
     ├── .claude-plugin/plugin.json
     ├── core/                       # the shared contract
     │   ├── iac-authoring/          # interview protocol, the spec, question-set format
@@ -157,14 +157,14 @@ reads by path. A declared path that does not exist fails to load the plugin, whi
 On Claude Code 2.1.275 or later, one step:
 
 ```
-/plugin install infrastructure-by-skill --marketplace LemurDaniel/Infrastructure-by-Skill
+/plugin install infrastructure-as-skills --marketplace LemurDaniel/Infrastructure-as-Skills
 ```
 
 Before that, the marketplace is added first:
 
 ```
-/plugin marketplace add LemurDaniel/Infrastructure-by-Skill
-/plugin install infrastructure-by-skill
+/plugin marketplace add LemurDaniel/Infrastructure-as-Skills
+/plugin install infrastructure-as-skills
 ```
 
 Then just say what you need — `"ich brauch ein storage account für terraform"` — and the
@@ -195,7 +195,7 @@ Nothing has been rendered to Terraform or Bicep yet.
 - [ ] Evals per pattern, plus a consistency run: same spec many times, measure the spread
 - [ ] Cross-backend check: one spec through both backends, diff the result
 
-Run `claude plugin validate ./plugins/infrastructure-by-skill` before trusting the manifest
+Run `claude plugin validate ./plugins/infrastructure-as-skills` before trusting the manifest
 — the grouped `skills` array is the part most likely to be wrong.
 
 ## Relation to `Infrastructure-as-Skills`

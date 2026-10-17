@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Pre-commit consistency checks for the Infrastructure-by-Skill repo.
+    Pre-commit consistency checks for the Infrastructure-as-Skills repo.
 
 .DESCRIPTION
     Read-only. Verifies the things that can actually go wrong in a Claude Code
@@ -84,7 +84,7 @@ try {
         Write-Host '[info] nothing tracked yet - checks run against the index only' -ForegroundColor DarkYellow
     }
 
-    $pluginRoot = Join-Path $repo 'plugins/infrastructure-by-skill'
+    $pluginRoot = Join-Path $repo 'plugins/infrastructure-as-skills'
 
     # Parse a SKILL.md frontmatter into name/description.
     function Get-SkillFrontmatter {
