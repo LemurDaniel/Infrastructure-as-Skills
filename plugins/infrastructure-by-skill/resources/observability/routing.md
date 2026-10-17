@@ -1,11 +1,7 @@
----
-name: observability
-description: Azure monitoring resources as Terraform or Bicep — Log Analytics workspaces, with the retention, ingestion-cost and access decisions each forces. Use for a workspace, log retention or diagnostic routing, and when a deployment has to build its own monitoring rather than reference a platform one.
----
-
 # Azure observability resources
 
-Routing table — the request picks the question set:
+A resource family, reached from the [azure-resources](../../core/azure-resources/SKILL.md)
+skill. Routing table — the request picks the question set:
 
 | Request mentions | Question set | Notes |
 |---|---|---|

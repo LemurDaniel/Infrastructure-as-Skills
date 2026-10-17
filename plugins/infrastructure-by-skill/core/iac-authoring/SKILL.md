@@ -5,16 +5,18 @@ description: The interview protocol behind every skill here — how a question s
 
 # Authoring infrastructure from a question set
 
-Each resource family skill carries a question set per resource under `questions/`: the
-decisions that resource forces, grouped by concern. This file is the protocol for turning a
-question set into a spec, and the spec into code. Follow it rather than improvising — the
-value of the plugin is that two runs of the same skill ask the same things and record them
-the same way.
+Each resource family under `resources/` carries a question set per resource under
+`questions/`: the decisions that resource forces, grouped by concern. This file is the
+protocol for turning a question set into a spec, and the spec into code. Follow it rather
+than improvising — the value of the plugin is that two runs of the same skill ask the same
+things and record them the same way.
 
-The family is the **triggering** unit and the question set is the **knowledge** unit. They
-are separate because the skill listing has a shared character budget: a skill per Azure
-resource would spend it all and get its own descriptions dropped, which silently removes
-the keywords that make any of it discoverable.
+Three units, kept apart on purpose: the [azure-resources](../azure-resources/SKILL.md)
+skill is the **triggering** unit, the family the **routing** unit, the question set the
+**knowledge** unit. They are separate because the skill listing has a shared character
+budget, and a description that overflows it is dropped silently — the skill stays
+installed and stops matching. A skill per resource would spend the budget at once; a skill
+per family spent it by the sixth family.
 
 ## The pipeline
 
@@ -200,7 +202,7 @@ service-affecting and which are noise, and that is a judgement the plan cannot m
 ## Composition: how a pattern drives a resource
 
 A pattern skill does not re-ask a resource's questions. It supplies a pre-answer block
-keyed by resource skill, entering resolution at precedence 2:
+keyed by resource, entering resolution at precedence 2:
 
 ```yaml
 pre_answers:
@@ -218,7 +220,7 @@ Two rules make this work:
   the pattern pre-answers differently, the user wins — and you say what the pattern
   expected and what the departure implies for the rest of the system.
 - **The wiring belongs to the pattern.** Private endpoints, DNS zone links, role
-  assignments between the parts, diagnostic routing: no single resource skill can own a
+  assignments between the parts, diagnostic routing: no single resource question set can own a
   relationship, so the pattern renders it. This is the genuinely hard part and the main
   reason pattern skills exist.
 
@@ -244,8 +246,10 @@ prevent.
 
 ## Adding a resource
 
-A resource goes into an existing family skill — `storage`, `network`, `compute`, `data`,
-`security`, `observability` — not into a skill of its own. Inside that family:
+A resource goes into a family under `resources/` — `storage`, `network`, `observability`
+today, `compute`, `data`, `security` planned. Families are not skills; the single
+[azure-resources](../azure-resources/SKILL.md) skill routes into all of them. Inside the
+family:
 
 1. Write `questions/<resource>.yaml`. Copy an existing one and keep the group order:
    placement, networking, identity, security, data_protection, observability. The order is
@@ -262,13 +266,17 @@ A resource goes into an existing family skill — `storage`, `network`, `compute
 6. Write `references/<resource>/terraform.md` and `references/<resource>/bicep.md` — the
    rendering, not the decisions. Anything true for both belongs in the shared references
    instead.
-7. Add a row to the family skill's routing table, so the resource is reachable.
-8. Validate: `pwsh -NoProfile -File scripts/Test-QuestionSet.ps1 <family-dir>`
+7. Add a row to the family's `routing.md`, so the resource is reachable.
+8. If people would ask for it with a term the
+   [azure-resources](../azure-resources/SKILL.md) description does not carry, add the term
+   there — that description is the only trigger the resource has.
+9. Validate: `pwsh -NoProfile -File scripts/Test-QuestionSet.ps1 <family-dir>`
 
-A genuinely new family — a cloud or a domain none of the existing ones covers — gets its
-own skill directory and an entry in `plugin.json`'s `skills` array. Weigh it against the
-listing budget first: each family skill spends part of a shared allowance, and the cost of
-one too many is that descriptions get dropped from skills you did not touch.
+A genuinely new family gets a directory under `resources/` with a `routing.md`, and a row in
+the azure-resources table. **Not** a skill directory and **not** a `plugin.json` entry:
+`resources/` is deliberately undeclared, so nothing in it costs listing budget, and a
+family that became a skill again would reintroduce the per-family budget cost that
+overflowed at the sixth family.
 
 ## Reference files
 

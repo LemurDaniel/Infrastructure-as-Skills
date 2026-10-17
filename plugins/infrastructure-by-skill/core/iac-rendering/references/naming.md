@@ -16,7 +16,7 @@ The Terraform provider takes `<Provider>::<Namespace>/<Type>[::<kind>]`, e.g.
 `Azure::Microsoft.Storage/storageAccounts`. The optional `kind` suffix selects a variant of
 the same type — `Microsoft.Compute/disks::os` abbreviates to `osdisk`, `::data` to `disk`.
 
-Each resource skill's `questions.yaml` states that identifier under `naming:`, alongside
+Each resource's `questions/<resource>.yaml` states that identifier under `naming:`, alongside
 the plain Bicep resource type and the **abbreviation** the Bicep vars render. Use those
 rather than constructing either yourself.
 

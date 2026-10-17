@@ -52,7 +52,7 @@ matter here:
   contract** (`core/`). A change to the interview protocol or the guardrails
   affects every resource and is reviewed differently from one resource's
   decisions.
-- **A family's routing table** (`resources/<family>/SKILL.md`) travels **with**
+- **A family's routing table** (`resources/<family>/routing.md`) travels **with**
   the question set it points at. A row pointing at a file that does not exist is
   the one failure this repo cannot detect at runtime — the skill simply reads a
   missing file mid-run.

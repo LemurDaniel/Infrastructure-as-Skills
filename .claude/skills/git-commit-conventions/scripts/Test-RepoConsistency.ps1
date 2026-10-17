@@ -22,8 +22,10 @@
          scope: deployment set names no resource and is exempt from the
          naming checks.
 
-      6. Routing coverage: every questions/*.yaml reachable from its family
-         SKILL.md, and no row pointing at a missing file.
+      6. Routing coverage: every questions/*.yaml reachable from its family's
+         routing.md (or the SKILL.md of the skill holding it), every family's
+         routing.md linked from core/azure-resources, and no row pointing at a
+         missing file.
       7. No CLAUDE.md inside the plugin directory - it is not loaded as context
          there and claude plugin validate warns about it.
       8. Broken relative links in tracked Markdown, and spaces in tracked paths.
@@ -219,10 +221,10 @@ try {
         if ($total -gt $ListingBudget) {
             Write-Host "[warn] $msg" -ForegroundColor Yellow
             foreach ($r in $rows) { Write-Host $r -ForegroundColor DarkGray }
-            $warnings.Add("The listing exceeds the assumed budget, so Claude Code may drop descriptions - which silently stops those skills from triggering. Check /context and /doctor, shorten descriptions, or merge resources into fewer family skills.")
+            $warnings.Add("The listing exceeds the assumed budget, so Claude Code may drop descriptions - which silently stops those skills from triggering. Check /context and /doctor, shorten descriptions, or move keyword terms into the single azure-resources description rather than adding skills.")
         } elseif ($pct -ge 70) {
             Write-Host "[warn] $msg" -ForegroundColor Yellow
-            $warnings.Add("The listing is near its budget. The next family skill may push it over; shorten descriptions first.")
+            $warnings.Add("The listing is near its budget. Shorten descriptions before adding a skill - families are not skills and should not become them.")
         } else {
             Write-Host "[ ok ] $msg" -ForegroundColor Green
         }
@@ -381,18 +383,37 @@ try {
         $routeIssues = [System.Collections.Generic.List[string]]::new()
         $families = @($questionSets | ForEach-Object { Split-Path -Parent (Split-Path -Parent $_.FullName) } | Sort-Object -Unique)
 
+        # A resource family routes through routing.md and is not a skill - the
+        # azure-resources skill is the single trigger for all of them. A question
+        # set inside a skill (the deployment set in iac-authoring) routes through
+        # that skill's SKILL.md.
+        $azureResources = Join-Path $pluginRoot 'core/azure-resources/SKILL.md'
+        $routerBody = if (Test-Path -LiteralPath $azureResources) { Get-Content -LiteralPath $azureResources -Raw } else { '' }
+
         foreach ($famDir in $families) {
-            $famSkill = Join-Path $famDir 'SKILL.md'
             $famRel = [System.IO.Path]::GetRelativePath($repo, $famDir) -replace '\\', '/'
-            if (-not (Test-Path -LiteralPath $famSkill)) {
-                $routeIssues.Add("$famRel has question sets but no SKILL.md to route to them")
+            $router = Join-Path $famDir 'routing.md'
+            if (-not (Test-Path -LiteralPath $router)) { $router = Join-Path $famDir 'SKILL.md' }
+            $routerLeaf = Split-Path -Leaf $router
+
+            if (-not (Test-Path -LiteralPath $router)) {
+                $routeIssues.Add("$famRel has question sets but neither routing.md nor SKILL.md to route to them")
                 continue
             }
-            $body = Get-Content -LiteralPath $famSkill -Raw
+
+            # A family nobody routes into is unreachable however good its table is.
+            if ($routerLeaf -eq 'routing.md') {
+                $famName = Split-Path -Leaf $famDir
+                if ($routerBody -notmatch [regex]::Escape("resources/$famName/routing.md")) {
+                    $routeIssues.Add("core/azure-resources/SKILL.md never links resources/$famName/routing.md - the whole family is unreachable")
+                }
+            }
+
+            $body = Get-Content -LiteralPath $router -Raw
             foreach ($qs in @($questionSets | Where-Object { (Split-Path -Parent (Split-Path -Parent $_.FullName)) -eq $famDir })) {
                 $leaf = $qs.Name
                 if ($body -notmatch [regex]::Escape($leaf)) {
-                    $routeIssues.Add("$famRel/SKILL.md never mentions questions/$leaf - the resource is unreachable")
+                    $routeIssues.Add("$famRel/$routerLeaf never mentions questions/$leaf - the resource is unreachable")
                 }
             }
             # Rows pointing at a questions/ file that does not exist. The
@@ -402,13 +423,13 @@ try {
             foreach ($m in [regex]::Matches($body, '(?<![\w./-])questions/([A-Za-z0-9._-]+\.ya?ml)')) {
                 $target = Join-Path $famDir (Join-Path 'questions' $m.Groups[1].Value)
                 if (-not (Test-Path -LiteralPath $target)) {
-                    $routeIssues.Add("$famRel/SKILL.md routes to questions/$($m.Groups[1].Value), which does not exist")
+                    $routeIssues.Add("$famRel/$routerLeaf routes to questions/$($m.Groups[1].Value), which does not exist")
                 }
             }
         }
 
         if ($routeIssues.Count -eq 0) {
-            Write-Host "[ ok ] routing - every question set reachable from its family skill" -ForegroundColor Green
+            Write-Host "[ ok ] routing - every question set reachable from its routing table" -ForegroundColor Green
         } else {
             Write-Host "[warn] routing - $($routeIssues.Count) issue(s)" -ForegroundColor Yellow
             foreach ($r in $routeIssues) { Write-Host "         $r" -ForegroundColor DarkGray }

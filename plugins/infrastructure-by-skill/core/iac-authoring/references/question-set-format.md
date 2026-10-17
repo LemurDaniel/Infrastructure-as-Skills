@@ -1,6 +1,6 @@
 # The question set format
 
-One file per resource, at `questions/<resource>.yaml` inside its family skill. These files
+One file per resource, at `questions/<resource>.yaml` inside its family under `resources/`. These files
 are the actual content of this plugin — a family's `SKILL.md` is a router and a handful of
 family-wide truths.
 
@@ -117,7 +117,7 @@ region, and what it connects to. The rest can default.
 
 **Group order is review order.** placement → networking → identity → security →
 data_protection → observability. Keep it, because a reviewer reading three different
-resource skills should not have to relearn the layout each time.
+resources should not have to relearn the layout each time.
 
 **`depends_on` instead of asking dead questions.** Firewall rules are meaningless when
 public access is disabled. Gate them rather than asking and discarding.
@@ -132,4 +132,4 @@ Checks every `questions/*.yaml` in the family for the structural invariants: uni
 `required` and `default` not both set, enum defaults within `values`, `depends_on` pointing
 at a question that exists, `why` and `renders` present, both naming forms and the
 abbreviation declared, the Bicep identifier not carrying an `Azure::` prefix, and every
-resource reachable from the family skill's routing table.
+resource reachable from the family's outing.md.

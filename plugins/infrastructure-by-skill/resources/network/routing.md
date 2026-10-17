@@ -1,11 +1,7 @@
----
-name: network
-description: Azure networking resources as Terraform or Bicep — virtual networks and subnets, with the address planning, delegation and private-endpoint policy decisions each forces. Use for a vnet, subnet, address space or private endpoint placement, and when a deployment has to build its own network.
----
-
 # Azure network resources
 
-Routing table — the request picks the question set:
+A resource family, reached from the [azure-resources](../../core/azure-resources/SKILL.md)
+skill. Routing table — the request picks the question set:
 
 | Request mentions | Question set | Notes |
 |---|---|---|
@@ -50,5 +46,7 @@ private endpoint removes the public surface. The posture ladder is in the guardr
 ## Adding a resource to this family
 
 Same steps as any family — see
-[iac-authoring](../../core/iac-authoring/SKILL.md#adding-a-resource). Do **not** add a new
-skill per resource: the listing budget is shared, and the family is the triggering unit.
+[iac-authoring](../../core/iac-authoring/SKILL.md#adding-a-resource). Do **not** add a
+skill for it: the listing budget is shared, and azure-resources is the triggering unit. If the
+resource brings a term people would type that the
+[azure-resources](../../core/azure-resources/SKILL.md) description lacks, add it there.

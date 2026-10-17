@@ -1,13 +1,8 @@
----
-name: storage
-description: Author Azure storage resources as Terraform or Bicep by resolving their decisions — storage accounts, blob containers, file shares, queues. Use whenever a storage account, blob storage, an ADLS Gen2 / data lake account or a file share is to be created, changed or reviewed in infrastructure code, or re-rendered for the other IaC target.
----
-
 # Azure storage
 
-A resource family. The decisions live in per-resource question sets under
-[questions/](questions/); this file routes to the right one and holds what is true across
-the family.
+A resource family, reached from the [azure-resources](../../core/azure-resources/SKILL.md)
+skill. The decisions live in per-resource question sets under [questions/](questions/);
+this file routes to the right one and holds what is true across the family.
 
 ## Pick the question set
 
@@ -48,7 +43,7 @@ account first, then the child, and keep them in separate files so the account's 
 is not tied to a container's.
 
 **Nothing here creates shared infrastructure.** Private DNS zones, the Log Analytics
-workspace and the resource group are referenced, never created. Two resource skills each
+workspace and the resource group are referenced, never created. Two deployments each
 creating `privatelink.blob.core.windows.net` is a conflict that only surfaces at apply
 time, which is why a pattern skill or the platform owns them.
 
@@ -75,8 +70,10 @@ Use those rather than constructing either yourself. The Bicep naming modules
    decisions fixed at creation, dependency order, the pitfalls worth naming
 3. Write `references/<resource>/terraform.md` and `references/<resource>/bicep.md`
 4. Add a row to the routing table above
+5. If the resource brings a term people would actually type that the
+   [azure-resources](../../core/azure-resources/SKILL.md) description does not already
+   carry, add it there — that description is the only trigger this family has
 
-Do **not** add a new skill for it. The skill listing has a shared character budget and
-every extra entry spends it; the family is the triggering unit, the question set is the
-knowledge unit. Keep this skill's `description` naming the family, not every resource in
-it.
+Do **not** add a skill for it. The skill listing has a shared character budget and every
+extra entry spends it; azure-resources is the triggering unit, the family the routing unit, the
+question set the knowledge unit.

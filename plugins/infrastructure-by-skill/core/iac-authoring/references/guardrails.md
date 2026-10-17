@@ -46,8 +46,8 @@ The posture ladder, in order of preference:
 4. **Public, unrestricted** — only with a stated reason recorded in the spec as
    `overridden`.
 
-Private DNS zones are shared infrastructure. No resource skill creates one — a pattern
-skill or the platform owns them, because two resource skills each creating
+Private DNS zones are shared infrastructure. No resource question set creates one — a pattern
+skill or the platform owns them, because two deployments each creating
 `privatelink.blob.core.windows.net` is a conflict that only shows up at apply time.
 
 ## 3. Identity over keys
@@ -96,7 +96,7 @@ invisible exactly when someone needs to see it.
 - **Metrics**: `AllMetrics`, which is cheap.
 
 The workspace is shared infrastructure, like DNS zones — referenced, not created, by a
-resource skill.
+resource question set.
 
 ## 6. Exceptions
 
