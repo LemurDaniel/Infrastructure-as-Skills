@@ -138,14 +138,23 @@ resource "azurerm_private_endpoint" "storage" {
     is_manual_connection           = false
   }
 
-  private_dns_zone_group {
-    name                 = "default"
-    private_dns_zone_ids = [var.private_dns_zone_ids[each.key]]
+  # Only with deployment.private_dns_records: deployment. Under `policy` - the
+  # landing-zone default - a DeployIfNotExists policy writes the record, and a
+  # zone group here would be a second writer: drift on every plan.
+  dynamic "private_dns_zone_group" {
+    for_each = var.private_dns_records == "deployment" ? [1] : []
+    content {
+      name                 = "default"
+      private_dns_zone_ids = [var.private_dns_zone_ids[each.key]]
+    }
   }
 
   tags = local.tags
 }
 ```
+
+Under `policy`, also add `lifecycle { ignore_changes = [private_dns_zone_group] }`: the zone
+group the policy attaches would otherwise show up as a change Terraform wants to remove.
 
 `subresource_names` takes exactly one entry per endpoint. Passing several is accepted at
 plan time and fails at apply.

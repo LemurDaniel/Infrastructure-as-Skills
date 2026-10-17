@@ -174,8 +174,8 @@ One endpoint per sub-resource. The DNS zone is referenced, never created:
 ```bicep
 resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = [
   for sub in privateEndpointSubresources: {
-    // pep + wedev + objects + blob  ->  pep-wedev-objects-blob
-    name: 'pep-${affix}-${workload}-${sub}'
+    // patterns.Azure.default with <?SUBNAME>  ->  pep-we-dev-objects-blob-01
+    name: 'pep-${locationCodes[location]}-${environmentCodes[environment]}-${workload}-${sub}-${padLeft(index, 2, '0')}'
     location: location
     tags: tags
 
@@ -199,9 +199,32 @@ resource privateEndpoint 'Microsoft.Network/privateEndpoints@2023-11-01' = [
 one entry per endpoint.
 
 The DNS zone group is a nested child resource of the endpoint
-(`privateEndpoints/privateDnsZoneGroups`). Without it the endpoint exists and resolves to
-nothing, which presents as a connection timeout rather than a DNS error and is
-correspondingly annoying to diagnose.
+(`privateEndpoints/privateDnsZoneGroups`), and **who writes it is
+`deployment.private_dns_records`**:
+
+- `policy` — the landing-zone default. A DeployIfNotExists policy attaches the zone group
+  after deployment. Render **no** zone group; a second writer re-creates the conflict on
+  every deployment.
+- `deployment` — render it, with the zone referenced from the hub subscription
+  (`private_dns_zone_scope`):
+
+```bicep
+resource zoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-11-01' = [
+  for (sub, i) in privateEndpointSubresources: if (privateDnsRecords == 'deployment') {
+    parent: privateEndpoint[i]
+    name: 'default'
+    properties: {
+      privateDnsZoneConfigs: [
+        { name: sub, properties: { privateDnsZoneId: privateDnsZoneIds[sub] } }
+      ]
+    }
+  }
+]
+```
+
+Either way something must write the record. Without it the endpoint exists and resolves to
+nothing, which presents as a connection timeout rather than a DNS error — so under
+`policy`, confirm the policy is actually assigned to the landing zone.
 
 ## Role assignments
 
