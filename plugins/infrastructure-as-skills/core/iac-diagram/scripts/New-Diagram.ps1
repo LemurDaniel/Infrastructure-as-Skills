@@ -104,6 +104,15 @@ function Get-Value($node) {
 }
 function Get-Decision($map, [string[]] $keys) { Get-Value (Get-At $map $keys) }
 
+# A referenced resource is recorded as "name / resource-group". The name goes on
+# the shape; the group goes to the panel, where text has room. Putting both on an
+# icon label overflows its fixed slot.
+function Split-Ref($value) {
+    if ($null -eq $value) { return @{ name = $null; rg = $null } }
+    $parts = "$value" -split '\s*/\s*', 2
+    return @{ name = $parts[0]; rg = ($parts.Count -gt 1 ? $parts[1] : $null) }
+}
+
 # --- Labels ----------------------------------------------------------------
 
 $T = @{
@@ -169,7 +178,7 @@ $withPe = @($middle | Where-Object {
 })
 $withoutPe = @($middle | Where-Object { $_ -notin $withPe })
 
-$peSubnetName = Get-Decision $dep @('private_endpoint_subnet')
+$peSubnetName = (Split-Ref (Get-Decision $dep @('private_endpoint_subnet'))).name
 $peSubnetPrefix = Get-Decision $dep @('private_endpoint_subnet_prefix')
 if (-not $peSubnetName) { $peSubnetName = 'snet-' + $T.peSubnet.ToLower().Replace(' ', '') }
 
@@ -183,7 +192,9 @@ foreach ($s in @(Get-Decision $resources['virtual-network'] @('addressing', 'sub
 
 $roles = @(Get-Decision $spec @('wiring', 'role_assignments') | Where-Object { $_ })
 $zones = @(Get-Decision $spec @('wiring', 'private_dns_zones') | Where-Object { $_ })
-$diagTarget = Get-Decision $dep @('diagnostics_destination')
+$diagRef = Split-Ref (Get-Decision $dep @('diagnostics_destination'))
+$diagTarget = $diagRef.name
+$vnetRef = Split-Ref (Get-Decision $dep @('existing_vnet'))
 $drawLaw = $hasLawRes -or $diagTarget
 
 # assumed values anywhere in the spec, by dotted path
@@ -329,7 +340,7 @@ if ($isPrivate) {
 }
 
 if ($drawVnet) {
-    $vnName = if ($vnetExisting) { "$(Get-Decision $dep @('existing_vnet'))" } else { 'Virtual Network' }
+    $vnName = if ($vnetExisting -and $vnetRef.name) { $vnetRef.name } else { 'Virtual Network' }
     $vnSub  = "$(Get-Decision $dep @('address_space') ?? (Get-Decision $resources['virtual-network'] @('addressing', 'address_space')))"
     $vnNote = if ($vnetExisting) { $T.existing } else { '' }
     $style  = $containerStyle + ($vnetExisting ? $existingStyle : '')
@@ -384,7 +395,8 @@ if ($netOwnership) { Add-Line "$($T.network): $(Esc $netOwnership)$(if ($vnSub) 
 $mand = @(Get-Decision $dep @('mandates') | Where-Object { $_ })
 if ($mand.Count)   { Add-Line "$($T.mandates): $(Esc ($mand -join ', '))" }
 if ($dnsOwnership) { Add-Line "$($T.dns): $(Esc $dnsOwnership)" }
-if ($diagTarget)   { Add-Line "$($T.diag): $(Esc $diagTarget)" }
+if ($diagTarget)   { Add-Line "$($T.diag): $(Esc $diagTarget)$(if ($diagRef.rg) { ' (' + (Esc $diagRef.rg) + ')' })" }
+if ($vnetExisting -and $vnetRef.rg) { Add-Line "VNet: $(Esc $vnetRef.name) ($(Esc $vnetRef.rg))" }
 # forced chains: deployment answers carrying `forces`
 if ($dep -is [System.Collections.IDictionary]) {
     foreach ($k in $dep.Keys) {
