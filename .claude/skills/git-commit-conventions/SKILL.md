@@ -41,7 +41,15 @@ repo and, if they are missing or say `Claude`, set them **repo-locally**:
 
 On the owner's own machine the identity is already theirs: do not touch the
 git config there, and do not rewrite a configured identity that is not
-`Claude`. A commit that went out under the wrong author is not amended if it
+`Claude`.
+
+**No signing from a tool session.** Commits made here are unsigned: no key is
+set up, no `-S`, no `commit.gpgsign`. A signature from a key GitHub does not
+know shows the commit as *Unverified*, which is worse than no signature. If a
+tool session inherits `commit.gpgsign = true` from somewhere, turn it off
+repo-locally (`git config commit.gpgsign false`) rather than bypassing it per
+commit with a flag (section 6). Signing on the owner's own machine is theirs
+to decide and is left as configured. A commit that went out under the wrong author is not amended if it
 is already pushed (section 6); say so and let the owner decide whether to
 rewrite the branch.
 
