@@ -5,3 +5,6 @@ plugins/infrastructure-as-skills/evals/results/
 # Terraform working files - the examples are rendered, never applied here
 .terraform/
 .terraform.lock.hcl
+
+# Python bytecode from the check scripts
+__pycache__/

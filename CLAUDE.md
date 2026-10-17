@@ -32,22 +32,24 @@ is `core/iac-rendering/references/avm.md`.
 # Pre-commit checks (read-only). Includes `claude plugin validate` on the plugin
 # and the marketplace — it finds the CLI on PATH, or the binary the VS Code
 # extension ships, and warns rather than passing quietly if it finds neither.
-pwsh -NoProfile -File .claude/skills/git-commit-conventions/scripts/Test-RepoConsistency.ps1
+python3 .claude/skills/git-commit-conventions/scripts/check_repo_consistency.py
 
-# Validates a generated spec. -RequireApplyable also fails on assumed values and
-# open items. Needs powershell-yaml or python with PyYAML.
-pwsh -NoProfile -File plugins/infrastructure-as-skills/core/iac-authoring/scripts/Test-Spec.ps1 <spec>
+# Validates a generated spec. --require-applyable also fails on assumed values and
+# open items. Needs PyYAML (pip install pyyaml).
+python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_spec.py <spec>
 
 # A rendered example: fmt, validate, plan-only tests with a mocked platform - and the
 # Bicep render of the same spec compiled and linted.
 terraform -chdir=examples/private-storage-on-platform init && terraform -chdir=examples/private-storage-on-platform test
 # Every decision in the spec asserted by those tests, or marked not-testable with a reason.
-pwsh -NoProfile -File plugins/infrastructure-as-skills/core/iac-rendering/scripts/Test-RenderCoverage.ps1 examples/private-storage-on-platform/infra-spec.yaml
+python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py examples/private-storage-on-platform/infra-spec.yaml
 bicep build --stdout examples/private-storage-on-platform/bicep/main.bicep > $null && bicep lint examples/private-storage-on-platform/bicep/main.bicep
 ```
 
 There is no build. The artefacts are Markdown and YAML; the scripts and the examples'
-Terraform tests are the whole verification story.
+Terraform tests are the whole verification story. The scripts are Python 3.9+ with PyYAML
+as the only dependency: `python3` on macOS, Linux and in a cloud session, `python` or
+`py -3` on Windows.
 
 On the owner's Windows machine `claude` is not on `PATH`: the CLI lives at
 `~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe`, and the
@@ -129,9 +131,9 @@ are in [README.md](README.md#why-one-trigger-and-families-that-are-not-skills).
 - **A missing question set is said out loud, never improvised.**
 - **A Terraform render ships with its tests.** One `assert` per spec decision, named
   `# decision: <resource>.<group>.<question>`; what a plan cannot observe is
-  `# not-testable:` with a reason. `Test-RenderCoverage.ps1` fails on anything else.
-- **`Test-QuestionSet.ps1` does not exist yet** although the authoring docs name it.
-  `Test-RepoConsistency.ps1` covers part of what it would.
+  `# not-testable:` with a reason. `check_render_coverage.py` fails on anything else.
+- **`check_question_set.py` does not exist yet** although the authoring docs name it.
+  `check_repo_consistency.py` covers part of what it would.
 
 ## Repository Conventions
 

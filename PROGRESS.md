@@ -52,7 +52,7 @@ Verified Modules first, authored resources second.
   `…-01-blob` while Bicep said `…-blob-01`; the convention has the token for exactly this.
 - **Tests are part of the render, with coverage as the contract.** One assert per spec
   decision, named by its key path; a decision a plan cannot observe is marked with its
-  reason. `Test-RenderCoverage.ps1` checks spec against tests, so "everything is tested"
+  reason. `check_render_coverage.py` checks spec against tests, so "everything is tested"
   is a gate, not an intention. Bicep has no equivalent yet (see Open).
 - **No registry alias, no registry modules — for the owner's own registry.** `br/public:`
   needs no alias and is the default; `br/modules:` is only rendered when
@@ -70,8 +70,8 @@ Verified Modules first, authored resources second.
 - **Which decisions a plan can observe through an AVM module's `resource` output** is
   undecided until that render: `avm.md` describes the intended test contract (assert on
   `resource.body` with `azapi` mocked, mark the rest `not-testable` with the module as the
-  reason) and `Test-RenderCoverage.ps1` accepts either per decision.
-- `Test-QuestionSet.ps1` is referenced by the authoring docs and not written.
+  reason) and `check_render_coverage.py` accepts either per decision.
+- `check_question_set.py` is referenced by the authoring docs and not written.
 - **Todo: an AVM version drift check.** The versions in `avm.md` and the six resource
   references are dated snapshots. A scheduled check that compares them against the MCR
   tag lists and the module repos' git tags and reports only what moved - never edits -
@@ -93,7 +93,7 @@ Verified Modules first, authored resources second.
 
 Re-render `private-storage-on-platform` on the AVM modules, both targets, from the
 unchanged spec: `terraform init` with `azapi`/`modtm`/`random` added, `terraform test`
-with the mocked providers, `Test-RenderCoverage.ps1`, `bicep build` against `br/public`.
+with the mocked providers, `check_render_coverage.py`, `bicep build` against `br/public`.
 That run settles the test contract in `avm.md`, re-measures the cross-backend diff (the
 role GUID table and the two diagnostic settings should disappear from it), and is the
 template for `greenfield-telemetry` — three resources, created network and workspace,
