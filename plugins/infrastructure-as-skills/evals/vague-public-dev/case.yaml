@@ -1,0 +1,93 @@
+schema_version: "1.1"
+name: vague-public-dev
+
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: iac-authoring
+
+  - name: exposure-public
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'network_exposure:[\s\S]{0,60}?value:\W{0,3}public\b'
+
+  - name: no-network
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'network_ownership:[\s\S]{0,60}?value:\W{0,3}none\b'
+
+  - name: environment-development
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'environment:\W{0,3}(value:\W{0,3})?development\b'
+
+  # The four things nobody said. Each must be an open item, not a value.
+  - name: open-subscription
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^open:[\s\S]*subscription_id'
+    flags: m
+
+  - name: open-resource-group
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^open:[\s\S]*resource_group_name'
+    flags: m
+
+  - name: open-location
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^open:[\s\S]*location'
+    flags: m
+
+  - name: open-workspace
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^open:[\s\S]*(diagnostics_destination|diagnostic_workspace)'
+    flags: m
+
+  - name: no-invented-subscription
+    type: regex
+    weight: 3
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    match: not_contains
+
+  - name: no-invented-resource-group
+    type: regex
+    weight: 3
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'value:\W{0,3}rg-'
+    match: not_contains
+
+  - name: no-vnet-resource
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^\s{2}virtual-network:'
+    flags: m
+    match: not_contains
+
+  - name: no-code-before-confirmation
+    type: file_exists
+    path: '**/*.tf'
+    exists: false
+
+  # Short output, concrete conditions - the one place a judge earns its cost.
+  - name: says-what-is-missing
+    type: llm
+    focus: last_message
+    criteria: |
+      PASS if the final message tells the user that the spec cannot be deployed yet
+      (or "not applyable", "blockiert apply", or equivalent) AND names at least the
+      subscription and the resource group as missing information they have to supply.
+      FAIL if it presents the spec as ready to deploy, if it states a concrete
+      subscription id or resource group name as chosen, or if it names neither the
+      subscription nor the resource group as missing. Language and formatting do not
+      matter.

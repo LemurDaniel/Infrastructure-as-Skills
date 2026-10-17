@@ -1,0 +1,94 @@
+schema_version: "1.1"
+name: greenfield-telemetry
+
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: iac-authoring
+
+  - name: target-bicep
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'target:\W{0,3}bicep\b'
+
+  - name: environment-staging
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'environment:\W{0,3}(value:\W{0,3})?staging\b'
+
+  - name: location-gwc
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'location:\W{0,3}(value:\W{0,3})?germanywestcentral\b'
+
+  - name: network-created
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'network_ownership:[\s\S]{0,60}?value:\W{0,3}create\b'
+
+  - name: workspace-created
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'observability_ownership:[\s\S]{0,60}?value:\W{0,3}create\b'
+
+  # The stated ranges are carried exactly - not rounded, not re-planned.
+  - name: address-space-as-stated
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '10\.20\.0\.0/16'
+
+  - name: pe-subnet-as-stated
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '10\.20\.1\.0/27'
+
+  - name: app-subnet-as-stated
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'snet-app[\s\S]{0,80}10\.20\.2\.0/24|10\.20\.2\.0/24[\s\S]{0,80}snet-app'
+
+  - name: all-three-resources
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^\s{2}(virtual-network|log-analytics-workspace|storage-account):'
+    flags: m
+    match: 'count:3'
+
+  - name: retention-90-stated
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'retention_days:[\s\S]{0,60}?value:\W{0,3}90\b'
+
+  - name: storage-public-access-disabled
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'public_network_access:[\s\S]{0,60}?value:\W{0,3}disabled\b'
+
+  # A created network is a spoke: "nothing exists yet" is the workload, not the
+  # platform. DNS zones stay in the hub, and where that is was not stated.
+  - name: dns-stays-with-platform
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'private_dns_ownership:[\s\S]{0,60}?value:\W{0,3}platform\b'
+
+  - name: open-dns-zone-scope
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^open:[\s\S]*(private_dns_zone_scope|private_dns_zones)'
+    flags: m
+
+  - name: naming-convention-written
+    type: file_exists
+    path: infra/naming.yaml
+
+  - name: no-code-before-confirmation
+    type: file_exists
+    path: '**/*.bicep'
+    exists: false
