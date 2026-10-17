@@ -1,14 +1,14 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "infrastructure-by-skill",
-  "description": "Interview-driven Azure infrastructure authoring for Claude Code: resource skills that ask the decisions a resource actually has, and pattern skills that compose them into whole systems. Renders Terraform or Bicep from the same answers.",
+  "description": "Interview-driven Azure infrastructure authoring for Claude Code: question sets that ask the decisions a resource actually has, settled once per deployment where they hold for all of it. Renders Terraform or Bicep from the same answers.",
   "owner": {
     "name": "LemurDaniel"
   },
   "plugins": [
     {
       "name": "infrastructure-by-skill",
-      "description": "Author Azure infrastructure as Terraform or Bicep by answering the decisions each resource actually has. Resource skills carry a grouped question set (placement, networking, identity, security, data protection, observability); pattern skills compose those resources into complete systems and own the wiring between them.",
+      "description": "Author Azure infrastructure as Terraform or Bicep by answering the decisions each resource actually has. Each resource carries a grouped question set (placement, networking, identity, security, data protection, observability), and a deployment-wide set settles posture, network ownership and mandates once for everything in a deployment.",
       "author": {
         "name": "LemurDaniel"
       },
