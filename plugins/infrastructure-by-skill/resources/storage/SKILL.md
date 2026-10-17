@@ -20,16 +20,19 @@ the family.
 
 When a question set does not exist yet, say so rather than improvising one. Generating a
 resource without its decision set is how this plugin loses the property that makes it worth
-using. Fall back to [azure-guardrails](../../core/azure-guardrails/SKILL.md), generate from
-those rules, and record in the spec that no question set backed it.
+using. Fall back to
+[the guardrails](../../core/iac-authoring/references/guardrails.md), generate from those
+rules, and record in the spec that no question set backed it.
 
 ## Then
 
 1. [iac-authoring](../../core/iac-authoring/SKILL.md) — the interview protocol: resolution
-   order, what gets asked, the spec
-2. [azure-guardrails](../../core/azure-guardrails/SKILL.md) — where the defaults come from
-3. `references/<resource>/terraform.md` or `references/<resource>/bicep.md` — the rendering
-4. [iac-plan-review](../../core/iac-plan-review/SKILL.md) — validate and explain
+   order, what gets asked, the spec, and
+   [references/guardrails.md](../../core/iac-authoring/references/guardrails.md) for where
+   the defaults come from
+2. [iac-rendering](../../core/iac-rendering/SKILL.md) — the spec into Terraform or Bicep,
+   plus `references/<resource>/terraform.md` or `.../bicep.md` for this resource's
+   specifics, and the validate step at the end of each idiom file
 
 ## True for the whole family
 
@@ -53,17 +56,16 @@ time, which is why a pattern skill or the platform owns them.
 
 Storage account names are the awkward case in the whole CAF convention: globally unique,
 3–24 characters, lowercase alphanumeric only. No hyphens — which is why a rendered account
-name has none while a vnet's does. The engine handles it; a name that looks wrong is not a
-reason to assemble your own.
+name has none while a vnet's does. The Terraform provider handles that; in Bicep the
+template assembles the name from vars and the length is the author's to check.
 
-Identifier per target, and the two differ:
-
-| Target | Identifier |
+| Target | What the question set declares |
 |---|---|
-| Terraform | `Azure::Microsoft.Storage/storageAccounts` |
-| Bicep | `Microsoft.Storage/storageAccounts` |
+| Terraform | `naming.terraform` — `Azure::Microsoft.Storage/storageAccounts` |
+| Bicep | `naming.abbreviation` — `st`, rendered into a var (see [naming.md](../../core/iac-rendering/references/naming.md)) |
 
-Each question set states both forms under `naming:`. Use those.
+Use those rather than constructing either yourself. The Bicep naming modules
+(`utility/naming`, `genName`) are not ready to ship — never import them.
 
 ## Adding a resource to this family
 

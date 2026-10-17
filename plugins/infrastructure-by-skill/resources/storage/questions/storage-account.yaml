@@ -6,6 +6,8 @@ title: Azure Storage Account
 naming:
   terraform: "Azure::Microsoft.Storage/storageAccounts"
   bicep: "Microsoft.Storage/storageAccounts"
+  # Bicep assembles the name from vars — this is the prefix it renders.
+  abbreviation: "st"
 
 boundaries:
   - "Does not create the resource group. Expects one from the spec's context."
@@ -26,9 +28,9 @@ groups:
         required: true
         from_context: true
         why: >
-          Drives the rendered name, the mandatory tags, and the strictness of
-          several defaults below. Nothing sensible can be guessed.
-        renders: naming parameter `environment`, tag `environment`
+          Drives the rendered name and the strictness of several defaults below.
+          Nothing sensible can be guessed.
+        renders: naming parameter `environment`, and the tag of that name where the repository uses one
 
       - id: location
         ask: Which Azure region?
@@ -57,31 +59,32 @@ groups:
     title: Networking
     questions:
       - id: public_network_access
-        ask: How should the account be reachable?
+        ask: Should this account depart from the deployment's exposure posture?
         type: enum
         values: [disabled, enabled_with_firewall, enabled]
-        default: disabled
+        from_deployment: network_exposure
         confirm_in: [production]
         why: >
+          Asked only as a departure, because exposure is a property of the system
+          and not of one account - the deployment set already answered it. The
+          mapping is `private` to `disabled`, `public` to `enabled_with_firewall`.
           A storage account reachable from the internet is the most common Azure
-          data-exposure finding, and the portal default is permissive. `disabled`
-          means access only through a private endpoint. `enabled_with_firewall`
-          keeps a public address and relies on an ACL to refuse traffic, which is
-          acceptable where the consumer genuinely lives off-network.
+          data-exposure finding, so a departure towards `enabled` is recorded as
+          `overridden` with its reason.
         renders: >
           terraform: public_network_access_enabled, network_rules.default_action;
           bicep: properties.publicNetworkAccess, properties.networkAcls.defaultAction
 
       - id: private_endpoint_subnet
-        ask: Which subnet should the private endpoint live in?
+        ask: Which subnet should this account's private endpoint live in?
         type: ref
         ref: subnet
-        required: true
-        depends_on: { question: public_network_access, equals: disabled }
+        from_deployment: private_endpoint_subnet
         why: >
-          With public access disabled the account is unreachable without an
-          endpoint, so this cannot be defaulted. A pattern skill normally supplies
-          it from the network it owns.
+          One subnet carries the deployment's private endpoints, so this is
+          inherited rather than asked. Overridden only where an account genuinely
+          belongs in a different subnet - a separate data zone, or a subnet whose
+          NSG differs.
         renders: azurerm_private_endpoint.subnet_id / Microsoft.Network/privateEndpoints
 
       - id: private_endpoint_subresources
@@ -172,15 +175,16 @@ groups:
       - id: shared_access_key_enabled
         ask: Should shared key (account key) authentication stay enabled?
         type: bool
-        default: false
+        from_deployment: local_auth
         confirm_in: [production]
         why: >
-          An account key is a bearer credential with full data-plane rights, it
-          does not expire, and its use is indistinguishable from any other key
-          holder in the audit log. Disabling it forces Entra ID and RBAC, where
-          access is attributable and revocable. The usual blocker is a legacy
-          consumer holding a connection string — that is a migration, not a reason
-          to leave it on.
+          Inherited: `local_auth: disabled` renders as `false` here. An account key
+          is a bearer credential with full data-plane rights, it does not expire,
+          and its use is indistinguishable from any other key holder in the audit
+          log. The usual blocker is a legacy consumer holding a connection string —
+          that is a migration, and it is the kind of case
+          `allowed_where_unavoidable` exists for, named at this account rather than
+          relaxed deployment-wide.
         renders: shared_access_key_enabled / properties.allowSharedKeyAccess
 
       - id: min_tls_version
@@ -231,13 +235,13 @@ groups:
         ask: Platform-managed or customer-managed encryption keys?
         type: enum
         values: [platform_managed, customer_managed]
-        default: platform_managed
+        from_deployment: key_management
         why: >
-          Platform-managed keys are encrypted, rotated and free. Customer-managed
-          keys are warranted when a compliance regime names them, or when key
-          revocation must be a capability you actually hold — and they pull in a
-          Key Vault with purge protection, an identity with wrap/unwrap, and a
-          rotation story. Choosing them without those is an incomplete answer.
+          Inherited, because a deployment where one account uses customer-managed
+          keys and the next does not has a key strategy nobody can state. The
+          reasoning, and what CMK pulls in, is in the deployment set. Where the
+          deployment also answered `key_protection: hsm`, the vault holding this
+          key is Premium — that is forced there, not decided here.
         renders: customer_managed_key / properties.encryption.keySource
 
       - id: cmk_key_vault_key_id
@@ -364,11 +368,13 @@ groups:
         ask: Which Log Analytics workspace should receive diagnostics?
         type: ref
         ref: log_analytics_workspace
-        required: true
+        from_deployment: diagnostics_destination
         why: >
-          A storage account with no diagnostic setting is invisible exactly when
-          someone is investigating it, and the workspace is shared infrastructure
-          this skill does not create. A pattern skill normally supplies it.
+          Inherited: one deployment, one destination, or correlating an incident
+          across its resources means querying two workspaces. A storage account
+          with no diagnostic setting at all is invisible exactly when someone is
+          investigating it, and the workspace is shared infrastructure this skill
+          does not create.
         renders: azurerm_monitor_diagnostic_setting / Microsoft.Insights/diagnosticSettings
 
       - id: diagnostic_categories
