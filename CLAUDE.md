@@ -136,10 +136,11 @@ fails on it.
 ## Repository Conventions
 
 [.claude/skills/git-commit-conventions/](.claude/skills/git-commit-conventions/SKILL.md)
-carries the working rules — read it before committing. In short: commits carry **no
-attribution trailers** (no `Co-Authored-By`, no "Generated with Claude Code"); English
-imperative subject; one concern per commit; default branch is `master`;
-`PROGRESS.md` is rewritten before a session's last commit.
+carries the working rules — read it before committing. In short: commits are authored as
+**LemurDaniel \<landau.daniel.1998@gmail.com\>** (set repo-locally when the session starts
+as `Claude`); they carry **no attribution trailers** (no `Co-Authored-By`, no "Generated
+with Claude Code"); English imperative subject; one concern per commit; default branch is
+`master`; `PROGRESS.md` is rewritten before a session's last commit.
 
 `.claude/settings.json` pre-approves the read-only checks and denies force-push,
 `reset --hard`, `--no-verify` and `terraform apply`. Do not widen it from a session.

@@ -23,6 +23,23 @@ It matches the owner's other repos: 57 commits across `terraform-provider-naming
 
 A commit message ends with its last content line. Nothing after it.
 
+### Author identity
+
+Commits are authored by the repository owner, not by the tool:
+
+```
+LemurDaniel <landau.daniel.1998@gmail.com>
+```
+
+Before the first commit of a session, check `git config user.name` and
+`git config user.email` in the repo. If they are missing or say anything else
+(`Claude <noreply@anthropic.com>` is what a cloud session starts with), set
+them **repo-locally** — `git config user.name "LemurDaniel"` and
+`git config user.email "landau.daniel.1998@gmail.com"`, never `--global`. A
+commit that went out under the wrong author is not amended if it is already
+pushed (section 6); say so and let the owner decide whether to rewrite the
+branch.
+
 ## 2. Message format
 
 ```
