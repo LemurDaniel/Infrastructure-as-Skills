@@ -173,3 +173,13 @@ with Claude Code"); English imperative subject; one concern per commit; default 
 
 The `origin` remote URL embeds a GitHub personal access token — never copy a remote URL into
 a tracked file, a commit message, or command output you paste back.
+
+## Pending: the 16-tips review
+
+**Not done yet.** The owner's standing instruction for any repo with a `CLAUDE.md`: read
+https://raw.githubusercontent.com/aishwaryanr/awesome-generative-ai-guide/main/youtube/claude-code-16-tips.md,
+go through all 16 tips, say which this repo already does, which apply and which do not,
+and for the applicable ones not yet done propose the specific change and **wait for the
+owner's approval on each one** before making it. It is interactive, so it belongs in a
+session the owner is watching. When it has been run, replace this section with the date
+and the outcome.
