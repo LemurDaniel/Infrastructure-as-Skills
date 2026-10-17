@@ -30,15 +30,22 @@ production answer and the other is the measurement.
 ## Commands
 
 ```powershell
-# Pre-commit checks (read-only)
+# Pre-commit checks (read-only). Includes `claude plugin validate` on the plugin
+# and the marketplace — it finds the CLI on PATH, or the binary the VS Code
+# extension ships, and warns rather than passing quietly if it finds neither.
 pwsh -NoProfile -File .claude/skills/git-commit-conventions/scripts/Test-RepoConsistency.ps1
 
-# The authoritative manifest check — run it after touching plugin.json or adding a skill
-claude plugin validate ./plugins/infrastructure-by-skill
+# Validates a generated spec. -RequireApplyable also fails on assumed values and
+# open items. Needs powershell-yaml or python with PyYAML.
+pwsh -NoProfile -File plugins/infrastructure-by-skill/core/iac-authoring/scripts/Test-Spec.ps1 <spec>
 ```
 
-There is no build and no test runner. The artefacts are Markdown and YAML, so the check
-script and `claude plugin validate` are the whole verification story.
+There is no build and no test runner. The artefacts are Markdown and YAML, so these two
+scripts are the whole verification story.
+
+**`claude` is not on `PATH` on this machine.** The CLI lives at
+`~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe`; invoke
+it by full path, or let the check script find it.
 
 ## Repository Layout
 
