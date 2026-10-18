@@ -7,7 +7,7 @@ graders:
   - name: skill-fired
     type: tool_used
     tool: Skill
-    input_match: iac-authoring
+    input_match: infrastructure-as-skills
 
   - name: target-terraform
     type: regex
