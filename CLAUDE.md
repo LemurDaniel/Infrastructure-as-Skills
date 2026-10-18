@@ -38,6 +38,11 @@ python3 .claude/skills/git-commit-conventions/scripts/check_repo_consistency.py
 # open items. Needs PyYAML (pip install pyyaml).
 python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_spec.py <spec>
 
+# Validates every question set (or the paths given) against the format: enum defaults,
+# depends_on / from_deployment targets, resolution fields, unknown fields.
+# --require-audience once every question carries one.
+python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_question_set.py
+
 # A rendered example: fmt, validate, plan-only tests with a mocked platform - and the
 # Bicep render of the same spec compiled and linted.
 terraform -chdir=examples/private-storage-on-platform init && terraform -chdir=examples/private-storage-on-platform test
@@ -132,8 +137,9 @@ are in [README.md](README.md#why-one-trigger-and-families-that-are-not-skills).
 - **A Terraform render ships with its tests.** One `assert` per spec decision, named
   `# decision: <resource>.<group>.<question>`; what a plan cannot observe is
   `# not-testable:` with a reason. `check_render_coverage.py` fails on anything else.
-- **`check_question_set.py` does not exist yet** although the authoring docs name it.
-  `check_repo_consistency.py` covers part of what it would.
+- **`check_question_set.py` parses; `check_repo_consistency.py` greps.** Run both before
+  a commit that touches a question set: the first finds a default outside `values` or a
+  `depends_on` pointing nowhere, the second finds a routing row pointing nowhere.
 
 ## Repository Conventions
 

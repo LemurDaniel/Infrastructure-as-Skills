@@ -82,7 +82,6 @@ Verified Modules first, authored resources second.
   undecided until that render: `avm.md` describes the intended test contract (assert on
   `resource.body` with `azapi` mocked, mark the rest `not-testable` with the module as the
   reason) and `check_render_coverage.py` accepts either per decision.
-- `check_question_set.py` is referenced by the authoring docs and not written.
 - **Todo: an AVM version drift check.** The versions in `avm.md` and the six resource
   references are dated snapshots. A scheduled check that compares them against the MCR
   tag lists and the module repos' git tags and reports only what moved - never edits -
@@ -110,10 +109,12 @@ Verified Modules first, authored resources second.
 
 ## Next
 
-`ROADMAP.md` A1 and A2, in parallel: re-render `private-storage-on-platform` on the AVM
-modules, both targets, from the unchanged spec (`terraform init` with
-`azapi`/`modtm`/`random` added, `terraform test` with the mocked providers,
-`check_render_coverage.py`, `bicep build` against `br/public`), which settles the test
-contract in `avm.md` and re-measures the cross-backend diff; and write
-`check_question_set.py`, since the `audience` field B1 adds needs a check that fails on
-its absence. Then B3 and B1.
+`ROADMAP.md` A1: re-render `private-storage-on-platform` on the AVM modules, both
+targets, from the unchanged spec (`terraform init` with `azapi`/`modtm`/`random` added,
+`terraform test` with the mocked providers, `check_render_coverage.py`, `bicep build`
+against `br/public`), which settles the test contract in `avm.md` and re-measures the
+cross-backend diff. A2 (`check_question_set.py`) is done. A1 needs a session whose
+network policy allows `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
+with `objects.githubusercontent.com` and `api.github.com` (terraform, the providers,
+the `naming` provider, the bicep binary) and `aka.ms`; the 2026-10-18 cloud session had
+only `mcr.microsoft.com`. Then B3 and B1.

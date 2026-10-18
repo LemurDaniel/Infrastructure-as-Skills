@@ -219,7 +219,8 @@ and linted with CLI 0.48 — and the two renders diffed. Nothing has been applie
       is applyable at all
 - [x] `check_render_coverage.py` — every spec decision asserted by the rendered Terraform
       tests, or marked not-testable with a reason. Bicep has no equivalent yet
-- [ ] **`check_question_set.py`** — still referenced by the docs and not written
+- [x] `check_question_set.py` — every question set parsed and checked against the format:
+      enum defaults, reference targets, resolution fields, `audience`
 - [ ] **Reference pattern skill** — `patterns/` is empty, so composition is specified but
       unproven
 - [x] A rendered spec: storage account on a referenced platform, Terraform, validated and
