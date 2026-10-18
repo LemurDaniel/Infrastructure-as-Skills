@@ -247,6 +247,13 @@ Only what Phase 0's description left open reaches this phase, and only the audie
 mode allows. A question the user already answered in prose and is asked again tells them
 the description was not read.
 
+**Never asked in any mode, whatever the description leaves open: the workload short name,
+the subscription id, the resource group and the region.** They are `parameterized` context
+in the deployment set - input variables the stage file supplies, not decisions. A question
+about them, "there is no default for these" included, is a bug in the interview: the person
+is designing and has no deployment target yet. Whether the resource group exists or is
+created is not asked either; the boundary is that it exists.
+
 **In customer mode there is one batch**: the surviving `customer` questions — the
 environment, who reaches it and from where, the mandates, and the three requirements
 (outage impact, data-loss tolerance, access pattern), fewer when the description settled
