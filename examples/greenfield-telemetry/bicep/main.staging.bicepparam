@@ -18,7 +18,7 @@ param subnets = [
   { name: 'snet-app', addressPrefix: '10.20.2.0/24' }
 ]
 
-// Non-production stage with non_production_savings enabled: cheaper replication and
-// the default retention; production's file carries Standard_ZRS and 90.
+// Non-production stage with non_production_savings enabled: cheaper replication;
+// production's file carries Standard_ZRS. The retention was stated, so it holds here too.
 param storageSkuName = 'Standard_LRS'
-param logRetentionDays = 30
+param logRetentionDays = 90

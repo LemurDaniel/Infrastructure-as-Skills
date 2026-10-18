@@ -19,11 +19,9 @@ Ein Code wird durch diese Stufen ausgerollt; alles, was hier nicht steht, ist in
 - Alle Teile liegen in der bestehenden Ressourcengruppe Vorproduktion: rg-telemetry-stg-gwc.
 - Das neue Netz nutzt den Adressbereich Vorproduktion: 10.20.0.0/16, zugewiesen von der Adressverwaltung.
 - Private Anbindungen bekommen ein eigenes Subnetz, Vorproduktion: 10.20.1.0/27.
-- Protokolle werden Entwicklung: 30; Test: 30; Vorproduktion: 30; Echtbetrieb: 90 Tage aufbewahrt. _(außerhalb der Produktion günstiger)_
 - Azure Virtual Network: Das Netz nutzt den Adressbereich Vorproduktion: 10.20.0.0/16.
 - Azure Virtual Network: Subnetze: Vorproduktion: snet-stg-privatelink-01 (10.20.1.0/27), snet-app (10.20.2.0/24).
 - Azure Virtual Network: Private Anbindungen bekommen das Subnetz Vorproduktion: 10.20.1.0/27.
-- Azure Log Analytics Workspace: Protokolle werden Entwicklung: 30; Test: 30; Vorproduktion: 30; Echtbetrieb: 90 Tage aufbewahrt. _(außerhalb der Produktion günstiger)_
 - Azure Storage Account: Die Daten liegen Entwicklung: dreifach in einem Rechenzentrum; Test: dreifach in einem Rechenzentrum; Vorproduktion: dreifach in einem Rechenzentrum; Echtbetrieb: in drei Rechenzentren der Region, eines darf ausfallen. _(außerhalb der Produktion günstiger)_
 
 ## Was aus euren Antworten folgt
@@ -38,7 +36,7 @@ Ein Code wird durch diese Stufen ausgerollt; alles, was hier nicht steht, ist in
   - daher, Azure Storage Account: Gespeichert in der Klasse Standard: günstig beim Lesen, für Daten in Nutzung.
 - **Der Zugang ist nur privat, nichts ist aus dem Internet erreichbar.** _(aus eurer Beschreibung)_
 - **Einzuhaltende Vorgaben: keine.** _(nicht gesagt, daher gilt die übliche Antwort)_
-- **Protokolle werden Entwicklung: 30; Test: 30; Vorproduktion: 30; Echtbetrieb: 90 Tage aufbewahrt.** _(aus eurer Beschreibung)_
+- **Protokolle werden 90 Tage aufbewahrt.** _(aus eurer Beschreibung)_
 
 ## Nach den Vorgaben gesetzt
 
@@ -75,7 +73,7 @@ Nichts davon wurde gefragt; jede Zeile folgt einer Regel oder einer der Antworte
 
 ### Azure Log Analytics Workspace
 
-- Protokolle werden Entwicklung: 30; Test: 30; Vorproduktion: 30; Echtbetrieb: 90 Tage aufbewahrt.
+- Protokolle werden 90 Tage aufbewahrt.
 - Tägliche Obergrenze für Protokolle: -1 GB (-1: keine).
 - Abgerechnet pro Gigabyte, nach Verbrauch.
 - Der Protokoll-Arbeitsbereich ist aus dem Internet erreichbar, mit Firmenkonten und Verschlüsselung; einen privaten Zugang dafür gibt es nicht.
@@ -143,7 +141,7 @@ Solange diese Punkte offen sind, wird nichts ausgerollt.
 | `deployment.private_endpoint_subnet_prefix` | {"staging": "10.20.1.0/27"} | eure Beschreibung |
 | `deployment.private_dns_ownership` | deployment | erzwungen |
 | `deployment.observability_ownership` | create | eure Beschreibung |
-| `deployment.log_retention_days` | {"development": 30, "test": 30, "staging": 30, "production": 90} | eure Beschreibung |
+| `deployment.log_retention_days` | 90 | eure Beschreibung |
 | `deployment.daily_quota_gb` | -1 | Regel |
 | `virtual-network.addressing.address_space` | {"staging": "10.20.0.0/16"} | übernommen |
 | `virtual-network.addressing.subnets` | {"staging": [{"name": "snet-stg-privatelink-01", "prefix": "10.20.1.0/27", "purpose": "private_endpoints"}, {"name": "snet-app", "prefix": "10.20.2.0/24"}]} | eure Beschreibung |
@@ -156,7 +154,7 @@ Solange diese Punkte offen sind, wird nichts ausgerollt.
 | `virtual-network.security.subnets_expecting_nsg` | [] | Regel |
 | `virtual-network.observability.diagnostic_workspace` | {"name": "log-gwc-stg-telemetry-01", "resource_group_name": "rg-telemetry-stg-gwc"} | übernommen |
 | `virtual-network.observability.flow_logs_enabled` | false | Regel |
-| `log-analytics-workspace.cost.retention_days` | {"development": 30, "test": 30, "staging": 30, "production": 90} | übernommen |
+| `log-analytics-workspace.cost.retention_days` | 90 | übernommen |
 | `log-analytics-workspace.cost.daily_quota_gb` | -1 | übernommen |
 | `log-analytics-workspace.cost.sku` | PerGB2018 | Regel |
 | `log-analytics-workspace.access.public_network_access` | enabled | Regel |

@@ -90,11 +90,10 @@ deployment:
     value: create
     source: stated          # "ein eigener Log Analytics Workspace"
   log_retention_days:
-    # Stated 90 applies to production; the non-production stages keep the
-    # non_production_default while non_production_savings is enabled.
-    value: { development: 30, test: 30, staging: 30, production: 90 }
+    # Stated, so it holds in every stage - the savings relax only defaults and
+    # derived values. Still a per-stage parameter in the render.
+    value: 90
     source: stated
-    non_production: default
   daily_quota_gb:
     value: -1
     source: default
@@ -163,9 +162,8 @@ resources:
   log-analytics-workspace:
     cost:
       retention_days:
-        value: { development: 30, test: 30, staging: 30, production: 90 }
-        source: deployment        # log_retention_days, stated 90 for production
-        non_production: default
+        value: 90
+        source: deployment        # log_retention_days, stated
       daily_quota_gb:
         value: -1
         source: deployment

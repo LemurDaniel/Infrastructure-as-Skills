@@ -57,7 +57,7 @@ type subnet = {
 @allowed(['Standard_LRS', 'Standard_ZRS', 'Standard_GRS', 'Standard_GZRS'])
 param storageSkuName string
 
-@description('Log retention in days for this stage (log-analytics-workspace.cost.retention_days): the stated value in production, 30 in the non-production stages while savings are on.')
+@description('Log retention in days for this stage (log-analytics-workspace.cost.retention_days): stated 90, which holds in every stage; a per-stage parameter so a stage may still depart.')
 @minValue(30)
 @maxValue(730)
 param logRetentionDays int

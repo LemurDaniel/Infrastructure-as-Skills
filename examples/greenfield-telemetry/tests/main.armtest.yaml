@@ -65,7 +65,7 @@
 - decision: log-analytics-workspace.cost.retention_days
   stage: staging
   path: parameters.logRetentionDays.value
-  equals: 30
+  equals: 90
 - deployment: deployment.log_retention_days
   path: resources.workspace.properties.parameters.dataRetention.value
   equals: "[parameters('logRetentionDays')]"
