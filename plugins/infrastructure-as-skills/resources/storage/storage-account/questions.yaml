@@ -294,60 +294,76 @@ groups:
       - id: replication
         ask: Which replication does the data need?
         type: enum
-        audience: customer
+        audience: engineer
         values: [LRS, ZRS, GRS, GZRS]
-        default: ZRS
+        derived_from:
+          question: outage_impact
+          map: { tolerable: LRS, disruptive: ZRS, critical: GZRS }
         confirm_in: [production]
         why: >
-          ZRS survives the loss of an availability zone at roughly LRS cost and is
-          the right floor for anything that is not scratch data. GRS adds a
-          secondary region and only pays off with a documented failover plan —
-          without one it is cost for a capability nobody will exercise. Replication
-          cannot be changed between local and geo tiers in place, so this choice
-          forces a replacement later.
+          Derived from how bad an outage is, which the customer answered once for
+          the whole system. ZRS survives the loss of an availability zone at roughly
+          LRS cost and is the right floor for anything that is not scratch data.
+          GZRS adds a secondary region and only pays off with a documented failover
+          plan — without one it is cost for a capability nobody will exercise. GRS
+          is reachable only as an engineer's departure, for a region without zones.
+          Replication cannot be changed between local and geo tiers in place, so
+          this choice forces a replacement later.
         renders: account_replication_type / sku.name
 
       - id: access_tier
         ask: Which default access tier?
         type: enum
-        audience: customer
+        audience: engineer
         values: [Hot, Cool, Cold]
-        default: Hot
+        derived_from:
+          question: data_access_pattern
+          map: { active: Hot, occasional: Cool, archive: Cold }
         why: >
-          Hot costs more to store and less to read. Cool and Cold invert that and
-          add an early-deletion charge, so they only win for data genuinely read
-          rarely — a lifecycle policy moving data between tiers usually beats
-          picking a cold default.
+          Derived from how the customer said the data is used. Hot costs more to
+          store and less to read. Cool and Cold invert that and add an
+          early-deletion charge, so they only win for data genuinely read rarely —
+          a lifecycle policy moving data between tiers usually beats picking a cold
+          default.
         renders: access_tier / properties.accessTier
 
       - id: blob_soft_delete_days
         ask: How many days should deleted blobs stay restorable?
         type: int
-        audience: customer
-        default: 7
+        audience: engineer
+        derived_from:
+          question: data_loss_tolerance
+          map: { reproducible: 0, one_week: 7, one_month: 30, three_months: 90 }
         why: >
-          The cheapest recovery there is for the most common failure mode, which
-          is someone deleting the wrong thing. 0 disables it and should be a
-          deliberate choice for genuinely reproducible data.
+          Derived from how far back the customer must be able to go. The cheapest
+          recovery there is for the most common failure mode, which is someone
+          deleting the wrong thing. 0 disables it, which is what `reproducible`
+          means: the data can be regenerated and nothing is kept.
         renders: blob_properties.delete_retention_policy.days / properties.deleteRetentionPolicy
 
       - id: container_soft_delete_days
         ask: How many days should deleted containers stay restorable?
         type: int
-        audience: customer
-        default: 7
+        audience: engineer
+        derived_from:
+          question: data_loss_tolerance
+          map: { reproducible: 0, one_week: 7, one_month: 30, three_months: 90 }
         why: >
-          Separate from blob soft delete and frequently forgotten — blob retention
-          does not help when the container itself is gone.
+          The same window as blob soft delete, from the same answer. Separate
+          because it is frequently forgotten — blob retention does not help when
+          the container itself is gone.
         renders: blob_properties.container_delete_retention_policy.days / properties.containerDeleteRetentionPolicy
 
       - id: versioning_enabled
         ask: Should blob versioning be enabled?
         type: bool
-        audience: customer
-        default: true
+        audience: engineer
+        derived_from:
+          question: data_loss_tolerance
+          map: { reproducible: false, one_week: true, one_month: true, three_months: true }
         why: >
-          Protects against overwrite, which soft delete does not. The cost is
+          Protects against overwrite, which soft delete does not - so it follows
+          the same answer, and is off only for reproducible data. The cost is
           storage for retained versions, so pair it with a lifecycle rule that
           expires old ones rather than leaving it unbounded.
         renders: blob_properties.versioning_enabled / properties.isVersioningEnabled
@@ -366,26 +382,29 @@ groups:
       - id: point_in_time_restore_days
         ask: How many days of point-in-time restore?
         type: int
-        audience: customer
+        audience: engineer
         default: 0
         why: >
-          Requires versioning and the change feed, and must be shorter than the
-          soft-delete window. 0 disables it. Worth enabling for data where a
-          logical corruption needs rewinding rather than a single object
-          restoring.
+          Not derived: it requires versioning and the change feed, must be shorter
+          than the soft-delete window, and rewinds a whole account rather than
+          restoring an object - an engineer's choice for data where a logical
+          corruption needs rewinding, offered when data_loss_tolerance is a month
+          or more. 0 disables it.
         renders: blob_properties.restore_policy.days / properties.restorePolicy
 
       - id: immutability
         ask: Does the data need immutability (WORM)?
         type: enum
-        audience: customer
+        audience: engineer
         values: [none, account_level, container_level]
         default: none
         why: >
           A legal-hold or time-based retention regime that even an account owner
           cannot delete through. That is the point and also the risk: an
           account-level locked policy cannot be undone, so it is a compliance
-          decision rather than a hardening default.
+          decision rather than a hardening default. Not derived mechanically: a
+          mandate (deployment.mandates) that names record retention is the trigger,
+          and the engineer names it in Phase 4 as a consequence of that mandate.
         renders: immutability_policy / properties.immutableStorageWithVersioning
 
   # ------------------------------------------------------------ observability

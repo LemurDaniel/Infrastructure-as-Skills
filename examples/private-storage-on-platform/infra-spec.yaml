@@ -32,6 +32,17 @@ deployment:
   module_telemetry:
     value: enabled
     source: default
+  # The requirements group - nothing in the request answered them, so each default
+  # applies and derives the guardrail value below (storage-account.data_protection).
+  outage_impact:
+    value: disruptive
+    source: default         # confirm_in production - applied, nobody to confirm
+  data_loss_tolerance:
+    value: one_week
+    source: default
+  data_access_pattern:
+    value: active
+    source: default
   landing_zone:
     value: corp
     source: stated          # "nur aus dem Firmennetz" over an existing hub
@@ -130,19 +141,24 @@ resources:
     data_protection:
       replication:
         value: ZRS
-        source: default           # confirm_in production
+        source: requirement       # confirm_in production
+        derived_from: deployment.outage_impact
       access_tier:
         value: Hot
-        source: default
+        source: requirement
+        derived_from: deployment.data_access_pattern
       blob_soft_delete_days:
         value: 7
-        source: default
+        source: requirement
+        derived_from: deployment.data_loss_tolerance
       container_soft_delete_days:
         value: 7
-        source: default
+        source: requirement
+        derived_from: deployment.data_loss_tolerance
       versioning_enabled:
         value: true
-        source: default
+        source: requirement
+        derived_from: deployment.data_loss_tolerance
       change_feed_enabled:
         value: false
         source: default

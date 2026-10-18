@@ -63,7 +63,7 @@ groups:
       - id: retention_days
         ask: How long should logs be retained?
         type: int
-        audience: customer
+        audience: engineer
         from_deployment: log_retention_days
         why: >
           Inherited from the deployment set. 30 days covers incident investigation,
