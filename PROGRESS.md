@@ -99,6 +99,22 @@ Verified Modules first, authored resources second.
   the derived decisions under each, what the rules set, departures, open items, an
   appendix with every key. Both examples carry theirs. Word is a `pandoc` conversion
   offered once in Phase 5, never a second source.
+- **The stack is the default, and per-stage values are never literals.** Owner's call,
+  2026-10-18: one code base goes through `development`, `test`, `production` unless the
+  customer says otherwise ("nur prod", "Sandbox"); a request naming one stage names that
+  stage of the stack. `context.environments` replaces `context.environment`; every value
+  is one for all stages or a map keyed by stage, a stage nobody could answer for is an
+  `open:` entry naming it, and a stage with open values gets no parameter file. A
+  question with `per_environment: true` (ranges, prefixes, subscription, group,
+  referenced platform parts) renders as a parameter with its value in
+  `environments/<stage>.tfvars` / `main.<stage>.bicepparam`, one state per stage by
+  backend key, never a workspace. Stages are separated by subscription by default
+  (`stage_isolation`), resource groups being the lesser form. Parity between stages is
+  the rule; `non_production_savings` (default enabled) lets `non_production_default`
+  relax cost knobs - replication LRS, retention 30 - outside production, and the check
+  refuses the field on anything security-shaped. Both examples re-rendered: the first
+  with `environments/production.tfvars` and a development-stage test run, the second
+  with `main.staging.bicepparam` and per-stage ARM assertions; the other stages are open.
 - **`naming.yaml` is copied for Terraform only.** Owner's call, 2026-10-18: the provider
   reads it at plan time, nothing in a Bicep deployment does. A Bicep root gets its name
   vars generated from the plugin's convention and a `naming.yaml` only for a stated
@@ -134,16 +150,19 @@ Verified Modules first, authored resources second.
   grader that counts the questions put to the customer and one that fails on Azure
   vocabulary in them. The decision document's `open:` lines stay English, because the
   spec's `open:` questions are English; a run translates them in the conversation.
+- The stack's stage files are written only for resolved stages; nothing yet generates
+  the other stages' files once their `open:` entries are answered - that is an extension
+  run, and the first one has not been exercised.
 - A cloud session needs `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
   release downloads and `mcr.microsoft.com` allowed, and installs `terraform` and `bicep`
   into `~/.local/bin` itself (neither is in the image). Done once on 2026-10-18.
 
 ## Next
 
-A4, the eval baseline: the suite has three cases with corrected graders and has never
-run against the current question sets (audience, requirements, derived values, the
-decision document in Phase 5); run it, read the failed runs' specs before touching a
-grader, commit `baseline.json`. B6's two graders on `greenfield-telemetry` go in with it.
-Then `ROADMAP.md` C1: the `security` family (Key Vault, user-assigned identity) and
-`compute` (App Service, Container Apps), each with `audience`, `plain`, both rendering
-references and a diagram icon. A5 (the sandbox plan) waits on the owner's subscription.
+A4, the eval baseline: the suite's three cases now expect the stack, per-stage maps and
+the derived values, and the plugin has never run against the current question sets; run
+it, read the failed runs' specs before touching a grader, commit `baseline.json`. B6's two
+graders (customer questions counted, no Azure vocabulary in them) go in with it. Then
+`ROADMAP.md` C1: the `security` family (Key Vault, user-assigned identity) and `compute`
+(App Service, Container Apps), each with `audience`, `plain`, `per_environment` where it
+applies, both rendering references and a diagram icon. A5 waits on the owner's sandbox.

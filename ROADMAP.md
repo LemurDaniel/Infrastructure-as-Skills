@@ -64,6 +64,16 @@ with no profile to answer it becomes an `open:` entry with its owner, and is nev
 the customer. The default mode is the customer's; the engineer mode is entered when the
 user says so or the repository shows it (existing IaC, an existing spec).
 
+### Stages, not an environment
+
+Decided on 2026-10-18, after the first renders: one code base is deployed through a
+stack of stages — `development`, `test`, `production` by default, a sandbox only when
+the customer says so — each from its own parameter file, its own state and, by default,
+its own subscription. What differs per stage by nature is a parameter from the stage
+file, never a literal in the template; what the stack exists for is parity, relaxed
+only for cost outside production and never for security. Every phase below renders
+and tests against that shape.
+
 ## Phases
 
 ### A. Close the foundation

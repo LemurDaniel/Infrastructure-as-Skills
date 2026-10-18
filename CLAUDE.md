@@ -140,6 +140,11 @@ are in [README.md](README.md#why-one-trigger-and-families-that-are-not-skills).
 - **A decision that holds for more than one resource belongs in the deployment set.** A
   resource question that re-asks one carries `from_deployment` instead of a `default`.
 - **A missing question set is said out loud, never improvised.**
+- **The stack is the default.** `context.environments` is `[development, test, production]`
+  unless the customer says otherwise; one root, one parameter file and one state (backend
+  key, never a workspace) per stage. A `per_environment` value is a parameter from the
+  stage file, never a literal in the template; `non_production_default` relaxes cost
+  knobs outside production and is refused on anything security-shaped.
 - **Every question carries an `audience`** (`customer`, `engineer`, `platform`), and only
   `customer` questions reach the person in the interview. Platform facts come from
   `platform.yaml`, which the interview reads and never writes.
