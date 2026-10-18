@@ -57,10 +57,14 @@ Verified Modules first, authored resources second.
 - **Sub-resource names go through `<?SUBNAME>`**, not appended to a finished name. The
   first cross-backend diff found the Terraform render naming a private endpoint
   `…-01-blob` while Bicep said `…-blob-01`; the convention has the token for exactly this.
-- **Tests are part of the render, with coverage as the contract.** One assert per spec
-  decision, named by its key path; a decision a plan cannot observe is marked with its
-  reason. `check_render_coverage.py` checks spec against tests, so "everything is tested"
-  is a gate, not an intention. Bicep has no equivalent yet (see Open).
+- **Tests are part of the render, with coverage as the contract - both targets.** One
+  assert per spec decision, named by its key path; a decision the target cannot observe
+  is marked with its reason. Terraform asserts on the plan (`terraform test`); Bicep
+  asserts on the compiled ARM (`tests/*.armtest.yaml`, `run_arm_tests.py`, 2026-10-18):
+  a module call is a nested deployment whose parameter values are the decisions, a loop
+  a `copy` whose expression text is matched by regex, symbolic resource names forced by
+  `bicepconfig.json`. `check_render_coverage.py` checks spec against tests per target,
+  so "everything is tested" is a gate, not an intention.
 - **The interview is the customer's, alone.** Decided 2026-10-18: the person answering
   sits in front of the plugin without an engineer, so every question carries an
   `audience`, the customer answers about six requirement questions in their own words,
@@ -94,9 +98,6 @@ Verified Modules first, authored resources second.
 
 ## Open
 
-- **Bicep decisions are visible in the compiled ARM** as parameter values of the nested
-  module deployment (checked by hand on 2026-10-18); a Bicep test would assert there.
-  Still no runner.
 - **Todo: an AVM version drift check.** The versions in `avm.md` and the six resource
   references are dated snapshots. A scheduled check that compares them against the MCR
   tag lists and the module repos' git tags and reports only what moved - never edits -
@@ -108,9 +109,9 @@ Verified Modules first, authored resources second.
 - No render has been applied: neither `terraform plan` nor `what-if` has run against a
   subscription, so the renders are validated, not proven.
 - The eval suite has no committed baseline yet; the first full run writes it. No eval
-  grader checks `implementation` or `module_source` yet.
-- Bicep renders have no tests. `bicep test` is experimental; the candidate is asserting on
-  the compiled ARM JSON per decision, mirroring the tftest markers.
+  grader checks `implementation` or `module_source` yet. The greenfield graders were
+  corrected on 2026-10-18 (they predated the `standalone` default and expected `corp`
+  with platform DNS); the suite has not run since.
 - Remaining families, in the order `ROADMAP.md` C1 sets: `security` (Key Vault,
   user-assigned identity), `compute` (App Service, Container Apps), `data` (Azure SQL,
   PostgreSQL Flexible), `integration` (Service Bus). Key Vault's Terraform AVM module is
@@ -127,10 +128,10 @@ Verified Modules first, authored resources second.
 
 ## Next
 
-`greenfield-telemetry` as the second example: Bicep, staging, created network and
-workspace - the `create` branches no render has reached, the first example for
-B6's graders (questions put to the customer counted, no Azure vocabulary in them), and
-the first spec to carry `requirement` values stated rather than defaulted. Then B5: the
-`plain` line on every question and `export_decisions.py`, which reads `derived_from`
-back into "because you said". A3 (Bicep tests), A4 (eval baseline) and A5 (the sandbox
-plan, waiting on the owner's subscription) stay on the list.
+B5: the `plain` line on every question and `export_decisions.py`, which turns a spec
+into the customer's decision document (Markdown, their language; `derived_from` read
+back as "because you said", `open:` as what is still needed from whom), offered in
+Phase 5 beside the diagram. Then A4, the eval baseline - the suite has three cases and
+corrected graders and has never been run against the current question sets - and B6's
+two graders on `greenfield-telemetry`. A5 (the sandbox plan) waits on the owner's
+subscription.

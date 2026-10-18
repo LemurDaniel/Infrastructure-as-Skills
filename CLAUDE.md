@@ -49,6 +49,9 @@ terraform -chdir=examples/private-storage-on-platform init && terraform -chdir=e
 # Every decision in the spec asserted by those tests, or marked not-testable with a reason.
 python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py examples/private-storage-on-platform/infra-spec.yaml
 bicep build --stdout examples/private-storage-on-platform/bicep/main.bicep > $null && bicep lint examples/private-storage-on-platform/bicep/main.bicep
+# The Bicep example: its tests run against the compiled ARM, then the same coverage check.
+python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/run_arm_tests.py examples/greenfield-telemetry/infra-spec.yaml
+python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py examples/greenfield-telemetry/infra-spec.yaml
 ```
 
 There is no build. The artefacts are Markdown and YAML; the scripts and the examples'
@@ -137,9 +140,11 @@ are in [README.md](README.md#why-one-trigger-and-families-that-are-not-skills).
 - **Every question carries an `audience`** (`customer`, `engineer`, `platform`), and only
   `customer` questions reach the person in the interview. Platform facts come from
   `platform.yaml`, which the interview reads and never writes.
-- **A Terraform render ships with its tests.** One `assert` per spec decision, named
-  `# decision: <resource>.<group>.<question>`; what a plan cannot observe is
-  `# not-testable:` with a reason. `check_render_coverage.py` fails on anything else.
+- **A render ships with its tests, both targets.** Terraform: one `assert` per spec
+  decision, named `# decision: <resource>.<group>.<question>`, what a plan cannot observe
+  `# not-testable:` with a reason. Bicep: one entry per decision in `tests/*.armtest.yaml`
+  against the compiled ARM (`run_arm_tests.py`; symbolic names via `bicepconfig.json`).
+  `check_render_coverage.py` fails on anything else, per target.
 - **`check_question_set.py` parses; `check_repo_consistency.py` greps.** Run both before
   a commit that touches a question set: the first finds a default outside `values` or a
   `depends_on` pointing nowhere, the second finds a routing row pointing nowhere.
