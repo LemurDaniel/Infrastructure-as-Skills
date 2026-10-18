@@ -68,7 +68,8 @@ One page, the decisions a customer can judge. Not forty attributes.
 | `resources:` | One Azure icon per resource, labelled with its type and spec key |
 | Private endpoint | In its subnet, on the same row as the resource it fronts — a straight edge |
 | `deployment.network_exposure` | `public`: an *Internet* actor with an edge to each resource. `private`: endpoints for every resource, and the group marked as having no public access |
-| `wiring.role_assignments` | Edge from principal to resource on its own track, labelled with the role |
+| `wiring.role_assignments` | A purple line on the target's label (`← principal: role`), not an edge - several roles from one principal made a bundle of lines nobody could follow |
+| A resource type with no icon | A box with the type's name, marked as having no question set; the script warns |
 | Diagnostics | Dashed edges on a shared track into the workspace |
 | `network_ownership: reference`, a referenced workspace, platform-owned DNS zones | Grey and faded, labelled as existing and not created |
 | `open:` entries, `assumed` values | The affected resource in red, and listed in the panel |

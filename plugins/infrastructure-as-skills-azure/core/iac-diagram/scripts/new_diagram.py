@@ -13,9 +13,10 @@ Left to right:
   Internet | subscription > resource group > [ network | resources | observability ] | decisions
 
 Private endpoints sit in their subnet in one column, each on the same row as
-the resource it fronts, so the endpoint edge is a straight line. Role
-assignments loop out to the right of the resource column; diagnostics run
-right into the workspace. Referenced (existing) things are grey and dashed.
+the resource it fronts, so the endpoint edge is a straight line. A role
+assignment is a purple line on its target's label; diagnostics run right
+into the workspace; DNS zones past four wrap into a second column. A type
+without an icon is drawn as a box and marked as having no question set. Referenced (existing) things are grey and dashed.
 
 Needs PyYAML (pip install pyyaml). Without it the script exits 2.
 
@@ -65,13 +66,13 @@ LABELS = {
         'internet': 'Internet', 'noPublic': 'no public access', 'existing': 'existing - not created',
         'decisions': 'Decisions', 'open': 'Open', 'assumed': 'Assumed', 'exposure': 'Exposure',
         'network': 'Network', 'mandates': 'Mandates', 'dns': 'Private DNS', 'diag': 'Diagnostics',
-        'forces': 'forces', 'peSubnet': 'private endpoints', 'owner': 'owner',
+        'forces': 'forces', 'peSubnet': 'private endpoints', 'owner': 'owner', 'noSet': 'no question set',
     },
     'de': {
         'internet': 'Internet', 'noPublic': 'kein öffentlicher Zugriff', 'existing': 'vorhanden - wird nicht erstellt',
         'decisions': 'Entscheidungen', 'open': 'Offen', 'assumed': 'Angenommen', 'exposure': 'Erreichbarkeit',
         'network': 'Netzwerk', 'mandates': 'Vorgaben', 'dns': 'Private DNS', 'diag': 'Diagnose',
-        'forces': 'erzwingt', 'peSubnet': 'Private Endpoints', 'owner': 'zuständig',
+        'forces': 'erzwingt', 'peSubnet': 'Private Endpoints', 'owner': 'zuständig', 'noSet': 'ohne Fragenset',
     },
 }
 
@@ -100,6 +101,7 @@ TYPE_NAMES = {
 SLOT_W, SLOT_H, ICON = 190, 130, 48
 LABEL_W = SLOT_W - 10
 HEAD, PAD, LANE_GAP, TRACK = 44, 20, 120, 14
+COL_GAP = 90   # between the DNS zone columns: the zone names are long and unwrapped
 
 CONTAINER_STYLE = 'rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;'
 EXISTING_STYLE = 'dashed=1;strokeColor=#999999;fontColor=#777777;'
@@ -171,6 +173,10 @@ def format_label(title, sub, note):
     if note:
         label += f"<br><font style='font-size:10px'><i>{esc(note)}</i></font>"
     return label
+
+
+def label_lines(label):
+    return sum(max(1, math.ceil(plain_len(part) / 26)) for part in label.split('<br>'))
 
 
 def icon_style(img, flagged, existing):
@@ -306,7 +312,7 @@ def main():
         return c
 
     # One icon in a fixed slot: centred horizontally, label below inside the slot.
-    def add_icon(cid, parent, slot_x, slot_y, kind, label, is_flagged=False, existing=False):
+    def add_icon(cid, parent, slot_x, slot_y, kind, label, is_flagged=False, existing=False, slot_h=SLOT_H):
         img = ICONS.get(kind)
         if img:
             style = icon_style(img, is_flagged, existing)
@@ -318,8 +324,34 @@ def main():
             if is_flagged:
                 style += 'fontColor=#D13438;'
             x, y, w, h = slot_x + 20, slot_y + 8, SLOT_W - 40, ICON
+            # The box holds the title; the rest of the label sits below it like an icon's,
+            # since a 48px box cannot hold four lines.
+            title, _, rest = label.partition('<br>')
+            label = title
+            if rest:
+                add_cell({'id': f"{cid}-icon", 'parent': parent, 'x': x, 'y': y + h + 2, 'w': w, 'h': 16 * label_lines(rest) + 4,
+                          'style': 'text;html=1;align=center;verticalAlign=top;whiteSpace=wrap;', 'value': rest})
         add_cell({'id': cid, 'parent': parent, 'x': x, 'y': y, 'w': w, 'h': h, 'style': style, 'value': label,
-                  'slot': {'x': slot_x, 'y': slot_y, 'w': SLOT_W, 'h': SLOT_H}, 'labelBelow': bool(img)})
+                  'slot': {'x': slot_x, 'y': slot_y, 'w': SLOT_W, 'h': slot_h}, 'labelBelow': bool(img)})
+
+    # A role assignment is a line on the target's label, not an edge: with several
+    # roles from one principal the edges become a bundle nobody can follow.
+    role_lines = {}
+    for ra in roles:
+        ra = ra if isinstance(ra, dict) else {}
+        if f"res-{s(ra.get('from'))}" not in {f"res-{m}" for m in middle} or f"res-{s(ra.get('to'))}" not in {f"res-{m}" for m in middle}:
+            say(f"[warn] role assignment {s(ra.get('from'))} -> {s(ra.get('to'))}: endpoint not drawn", 'yellow')
+            continue
+        role_lines.setdefault(s(ra.get('to')), []).append(f"{s(ra.get('from'))}: {s(ra.get('role'))}")
+
+    def resource_label(k):
+        label = format_label(TYPE_NAMES.get(k, k.replace('-', ' ').title()), k, T['noSet'] if k not in ICONS else '')
+        for line in role_lines.get(k, []):
+            label += f"<br><font style='font-size:10px' color='#5C2D91'>&#8592; {esc(line)}</font>"
+        return label
+
+    # One row per resource, shared by its endpoint and itself; as tall as its label needs.
+    pitch = {k: max(100, 8 + ICON + 4 + 16 * label_lines(resource_label(k)) + 8) for k in middle}
 
     internet_w = 160 if exposure == 'public' else 0
     sub_x, sub_y = 20 + internet_w, 20
@@ -338,10 +370,12 @@ def main():
         sn_x = vn_x + PAD
         cursor = vn_y + HEAD
 
-        pe_rows = max(len(with_pe), 1)
-        pe_sn = {'x': sn_x, 'y': cursor, 'w': SLOT_W + 2 * PAD, 'h': 34 + pe_rows * SLOT_H + 10}
-        for i, k in enumerate(with_pe):
-            row_y[k] = pe_sn['y'] + 34 + i * SLOT_H
+        pe_total = sum(pitch[k] for k in with_pe) or SLOT_H
+        pe_sn = {'x': sn_x, 'y': cursor, 'w': SLOT_W + 2 * PAD, 'h': 34 + pe_total + 10}
+        ry = pe_sn['y'] + 34
+        for k in with_pe:
+            row_y[k] = ry
+            ry += pitch[k]
         cursor += pe_sn['h'] + PAD
 
         for sn in other_subnets:
@@ -351,33 +385,33 @@ def main():
         vn_h = cursor - vn_y + PAD - (10 if other_boxes else 0)
         net_right = vn_x + vn_w
     else:
-        for i, k in enumerate(with_pe):
-            row_y[k] = lane_y + i * SLOT_H
+        ry = lane_y
+        for k in with_pe:
+            row_y[k] = ry
+            ry += pitch[k]
 
     # Resource lane: endpoint-backed resources on their endpoint's row, the rest after.
     res_x = net_right + LANE_GAP
     nxt = lane_y
     if with_pe:
-        nxt = max(row_y[k] for k in with_pe) + SLOT_H
+        nxt = max(row_y[k] + pitch[k] for k in with_pe)
     for k in without_pe:
         row_y[k] = nxt
-        nxt += SLOT_H
-    res_bottom = (max(row_y[k] for k in middle) + SLOT_H) if middle else lane_y
-    # Right of the resource column run vertical tracks: one per role assignment,
-    # then one shared by every diagnostics edge. Separate tracks are what keeps the
-    # lines from running on top of each other.
-    # The gap before the first track holds the role labels, which sit on each
-    # edge's last segment into its target.
-    role_track_x = res_x + SLOT_W + (50 if roles else 0)
-    diag_track_x = role_track_x + (len(roles) + 1) * TRACK
+        nxt += pitch[k]
+    res_bottom = max(row_y[k] + pitch[k] for k in middle) if middle else lane_y
+    # Right of the resource column runs one vertical track shared by every diagnostics edge.
+    diag_track_x = res_x + SLOT_W + TRACK
     res_right = (diag_track_x + TRACK) if middle else (res_x - LANE_GAP)
 
     # Observability lane: workspace on top, then the DNS zones.
     obs_x = res_right + LANE_GAP
     obs_y = min(row_y[k] for k in middle) if middle else lane_y
     obs_count = (1 if draw_law else 0) + len(zones)
-    obs_right = (obs_x + SLOT_W) if obs_count else res_right
-    obs_bottom = obs_y + obs_count * SLOT_H
+    # Zones carry no edges, so past four they wrap into a second column instead of a tall one.
+    obs_cols = 2 if obs_count > 5 else 1
+    obs_rows = math.ceil(obs_count / obs_cols)
+    obs_right = (obs_x + (obs_cols - 1) * (SLOT_W + COL_GAP) + SLOT_W) if obs_count else res_right
+    obs_bottom = obs_y + obs_rows * SLOT_H
 
     content_bottom = max(res_bottom, obs_bottom, lane_y + SLOT_H)
     if draw_vnet:
@@ -421,26 +455,33 @@ def main():
         add_cell({'id': 'snet-pe', 'parent': 'vnet', 'x': pe_sn['x'], 'y': pe_sn['y'], 'w': pe_sn['w'], 'h': pe_sn['h'],
                   'style': SUBNET_STYLE + (EXISTING_STYLE if vnet_existing else ''), 'value': pe_label})
         for k in with_pe:
-            add_icon(f"pe-{k}", 'snet-pe', pe_sn['x'] + PAD, row_y[k], 'private-endpoint', format_label('Private Endpoint', k, ''))
+            add_icon(f"pe-{k}", 'snet-pe', pe_sn['x'] + PAD, row_y[k], 'private-endpoint', format_label('Private Endpoint', k, ''), slot_h=pitch[k])
         for j, b in enumerate(other_boxes):
             lbl = f"<b>{esc(b['name'])}</b>" + (f"  <font style='font-size:10px'>{b['prefix']}</font>" if b['prefix'] else '')
             add_cell({'id': f"snet-{j}", 'parent': 'vnet', 'x': b['x'], 'y': b['y'], 'w': b['w'], 'h': b['h'], 'style': SUBNET_STYLE, 'value': lbl})
 
     for k in middle:
-        add_icon(f"res-{k}", 'rg', res_x, row_y[k], k, format_label(TYPE_NAMES.get(k, k), k, ''), flagged(k))
+        add_icon(f"res-{k}", 'rg', res_x, row_y[k], k, resource_label(k), flagged(k), slot_h=pitch[k])
 
-    oy = obs_y
+    obs_i = 0
+
+    def obs_slot():
+        nonlocal obs_i
+        pos = (obs_x + (obs_i % obs_cols) * (SLOT_W + COL_GAP), obs_y + (obs_i // obs_cols) * SLOT_H)
+        obs_i += 1
+        return pos
+
     if draw_law:
         law_existing = (not has_law_res) and obs_ownership != 'create'
         law_name = s(diag_target) if diag_target else 'log-analytics-workspace'
-        add_icon('law', 'rg', obs_x, oy, 'log-analytics-workspace',
+        lx, ly = obs_slot()
+        add_icon('law', 'rg', lx, ly, 'log-analytics-workspace',
                  format_label('Log Analytics', law_name, T['existing'] if law_existing else ''),
                  flagged('log-analytics-workspace'), law_existing)
-        oy += SLOT_H
     for z, zone in enumerate(zones):
         z_existing = dns_ownership != 'deployment'
-        add_icon(f"dns-{z}", 'rg', obs_x, oy, 'private-dns-zone', format_label(s(zone), '', T['existing'] if z_existing else ''), False, z_existing)
-        oy += SLOT_H
+        zx, zy = obs_slot()
+        add_icon(f"dns-{z}", 'rg', zx, zy, 'private-dns-zone', format_label(s(zone), '', T['existing'] if z_existing else ''), False, z_existing)
 
     if exposure == 'public' and middle:
         iy = min(row_y[k] for k in middle)
@@ -504,30 +545,6 @@ def main():
         if draw_vnet:
             edges.append({'id': f"e-pe-{k}", 'source': f"pe-{k}", 'target': f"res-{k}",
                           'style': EDGE_BASE + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeColor=#0078D4;', 'value': ''})
-    r = 0
-    for ra in roles:
-        ra = ra if isinstance(ra, dict) else {}
-        frm, to = f"res-{s(ra.get('from'))}", f"res-{s(ra.get('to'))}"
-        if frm not in by_id or to not in by_id:
-            say(f"[warn] role assignment {s(ra.get('from'))} -> {s(ra.get('to'))}: endpoint not drawn", 'yellow')
-            continue
-        tx = role_track_x + (r + 1) * TRACK
-        # The role name sits on the segment into the target: one per target row, so
-        # two roles from the same principal do not stack on its shared stub.
-        # Wrapped at ~18 characters to fit the gap.
-        wrapped, line = [], ''
-        for word in s(ra.get('role')).split(' '):
-            if line and (len(line) + 1 + len(word)) > 18:
-                wrapped.append(line)
-                line = word
-            else:
-                line = f"{line} {word}" if line else word
-        if line:
-            wrapped.append(line)
-        edges.append({'id': f"e-role-{r}", 'source': frm, 'target': to, 'value': '<br>'.join(esc(w) for w in wrapped), 'labelAt': 0.7,
-                      'style': EDGE_BASE + 'exitX=1;exitY=0.3;entryX=1;entryY=0.3;strokeColor=#5C2D91;fontColor=#5C2D91;fontSize=10;labelBackgroundColor=#FFFFFF;',
-                      'points': [{'x': tx, 'y': anchor_y(frm, 0.3)}, {'x': tx, 'y': anchor_y(to, 0.3)}]})
-        r += 1
     if draw_law:
         law_y = anchor_y('law', 0.5)
         for k in middle:

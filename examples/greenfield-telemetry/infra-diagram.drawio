@@ -20,19 +20,19 @@
           <mxGeometry x="20" y="410" width="918" height="20" as="geometry"/>
         </mxCell>
         <mxCell id="vnet" value="&lt;b&gt;Virtual Network&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;10.20.0.0/16&lt;/font&gt;" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;" vertex="1" parent="rg">
-          <mxGeometry x="20" y="54" width="270" height="302" as="geometry"/>
+          <mxGeometry x="20" y="54" width="270" height="272" as="geometry"/>
         </mxCell>
         <mxCell id="vnet-icon" value="" style="image;aspect=fixed;html=1;image=img/lib/azure2/networking/Virtual_Networks.svg;" vertex="1" parent="vnet">
           <mxGeometry x="6" y="6" width="24" height="24" as="geometry"/>
         </mxCell>
         <mxCell id="snet-pe" value="&lt;b&gt;snet-stg-privatelink-01&lt;/b&gt;  &lt;font style=&apos;font-size:10px&apos;&gt;10.20.1.0/27&lt;/font&gt;" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F3F9FD;strokeColor=#7FBAEA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=2;container=1;collapsible=0;" vertex="1" parent="vnet">
-          <mxGeometry x="20" y="44" width="230" height="174" as="geometry"/>
+          <mxGeometry x="20" y="44" width="230" height="144" as="geometry"/>
         </mxCell>
         <mxCell id="pe-storage-account" value="&lt;b&gt;Private Endpoint&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;storage-account&lt;/font&gt;" style="image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelBackgroundColor=none;labelWidth=180;image=img/lib/azure2/networking/Private_Endpoint.svg;" vertex="1" parent="snet-pe">
           <mxGeometry x="91" y="42" width="48" height="48" as="geometry"/>
         </mxCell>
         <mxCell id="snet-0" value="&lt;b&gt;snet-app&lt;/b&gt;  &lt;font style=&apos;font-size:10px&apos;&gt;10.20.2.0/24&lt;/font&gt;" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F3F9FD;strokeColor=#7FBAEA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=2;container=1;collapsible=0;" vertex="1" parent="vnet">
-          <mxGeometry x="20" y="238" width="230" height="44" as="geometry"/>
+          <mxGeometry x="20" y="208" width="230" height="44" as="geometry"/>
         </mxCell>
         <mxCell id="res-storage-account" value="&lt;b&gt;Storage Account&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;storage-account&lt;/font&gt;" style="image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelBackgroundColor=none;labelWidth=180;image=img/lib/azure2/storage/Storage_Accounts.svg;fontColor=#D13438;" vertex="1" parent="rg">
           <mxGeometry x="481" y="140" width="48" height="48" as="geometry"/>
