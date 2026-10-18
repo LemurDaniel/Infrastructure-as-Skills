@@ -108,6 +108,73 @@ groups:
           (network_ownership), not this value.
         renders: variable resource_group_name / param resourceGroupName / scope
 
+  # ---------------------------------------------------------------- requirements
+  # What the customer can say about the system without knowing Azure. Each answer
+  # derives technical decisions in the resource sets: a resource question carrying
+  # `derived_from: <id>` maps the answer through its own table and records the value
+  # with `source: requirement`. The default answer derives the guardrail default, so an
+  # unanswered requirement changes nothing - it only lets the customer change things.
+  - id: requirements
+    title: Requirements
+    questions:
+      - id: outage_impact
+        ask: How bad is it if the system is unavailable for a day?
+        type: enum
+        values: [tolerable, disruptive, critical]
+        default: disruptive
+        audience: customer
+        confirm_in: [production]
+        why: >
+          The one question behind every redundancy decision, and the customer is the
+          only one who can answer it. `tolerable` is a system people can do without
+          for a day - a sandbox, an internal tool with a manual fallback - and buys
+          the cheapest replication. `disruptive` is the normal case: an outage costs
+          work and money but not the business, so the data survives the loss of a
+          datacenter (zone redundancy) at little extra cost. `critical` is a system
+          whose outage stops the business or breaks a legal duty: the data is also
+          copied to a second region, which costs roughly double and only pays off
+          with a failover plan - say so when it is chosen.
+        renders: >
+          derived by the resource sets: storage-account.replication (LRS / ZRS / GZRS);
+          later resources map it to their own zone-redundancy and SKU decisions
+
+      - id: data_loss_tolerance
+        ask: If data is deleted or overwritten by mistake, how far back must you be able to go?
+        type: enum
+        values: [reproducible, one_week, one_month, three_months]
+        default: one_week
+        audience: customer
+        why: >
+          The question behind soft delete, versioning and point-in-time restore,
+          asked once in the customer's terms. `reproducible` means the data can be
+          regenerated from somewhere else - a cache, an export, a build - so nothing
+          is kept after a delete and no storage is spent on it. `one_week` covers the
+          usual case: someone notices within days. `one_month` and `three_months` are
+          for data where the mistake surfaces at a month-end or quarter-end close,
+          and cost the retained versions for that long.
+        renders: >
+          derived by the resource sets: storage-account.blob_soft_delete_days,
+          container_soft_delete_days, versioning_enabled, point_in_time_restore_days
+
+      - id: data_access_pattern
+        ask: How is the data used - worked with all the time, read rarely once written, or kept only because something requires it?
+        type: enum
+        values: [active, occasional, archive]
+        default: active
+        audience: customer
+        why: >
+          Storage prices trade storage cost against access cost, and only the
+          customer knows which side the data is on. `active` is data an application
+          reads and writes continuously. `occasional` is data written once and read
+          now and then - exports, backups, logs - where cheaper storage with a small
+          per-read charge wins. `archive` is data kept for a retention duty and read
+          almost never; it is the cheapest to keep and the most expensive to read
+          back, with an early-deletion charge. The default is `active` because
+          choosing a cold tier for data that turns out to be read often costs more
+          than the other way round.
+        renders: >
+          derived by the resource sets: storage-account.access_tier (Hot / Cool / Cold)
+
   - id: modules
     title: Modules
     questions:

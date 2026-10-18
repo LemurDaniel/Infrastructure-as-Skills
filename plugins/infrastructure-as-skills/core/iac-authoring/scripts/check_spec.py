@@ -7,8 +7,10 @@ Read-only. Checks what the contract in references/spec.md promises:
      spec.target.
   2. Every decision value carries a known `source`. A value without one is a
      settings dump entry, not a recorded decision.
-  3. `overridden` carries a reason, and `forced` carries `forced_by`. An
-     undocumented exception reads as an accident a year later.
+  3. `overridden` carries a reason, `forced` carries `forced_by`, and
+     `requirement` carries `derived_from: deployment.<id>`. An undocumented
+     exception reads as an accident a year later; a derived value without its
+     requirement cannot be explained to the customer.
   4. `assumed` values and `open:` entries are reported, with what they block.
      A spec holding either is valid - it is not applyable, which is the
      distinction the exit code makes.
@@ -33,7 +35,7 @@ import argparse
 import os
 import sys
 
-KNOWN_SOURCES = ['stated', 'asked', 'platform', 'pattern', 'deployment', 'forced', 'assumed', 'default', 'carried', 'overridden']
+KNOWN_SOURCES = ['stated', 'asked', 'platform', 'pattern', 'requirement', 'deployment', 'forced', 'assumed', 'default', 'carried', 'overridden']
 KNOWN_BLOCKS = ['render', 'plan', 'apply']
 
 # Attribute spellings that belong to a backend, not to a decision. Matched
@@ -136,6 +138,9 @@ def main():
             elif src == 'forced':
                 if 'forced_by' not in node:
                     errors.append(f"{path} is forced with no forced_by. The chain is the point - what forced it?")
+            elif src == 'requirement':
+                if not str(node.get('derived_from', '')).startswith('deployment.'):
+                    errors.append(f"{path} is a requirement-derived value with no derived_from: deployment.<id>. The customer's answer is the point - which one?")
             elif src == 'assumed':
                 assumed.append(path)
             return

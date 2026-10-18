@@ -90,7 +90,7 @@ groups:
 | `from_context` | no | The value comes from the spec's `context:` rather than being asked per resource. |
 | `audience` | yes | Who answers it: `customer`, `engineer` or `platform`. See below. |
 | `plain` | not yet | Reserved: a one-line, customer-language reason for the default, read by the decision document (`ROADMAP.md` B5). |
-| `derived_from` | not yet | Reserved: the requirement question this decision follows from (`ROADMAP.md` B2). |
+| `derived_from` | no | `{ question: <deployment id>, map: { <answer>: <value> } }` — the value follows from a customer's answer in the deployment set's `requirements` group, mapped through this table. Mutually exclusive with `default`, `required` and `from_deployment`. See below. |
 
 ## Who answers: `audience`
 
@@ -114,6 +114,46 @@ audience that may override it per resource, which is usually `engineer`.
 Keep `customer` scarce for the same reason as `required`: each one is a question put to
 someone who did not come to answer questions. Six per interview is the budget
 (`ROADMAP.md`); a seventh means a question set is missing a default.
+
+## Requirements, and `derived_from`
+
+A resource question whose answer the customer could give — how much redundancy, how far
+back a delete must be recoverable, how the data is used — is not asked per resource and
+not asked in the resource's vocabulary. The deployment set's `requirements` group asks it
+once, in the customer's terms (`outage_impact`, `data_loss_tolerance`,
+`data_access_pattern`), and the resource question **derives** its value:
+
+```yaml
+      - id: replication
+        type: enum
+        audience: engineer
+        values: [LRS, ZRS, GRS, GZRS]
+        derived_from:
+          question: outage_impact
+          map: { tolerable: LRS, disruptive: ZRS, critical: GZRS }
+```
+
+The map lives on the resource question, not on the requirement: the resource knows its
+own vocabulary, and a new resource derives from an existing requirement without editing
+the deployment set. The spec records the value with `source: requirement` and
+`derived_from: deployment.outage_impact`, which is what lets the decision document say
+"because you said an outage would be disruptive, the data is kept in three datacenters".
+
+Three rules:
+
+- **Every answer maps.** The map covers every value the requirement can take; the check
+  fails on a gap. A value the map cannot reach (`GRS` above) is an engineer's departure,
+  recorded `overridden`.
+- **The default answer derives the guardrail default.** `disruptive` → `ZRS`,
+  `one_week` → 7 days, `active` → `Hot`. An unanswered requirement changes nothing; it
+  only lets the customer change things. A map whose default-answer row departs from
+  [guardrails.md](guardrails.md) is a bug in one of the two.
+- **A derived question's `audience` is `engineer`**: the customer answered the
+  requirement; a per-resource departure from the derivation is the engineer's.
+
+What cannot be mapped mechanically stays an engineer's question with a default and is
+named as a consequence in Phase 4 — `immutability` follows a mandate, but a mandate is
+free text, so the engineer names it rather than a table.
 
 ## Rules that matter
 
@@ -164,7 +204,9 @@ enum, a default within `values` and of the type's kind, `ref` on a ref question;
 `required`, `default`, `from_deployment` and `parameterized` mutually exclusive and one
 of them present; `depends_on` naming a question in the set and a value it can take;
 `from_deployment` and `from_context` naming a deployment-set question; `confirm_in`
-naming known environments; `audience` present and one of `customer`, `engineer`, `platform`; and
+naming known environments; `derived_from` naming a customer question in the deployment
+set with a map covering every answer; `audience` present and one of `customer`, `engineer`,
+`platform`; and
 unknown fields, which is how a misspelt `default` turns into a question asked every run.
 Exit 0 clean, 1 violations, 2 could not check.
 

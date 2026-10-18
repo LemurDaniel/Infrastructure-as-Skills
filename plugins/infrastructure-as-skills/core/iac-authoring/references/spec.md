@@ -145,6 +145,7 @@ config file whose provenance has to be guessed.
 | `stated` | The user said it in their request, before being asked |
 | `asked` | The user answered it in the interview |
 | `platform` | Read from the repository's [`platform.yaml`](platform.md), the profile the platform engineer wrote once |
+| `requirement` | Derived from a customer's answer in the deployment set's `requirements` group, with `derived_from: deployment.<id>` naming it |
 | `pattern` | A pattern skill pre-answered it |
 | `deployment` | Inherited from the deployment set, via the question's `from_deployment` |
 | `forced` | Determined by another answer, with `forced_by` naming it |
@@ -176,6 +177,11 @@ open:
 
 Neither is a defect in the spec. A run that invents a resource group to avoid an empty
 field is the defect, and it is invisible until someone deploys it.
+
+`requirement` carries `derived_from`, and that is what the customer reads back: the
+decision document turns `replication: ZRS, derived_from: deployment.outage_impact` into
+"because an outage would be disruptive, the data is kept in three datacenters". A derived
+value without its requirement is a value the customer cannot recognise as theirs.
 
 `forced` carries `forced_by`, and that chain is the point: a Premium Key Vault is a
 recurring cost, and "because the mandate requires HSM keys" is the difference between a
@@ -364,11 +370,12 @@ Extension is the normal case after the first run, and the spec is shaped for it:
 decision is a separate key with its own `source`, so adding to it is adding keys.
 
 **What is carried and what is re-derived.** Values whose `source` is `stated`, `asked`,
-`pattern`, `default`, `overridden` or `carried` are carried as they are — they were
-decided. Values whose `source` is `deployment` or `forced` are consequences, so they are
-re-derived from what they follow: if `network_exposure` changes in this run, every
-resource inheriting it follows, and every `forced` value is recomputed from its
-`forced_by`.
+`pattern`, `platform`, `default`, `overridden` or `carried` are carried as they are —
+they were decided. Values whose `source` is `deployment`, `requirement` or `forced` are
+consequences, so they are re-derived from what they follow: if `network_exposure` changes
+in this run, every resource inheriting it follows; if the customer now says an outage
+would be critical, every `requirement` value derived from `outage_impact` is remapped;
+and every `forced` value is recomputed from its `forced_by`.
 
 **The opening question changes.** Phase 0 asks what should be added or changed, not what is
 being built — the system is already described. List what the spec holds, so the user

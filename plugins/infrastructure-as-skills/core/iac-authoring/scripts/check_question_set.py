@@ -21,7 +21,9 @@ a regex cannot see - what references/question-set-format.md promises:
   5. References: `depends_on` names a question in the same set and, for an
      enum, a value it can take; `from_deployment` and `from_context` name a
      question in the deployment set; `confirm_in` names environments the
-     deployment set knows.
+     deployment set knows; `derived_from` names a customer question in the
+     deployment set and maps every one of its values to a value of this
+     question's kind (and, for an enum, one of its values).
   6. `audience` is present and is customer, engineer or platform - who answers
      the question; a question without one would reach the customer by accident.
   7. Unknown fields are reported: a misspelt `default` is a question that is
@@ -56,12 +58,13 @@ DEPLOYMENT_SET = os.path.join(HERE, '..', 'questions', 'deployment.yaml')
 TYPES = ['enum', 'bool', 'string', 'int', 'list', 'ref']
 AUDIENCES = ['customer', 'engineer', 'platform']
 REVIEW_ORDER = ['placement', 'networking', 'identity', 'security', 'data_protection', 'observability']
-RESOLUTION_FIELDS = ['required', 'default', 'from_deployment', 'parameterized']
+RESOLUTION_FIELDS = ['required', 'default', 'from_deployment', 'parameterized', 'derived_from']
 KNOWN_FIELDS = {
     'id', 'ask', 'type', 'values', 'default', 'required', 'parameterized', 'confirm_in',
     'why', 'renders', 'depends_on', 'ref', 'from_deployment', 'forced_when', 'from_context',
     'audience', 'plain', 'derived_from',
 }
+DERIVED_KEYS = {'question', 'map'}
 KNOWN_TOP = {'schema_version', 'scope', 'resource', 'title', 'naming', 'boundaries', 'groups'}
 
 COLORS = {'cyan': '36', 'green': '32', 'red': '31', 'yellow': '33', 'gray': '90'}
@@ -320,6 +323,38 @@ def check_set(path, doc, deployment, rel):
                     if set(map(str, tv)) == set(map(str, values)):
                         pass  # same vocabulary, inherited as-is
                     # different vocabularies are mapped in `why`; nothing to check mechanically
+
+        dv = q.get('derived_from')
+        if dv is not None:
+            if scope == 'deployment':
+                err(f"{where}: derived_from inside the deployment set")
+            elif not isinstance(dv, dict) or set(dv) != DERIVED_KEYS:
+                err(f"{where}: derived_from must be {{ question: <deployment id>, map: {{ <answer>: <value> }} }}")
+            elif deployment is None:
+                wrn(f"{where}: derived_from '{dv.get('question')}' not checked - the deployment set did not load")
+            elif dv['question'] not in dep_ids:
+                err(f"{where}: derived_from '{dv['question']}', which the deployment set does not have")
+            else:
+                tq = dep_ids[dv['question']]
+                if tq.get('audience') != 'customer':
+                    err(f"{where}: derived_from '{dv['question']}', whose audience is {tq.get('audience')} - a derivation answers a customer question; otherwise use from_deployment")
+                tv = tq.get('values') if tq.get('type') == 'enum' else None
+                m = dv['map']
+                if not isinstance(m, dict) or not m:
+                    err(f"{where}: derived_from.map must be a non-empty mapping")
+                else:
+                    if tv is not None:
+                        missing = [v for v in tv if v not in m]
+                        extra = [k for k in m if k not in tv]
+                        if missing:
+                            err(f"{where}: derived_from.map has no entry for {missing} - every answer to {dv['question']} must derive a value")
+                        if extra:
+                            err(f"{where}: derived_from.map names answer(s) {extra} that {dv['question']} cannot take")
+                    for k, v in m.items():
+                        if qtype and not kind_matches(qtype, v):
+                            err(f"{where}: derived_from.map[{k!r}] = {v!r} is not a {qtype}")
+                        if qtype == 'enum' and isinstance(values, list) and v not in values:
+                            err(f"{where}: derived_from.map[{k!r}] = '{v}' is not in values {values}")
 
         if q.get('from_context'):
             if scope == 'deployment':
