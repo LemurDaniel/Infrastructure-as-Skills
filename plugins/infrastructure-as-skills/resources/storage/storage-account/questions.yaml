@@ -24,6 +24,7 @@ groups:
       - id: environment
         ask: Which environment is this for?
         type: enum
+        audience: engineer
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         from_context: true
@@ -35,6 +36,7 @@ groups:
       - id: location
         ask: Which Azure region?
         type: string
+        audience: engineer
         required: true
         from_context: true
         why: >
@@ -46,6 +48,7 @@ groups:
       - id: resource_group_name
         ask: Which resource group?
         type: ref
+        audience: engineer
         ref: resource_group
         required: true
         from_context: true
@@ -61,6 +64,7 @@ groups:
       - id: public_network_access
         ask: Should this account depart from the deployment's exposure posture?
         type: enum
+        audience: engineer
         values: [disabled, enabled_with_firewall, enabled]
         from_deployment: network_exposure
         confirm_in: [production]
@@ -78,6 +82,7 @@ groups:
       - id: private_endpoint_subnet
         ask: Which subnet should this account's private endpoint live in?
         type: ref
+        audience: platform
         ref: subnet
         from_deployment: private_endpoint_subnet
         why: >
@@ -90,6 +95,7 @@ groups:
       - id: private_endpoint_subresources
         ask: Which storage services need an endpoint?
         type: list
+        audience: engineer
         values: [blob, file, queue, table, dfs, web]
         default: [blob]
         why: >
@@ -100,6 +106,7 @@ groups:
       - id: firewall_ip_rules
         ask: Which public IP ranges may reach the account?
         type: list
+        audience: engineer
         default: []
         depends_on: { question: public_network_access, equals: enabled_with_firewall }
         why: >
@@ -111,6 +118,7 @@ groups:
       - id: firewall_subnet_rules
         ask: Which subnets may reach the account via service endpoint?
         type: list
+        audience: engineer
         ref: subnet
         default: []
         depends_on: { question: public_network_access, equals: enabled_with_firewall }
@@ -123,6 +131,7 @@ groups:
       - id: allow_azure_services_bypass
         ask: Should trusted Azure services bypass the firewall?
         type: bool
+        audience: engineer
         default: true
         why: >
           Without the bypass, platform features that reach the account on your
@@ -138,6 +147,7 @@ groups:
       - id: managed_identity
         ask: Which managed identity should the account carry?
         type: enum
+        audience: engineer
         values: [system_assigned, user_assigned, none]
         default: system_assigned
         why: >
@@ -150,6 +160,7 @@ groups:
       - id: user_assigned_identity_ids
         ask: Which user-assigned identities?
         type: list
+        audience: engineer
         ref: user_assigned_identity
         required: true
         depends_on: { question: managed_identity, equals: user_assigned }
@@ -159,6 +170,7 @@ groups:
       - id: role_assignments
         ask: Who needs which data-plane role on this account?
         type: list
+        audience: engineer
         default: []
         why: >
           With shared-key auth disabled, nothing can read the account until a role
@@ -175,6 +187,7 @@ groups:
       - id: shared_access_key_enabled
         ask: Should shared key (account key) authentication stay enabled?
         type: bool
+        audience: engineer
         from_deployment: local_auth
         confirm_in: [production]
         why: >
@@ -190,6 +203,7 @@ groups:
       - id: min_tls_version
         ask: What is the minimum TLS version?
         type: enum
+        audience: engineer
         values: [TLS1_2, TLS1_3]
         default: TLS1_2
         why: >
@@ -201,6 +215,7 @@ groups:
       - id: https_traffic_only
         ask: Should the account refuse plain HTTP?
         type: bool
+        audience: engineer
         default: true
         why: >
           No current reason to allow HTTP to a storage account. Kept as a question
@@ -211,6 +226,7 @@ groups:
       - id: allow_blob_public_access
         ask: May individual containers be made publicly readable?
         type: bool
+        audience: engineer
         default: false
         why: >
           This is the account-level switch that makes anonymous container access
@@ -223,6 +239,7 @@ groups:
       - id: infrastructure_encryption_enabled
         ask: Should infrastructure (double) encryption be enabled?
         type: bool
+        audience: engineer
         default: true
         why: >
           A second encryption layer below the service layer, at no measurable cost.
@@ -234,6 +251,7 @@ groups:
       - id: key_management
         ask: Platform-managed or customer-managed encryption keys?
         type: enum
+        audience: engineer
         values: [platform_managed, customer_managed]
         from_deployment: key_management
         why: >
@@ -247,6 +265,7 @@ groups:
       - id: cmk_key_vault_key_id
         ask: Which Key Vault key should encrypt the account?
         type: ref
+        audience: engineer
         ref: key_vault_key
         required: true
         depends_on: { question: key_management, equals: customer_managed }
@@ -259,6 +278,7 @@ groups:
       - id: sftp_enabled
         ask: Should the SFTP endpoint be enabled?
         type: bool
+        audience: engineer
         default: false
         why: >
           SFTP requires hierarchical namespace and introduces local users, which
@@ -274,6 +294,7 @@ groups:
       - id: replication
         ask: Which replication does the data need?
         type: enum
+        audience: customer
         values: [LRS, ZRS, GRS, GZRS]
         default: ZRS
         confirm_in: [production]
@@ -289,6 +310,7 @@ groups:
       - id: access_tier
         ask: Which default access tier?
         type: enum
+        audience: customer
         values: [Hot, Cool, Cold]
         default: Hot
         why: >
@@ -301,6 +323,7 @@ groups:
       - id: blob_soft_delete_days
         ask: How many days should deleted blobs stay restorable?
         type: int
+        audience: customer
         default: 7
         why: >
           The cheapest recovery there is for the most common failure mode, which
@@ -311,6 +334,7 @@ groups:
       - id: container_soft_delete_days
         ask: How many days should deleted containers stay restorable?
         type: int
+        audience: customer
         default: 7
         why: >
           Separate from blob soft delete and frequently forgotten — blob retention
@@ -320,6 +344,7 @@ groups:
       - id: versioning_enabled
         ask: Should blob versioning be enabled?
         type: bool
+        audience: customer
         default: true
         why: >
           Protects against overwrite, which soft delete does not. The cost is
@@ -330,6 +355,7 @@ groups:
       - id: change_feed_enabled
         ask: Should the change feed be enabled?
         type: bool
+        audience: engineer
         default: false
         why: >
           An append-only log of blob changes. Useful for downstream processing and
@@ -340,6 +366,7 @@ groups:
       - id: point_in_time_restore_days
         ask: How many days of point-in-time restore?
         type: int
+        audience: customer
         default: 0
         why: >
           Requires versioning and the change feed, and must be shorter than the
@@ -351,6 +378,7 @@ groups:
       - id: immutability
         ask: Does the data need immutability (WORM)?
         type: enum
+        audience: customer
         values: [none, account_level, container_level]
         default: none
         why: >
@@ -367,6 +395,7 @@ groups:
       - id: diagnostic_workspace
         ask: Which Log Analytics workspace should receive diagnostics?
         type: ref
+        audience: platform
         ref: log_analytics_workspace
         from_deployment: diagnostics_destination
         why: >
@@ -380,6 +409,7 @@ groups:
       - id: diagnostic_categories
         ask: Which log categories should be collected?
         type: list
+        audience: engineer
         values: [audit, allLogs, StorageRead, StorageWrite, StorageDelete]
         default: [audit]
         why: >
@@ -392,6 +422,7 @@ groups:
       - id: metrics_enabled
         ask: Should all metrics be collected?
         type: bool
+        audience: engineer
         default: true
         why: Metric ingestion is cheap and the baseline for any capacity question.
         renders: metric.category = "AllMetrics" / metrics.category

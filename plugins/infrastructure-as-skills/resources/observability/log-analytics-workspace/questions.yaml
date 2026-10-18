@@ -23,6 +23,7 @@ groups:
       - id: environment
         ask: Which environment is this for?
         type: enum
+        audience: engineer
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         from_context: true
@@ -33,6 +34,7 @@ groups:
       - id: location
         ask: Which Azure region?
         type: string
+        audience: engineer
         required: true
         from_context: true
         why: >
@@ -44,6 +46,7 @@ groups:
       - id: resource_group_name
         ask: Which resource group?
         type: ref
+        audience: engineer
         ref: resource_group
         required: true
         from_context: true
@@ -60,6 +63,7 @@ groups:
       - id: retention_days
         ask: How long should logs be retained?
         type: int
+        audience: customer
         from_deployment: log_retention_days
         why: >
           Inherited from the deployment set. 30 days covers incident investigation,
@@ -72,6 +76,7 @@ groups:
       - id: daily_quota_gb
         ask: Should ingestion be capped per day?
         type: int
+        audience: engineer
         from_deployment: daily_quota_gb
         confirm_in: [production]
         why: >
@@ -84,6 +89,7 @@ groups:
       - id: sku
         ask: Which pricing tier?
         type: enum
+        audience: engineer
         values: [PerGB2018, CapacityReservation]
         default: PerGB2018
         why: >
@@ -100,6 +106,7 @@ groups:
       - id: public_network_access
         ask: Should the workspace be reachable from the internet?
         type: enum
+        audience: engineer
         values: [disabled, enabled]
         from_deployment: network_exposure
         confirm_in: [production]
@@ -117,6 +124,7 @@ groups:
       - id: local_auth
         ask: Should workspace keys be usable for ingestion?
         type: bool
+        audience: engineer
         from_deployment: local_auth
         why: >
           The shared key is a bearer credential with ingestion rights and no
@@ -128,6 +136,7 @@ groups:
       - id: rbac_only_access
         ask: Should data access be governed only by Azure RBAC?
         type: bool
+        audience: engineer
         default: true
         why: >
           With this on, workspace permissions decide who reads which data instead
@@ -145,6 +154,7 @@ groups:
       - id: immediate_purge_protection
         ask: Should the workspace keep its 14-day soft delete?
         type: bool
+        audience: engineer
         default: true
         why: >
           A deleted workspace is recoverable for 14 days and its name stays
@@ -158,6 +168,7 @@ groups:
       - id: archive_to_storage
         ask: Should logs also be archived to a storage account?
         type: bool
+        audience: engineer
         default: false
         why: >
           Long retention in a workspace is expensive per gigabyte-month; archival
