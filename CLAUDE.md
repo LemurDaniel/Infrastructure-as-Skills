@@ -39,8 +39,8 @@ python3 .claude/skills/git-commit-conventions/scripts/check_repo_consistency.py
 python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_spec.py <spec>
 
 # Validates every question set (or the paths given) against the format: enum defaults,
-# depends_on / from_deployment targets, resolution fields, unknown fields.
-# --require-audience once every question carries one.
+# depends_on / from_deployment targets, resolution fields, audience, unknown fields.
+# --platform <platform.yaml> checks a platform profile against the deployment set instead.
 python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_question_set.py
 
 # A rendered example: fmt, validate, plan-only tests with a mocked platform - and the
@@ -69,7 +69,7 @@ The full tree is in [README.md](README.md#layout). What is not obvious from it:
 | `.../core/` | The skills, declared in `plugin.json` as `"skills": ["./core/"]` — it sits beside `skills/`, not inside it |
 | `.../core/azure-resources/` | The single trigger for every resource. Its description is the keyword surface for all families |
 | `.../core/iac-authoring/questions/deployment.yaml` | The deployment-wide set, resolved before any resource |
-| `.../core/iac-authoring/references/{spec,question-set-format,guardrails}.md` | The spec schema; how to author a `questions.yaml`; where every default comes from |
+| `.../core/iac-authoring/references/{spec,question-set-format,guardrails,platform}.md` | The spec schema; how to author a `questions.yaml`; where every default comes from; the platform profile |
 | `.../core/iac-rendering/references/avm.md` | AVM first: which module, status, live version lookup, interfaces, provider requirements, gaps, the test contract |
 | `.../core/iac-rendering/references/{naming,terraform-idiom,bicep-idiom}.md` | Naming interfaces; layout, modules, tests per target |
 | `.../resources/<family>/routing.md` | Routing table: request → question set. **Not** a `SKILL.md` — see below |
@@ -134,6 +134,9 @@ are in [README.md](README.md#why-one-trigger-and-families-that-are-not-skills).
 - **A decision that holds for more than one resource belongs in the deployment set.** A
   resource question that re-asks one carries `from_deployment` instead of a `default`.
 - **A missing question set is said out loud, never improvised.**
+- **Every question carries an `audience`** (`customer`, `engineer`, `platform`), and only
+  `customer` questions reach the person in the interview. Platform facts come from
+  `platform.yaml`, which the interview reads and never writes.
 - **A Terraform render ships with its tests.** One `assert` per spec decision, named
   `# decision: <resource>.<group>.<question>`; what a plan cannot observe is
   `# not-testable:` with a reason. `check_render_coverage.py` fails on anything else.

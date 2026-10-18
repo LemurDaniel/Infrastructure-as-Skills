@@ -70,7 +70,11 @@ Verified Modules first, authored resources second.
   engineer mode is entered on request or when the repository shows it. The plugin is
   public and has to hold for any use case. Beside the diagram, a decision document in the
   customer's language (Markdown first, Word offered once) is a deliverable. Plan:
-  `ROADMAP.md`, phases A–E.
+  `ROADMAP.md`, phases A–E. B1 and B3 landed the same day: every one of the 82
+  questions carries an `audience` (customer 13, engineer 49, platform 20) and
+  `check_question_set.py` fails without one; `platform.yaml` is the engineer's profile
+  (`references/platform.md`, a commented template beside it, `--platform` to check one),
+  read at precedence 3 as `source: platform`, never written by an interview.
 - **No registry alias, no registry modules — for the owner's own registry.** `br/public:`
   needs no alias and is the default; `br/modules:` is only rendered when
   `bicepconfig.json` already has it (`implementation: reuse`).
@@ -101,18 +105,21 @@ Verified Modules first, authored resources second.
 - **A sandbox subscription for real plans, applies and the deploy agent** (`ROADMAP.md`
   A5, E): the owner sets it up — subscription, federated credential for OIDC, a fenced
   resource group. Not available yet (2026-10-18).
-- The customer interview (`ROADMAP.md` B): `audience` and `plain` in the question-set
-  format, `requirements.yaml`, `platform.yaml`, the role filter in Phase 0 and 3,
-  `export_decisions.py`, the three evals graders. None started.
+- The customer interview (`ROADMAP.md` B), still open: `requirements.yaml` with its
+  `derives:` blocks and `source: requirement` (B2), the role filter in Phase 0 and 3 that
+  puts only `customer` questions to the person and turns the rest into defaults or
+  `open:` entries (B4 - the one-line rule is in the skill, the mechanics are not),
+  `plain` on every question and `export_decisions.py` (B5), the evals graders (B6).
 - A cloud session needs `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
   release downloads and `mcr.microsoft.com` allowed, and installs `terraform` and `bicep`
   into `~/.local/bin` itself (neither is in the image). Done once on 2026-10-18.
 
 ## Next
 
-`ROADMAP.md` A is down to A3 (Bicep tests on the compiled ARM), A4 (eval baseline) and A5
-(the sandbox plan, waiting on the owner's subscription). Next in order: B3 and B1 —
-`platform.yaml` and the `audience` field in the question-set format with
-`check_question_set.py --require-audience` turned on — because they are small and change
-the interview at once; then `greenfield-telemetry` as the second example (Bicep, the
-`create` branches), which is also the template for B's evals.
+`ROADMAP.md` B4 and B2 together: the role filter in `iac-authoring` Phase 0 and 3
+(customer mode by default, engineer mode on request or repository signal; a non-customer
+question is resolved or opened, never asked) and `questions/requirements.yaml` - the six
+customer questions with `derives:` blocks, `source: requirement` in the spec contract
+and `check_spec.py`. Then `greenfield-telemetry` as the second example (Bicep, the
+`create` branches) and the B6 graders on it. A3 (Bicep tests), A4 (eval baseline) and A5
+(the sandbox plan, waiting on the owner's subscription) stay on the list.
