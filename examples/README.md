@@ -19,6 +19,7 @@ the harder case, exercising the `create` branches this example never reaches.
   request.md            # the user's words, verbatim
   infra-spec.yaml       # the interview's output - the artefact everything else follows from
   naming.yaml           # the convention, a full copy of naming.default.yaml
+  platform.yaml         # the platform profile the platform team would have written
   *.tf, *.tfvars        # the Terraform render, one concern per file
   tests/*.tftest.hcl    # plan-only, platform mocked, naming provider real - one
                         # assert per spec decision, checked by check_render_coverage.py

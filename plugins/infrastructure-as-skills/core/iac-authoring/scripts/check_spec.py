@@ -33,7 +33,7 @@ import argparse
 import os
 import sys
 
-KNOWN_SOURCES = ['stated', 'asked', 'pattern', 'deployment', 'forced', 'assumed', 'default', 'carried', 'overridden']
+KNOWN_SOURCES = ['stated', 'asked', 'platform', 'pattern', 'deployment', 'forced', 'assumed', 'default', 'carried', 'overridden']
 KNOWN_BLOCKS = ['render', 'plan', 'apply']
 
 # Attribute spellings that belong to a backend, not to a decision. Matched

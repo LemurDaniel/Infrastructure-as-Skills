@@ -41,6 +41,12 @@ writes goes into the repository's IaC root, or `infra/` when there is none, and 
 committed with the code — it is what the next run extends. The rules for both, and for
 several roots, are in [references/spec.md](references/spec.md#where-it-lives).
 
+Look for `platform.yaml` beside it in the same search. It is the platform engineer's
+profile — landing zone, hub network and subnet, DNS, workspace, telemetry — and every
+value in it answers a deployment-set question with `audience: platform` before anyone is
+asked. Say in the first message whether one was found. Never write it from an interview:
+[references/platform.md](references/platform.md).
+
 ## Phase 0 — Ask what is being built, in the user's own words
 
 The interview opens with one open question, not with the question set. Let the user
@@ -143,9 +149,10 @@ For each question, the answer then comes from the first source that has one:
 |---|---|---|
 | 1 | What the user said — the request and the Phase 0 description | `stated`, or `overridden` where it changes a carried value |
 | 2 | The existing `infra-spec.yaml` | `carried` |
-| 3 | A pattern skill's pre-answers | `pattern` |
-| 4 | The deployment set's answer, for a `from_deployment` question | `deployment` |
-| 5 | The question's `default` | `default` |
+| 3 | The repository's `platform.yaml` | `platform` |
+| 4 | A pattern skill's pre-answers | `pattern` |
+| 5 | The deployment set's answer, for a `from_deployment` question | `deployment` |
+| 6 | The question's `default` | `default` |
 
 A carried value outranks a pattern and a default on purpose: it was decided, and quite
 possibly deployed. A re-run that let a pattern or a changed guardrail flip it would turn
@@ -154,7 +161,11 @@ carried value. Consequences are the exception — `deployment` and `forced` valu
 re-derived from what they follow, not carried.
 
 A question with `required: true` has no default and no safe guess. It is the only kind you
-must ask.
+must ask — of the audience that can answer it. Every question carries an `audience`
+([question-set-format](references/question-set-format.md#who-answers-audience)): a
+`customer` question is put to the person in the interview; an `engineer` or `platform`
+question is never put to a customer — it resolves from the profile or the default, and a
+`required` one nobody present can answer becomes an `open:` entry naming its owner.
 
 **A forced value is pre-answered, not asked.** `key_protection: hsm` requires a Premium Key
 Vault; `network_exposure: private` requires the private-endpoint subnet. Apply the

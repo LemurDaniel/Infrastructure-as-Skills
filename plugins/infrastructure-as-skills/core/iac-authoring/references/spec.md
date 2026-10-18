@@ -144,6 +144,7 @@ config file whose provenance has to be guessed.
 |---|---|
 | `stated` | The user said it in their request, before being asked |
 | `asked` | The user answered it in the interview |
+| `platform` | Read from the repository's [`platform.yaml`](platform.md), the profile the platform engineer wrote once |
 | `pattern` | A pattern skill pre-answered it |
 | `deployment` | Inherited from the deployment set, via the question's `from_deployment` |
 | `forced` | Determined by another answer, with `forced_by` naming it |
