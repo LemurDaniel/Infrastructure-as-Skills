@@ -183,10 +183,22 @@ Verified Modules first, authored resources second.
   **Found by doing it:** `terraform init -backend-config=...` without a backend block is
   ignored without an error (local state, gone with the runner) - the example now holds an
   empty `backend "azurerm" {}`, `terraform-idiom.md` and `pipelines.md` say so, and
-  `check_pipeline.py` fails on a root without one. Not yet done: the Azure DevOps, GitLab
-  and Bicep pipelines have no rendered example, `spec.md` does not document the new `deployment:`
-  keys, the diagram does not draw the pipeline, no eval case, and `deploy_mechanism` is a
-  customer question on top of an interview already over its six-question budget.
+  `check_pipeline.py` fails on a root without one. **The other two examples landed the same
+  day:** `greenfield-telemetry` (Bicep) got `deploy_mechanism: azure_devops` - `azure-pipelines.yml`,
+  `.azure-pipelines/stage.yml`, working directory `bicep/`, placeholder `bicepparam` files for
+  its three open stages - and `private-storage-gitlab` is the storage example's Terraform
+  root with a `.gitlab-ci.yml` (one spec names one system, so GitLab needs its own). Run:
+  `check_pipeline.py` on both, `bicep build`/`build-params`/`lint` on all four stages,
+  `run_arm_tests.py` and `check_render_coverage.py`, `terraform test` on the GitLab copy,
+  and the two guard steps extracted from the YAML and executed per stage (open stages exit
+  1, the resolved one 0). **Found by doing it:** a resolved stage's file must not spell a
+  marker out even in a comment - the grep reads comments, and staging's header comment
+  would have refused staging itself; `check_pipeline.py` caught it. Not run: Azure DevOps
+  or GitLab accepting their file (no lint available offline), and GitHub with Bicep has a
+  fixture and `actionlint` but no rendered example. `spec.md` documents the keys; the
+  diagram does not draw the pipeline, by the owner's call (not needed). Not yet done: no
+  eval case for the delivery questions, and `deploy_mechanism` is a customer question on top
+  of an interview already over its six-question budget.
 - Remaining families, in the order `ROADMAP.md` C1 sets: `security` (Key Vault,
   user-assigned identity), `compute` (Container Apps, function apps), `data` (Azure SQL,
   PostgreSQL Flexible), `integration` (Service Bus). Key Vault's Terraform AVM module is

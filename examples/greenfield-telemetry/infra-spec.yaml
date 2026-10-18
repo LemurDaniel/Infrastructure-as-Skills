@@ -6,7 +6,7 @@ spec:
   generated_by: infrastructure-as-skills-azure
   skill: azure-resources
   skill_version: 0.1.0
-  at: 2026-10-18T14:00:00Z
+  at: 2026-10-18T16:00:00Z   # extension run: deployment.deploy_mechanism added
 
 # Values every resource inherits. Resolved once, not per resource. The request named
 # the staging stage; the stack is the default, so staging joins development, test and
@@ -34,6 +34,16 @@ deployment:
   module_telemetry:
     value: enabled
     source: default
+  deploy_mechanism:
+    # The second request (request.pipeline.md): "Wir nutzen Azure DevOps."
+    value: azure_devops
+    source: stated
+  pipeline_auth:
+    value: workload_identity
+    source: default
+  pipeline_approvals:
+    value: production
+    source: default         # the production stage waits for a person; nothing else does
   stage_isolation:
     value: subscription
     source: default

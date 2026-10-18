@@ -5,7 +5,8 @@
 // One template for the whole stack (context.environments): every value that differs per
 // stage - the address range, the subnets, the cost knobs - is a parameter, and each stage
 // has its own main.<stage>.bicepparam. Only staging's values are known; the other stages'
-// files are written once their open: entries are answered, never with guessed values.
+// files hold OPEN-... placeholders until their open: entries are answered, never guessed
+// values; the pipeline refuses to deploy a placeholder.
 // Versions resolved 2026-10-18 from the MCR tag lists: virtual-network 0.10.2,
 // operational-insights/workspace 0.16.1, private-dns-zone 0.8.1, storage-account 0.33.1.
 targetScope = 'resourceGroup'

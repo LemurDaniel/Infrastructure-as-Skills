@@ -8,7 +8,8 @@ idiom, a reviewer sees what `source:` buys.
 | Example | Targets | Scenario | Why it is here |
 |---|---|---|---|
 | [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account on the default stack (development, test, production - the request named production), behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec on the **Azure Verified Modules** (`avm-res-storage-storageaccount` v0.10.0, `avm/res/storage/storage-account` 0.33.1, resolved 2026-10-18), so the two can be diffed. The git history before that date holds the authored render of the same spec. A second request (`request.pipeline.md`, an extension run) added `deploy_mechanism: github` and the **GitHub Actions pipeline** - all three stage blocks, with placeholder stage files for development and test, which are still `open:`; the pipeline refuses to deploy a placeholder |
-| [`greenfield-telemetry/`](greenfield-telemetry/) | Bicep | Three resources on a four-stage stack (the request named staging), nothing referenced: own network with two subnets, own workspace, private storage, `landing_zone: standalone`; only staging's stage file is resolved | The `create` branches the first example never reaches, including the privatelink zone the deployment owns and links. Four AVM modules in one root, the wiring between them in the root. The first render with tests against the compiled ARM, and the first spec carrying `source: requirement` |
+| [`greenfield-telemetry/`](greenfield-telemetry/) | Bicep | Three resources on a four-stage stack (the request named staging), nothing referenced: own network with two subnets, own workspace, private storage, `landing_zone: standalone`; only staging's stage file is resolved | The `create` branches the first example never reaches, including the privatelink zone the deployment owns and links. Four AVM modules in one root, the wiring between them in the root. The first render with tests against the compiled ARM, and the first spec carrying `source: requirement`. A second request (`request.pipeline.md`) added `deploy_mechanism: azure_devops` and the **Azure DevOps pipeline** (`azure-pipelines.yml`, `.azure-pipelines/stage.yml`): four stage blocks with the Bicep root `bicep/` as working directory, and placeholder parameter files for the three open stages |
+| [`private-storage-gitlab/`](private-storage-gitlab/) | Terraform | The storage example's Terraform root with a **GitLab CI pipeline** instead of GitHub Actions (`request.pipeline.md`: "Der Code liegt in GitLab") | One spec names one system, and two pipelines on one state race for its lock, so the GitLab render needs a spec of its own. Same code as `private-storage-on-platform/`, no Bicep and no diagram; only `.gitlab-ci.yml`, the spec's `deploy_mechanism` and the decision document differ. The GitLab file is written from the documentation alone and has not run against a project |
 
 
 ## What each directory holds
@@ -53,8 +54,14 @@ bicep build --stdout bicep/main.bicep > $null
 bicep build-params bicep/main.staging.bicepparam --stdout > $null   # one per resolved stage
 bicep lint bicep/main.bicep
 
+cd ../private-storage-gitlab
+terraform init -backend=false && terraform validate && terraform test
+python3 ../../plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_pipeline.py ./infra-spec.yaml
+
 cd ../greenfield-telemetry
 bicep build --stdout bicep/main.bicep > $null && bicep lint bicep/main.bicep
+bicep build-params bicep/main.staging.bicepparam --stdout > $null   # one per stage, placeholders included
+python3 ../../plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_pipeline.py ./infra-spec.yaml
 python3 ../../plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/run_arm_tests.py ./infra-spec.yaml
 python3 ../../plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
 ```

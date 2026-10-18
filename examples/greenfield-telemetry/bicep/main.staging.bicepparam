@@ -3,8 +3,8 @@
 // group (rg-telemetry-stg-gwc) are the deployment's scope, given on the command line -
 // one subscription per stage (deployment.stage_isolation: subscription):
 //   az deployment group what-if --subscription <id> --resource-group rg-telemetry-stg-gwc --template-file main.bicep --parameters main.staging.bicepparam
-// development, test and production get their own files once their ranges, subscriptions
-// and groups are answered (spec: open).
+// development, test and production hold placeholders until their ranges, subscriptions
+// and groups are answered (spec: open); the pipeline refuses those.
 using 'main.bicep'
 
 param environment = 'staging'

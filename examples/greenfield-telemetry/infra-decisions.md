@@ -26,6 +26,7 @@ Ein Code wird durch diese Stufen ausgerollt; alles, was hier nicht steht, ist in
 
 ## Was aus euren Antworten folgt
 
+- **Das System wird durch eine Azure-DevOps-Pipeline ausgerollt.** _(aus eurer Beschreibung)_
 - **Ein Tag Ausfall wäre störend.** _(nicht gesagt, daher gilt die übliche Antwort)_
   - daher, Azure Storage Account: Die Daten liegen Entwicklung: dreifach in einem Rechenzentrum; Test: dreifach in einem Rechenzentrum; Vorproduktion: dreifach in einem Rechenzentrum; Echtbetrieb: in drei Rechenzentren der Region, eines darf ausfallen.
 - **Nach einem versehentlichen Löschen müsst ihr eine Woche zurückkommen.** _(nicht gesagt, daher gilt die übliche Antwort)_
@@ -44,6 +45,8 @@ Nichts davon wurde gefragt; jede Zeile folgt einer Regel oder einer der Antworte
 
 ### Für das ganze System
 
+- Die Pipeline meldet sich mit einem kurzlebigen Token pro Lauf, ohne irgendwo gespeichertes Passwort bei Azure an.
+- Eine Person gibt die Änderung frei, bevor sie ausgerollt wird: nur im Echtbetrieb.
 - Der Code wird aus Microsofts geprüften, getesteten Bausteinen (Azure Verified Modules) gebaut.
 - Nutzungstelemetrie an Microsoft ist eingeschaltet: eine Zählung pro Ausrollen, keine eurer Daten.
 - Das System landet in einer eigenen Umgebung: es gibt keine gemeinsame Plattform, also bringt es Netz, Namensauflösung und Protokollierung selbst mit.
@@ -125,6 +128,9 @@ Solange diese Punkte offen sind, wird nichts ausgerollt.
 | `deployment.naming_convention` | default | Regel |
 | `deployment.module_source` | avm | Regel |
 | `deployment.module_telemetry` | enabled | Regel |
+| `deployment.deploy_mechanism` | azure_devops | eure Beschreibung |
+| `deployment.pipeline_auth` | workload_identity | Regel |
+| `deployment.pipeline_approvals` | production | Regel |
 | `deployment.stage_isolation` | subscription | Regel |
 | `deployment.non_production_savings` | enabled | Regel |
 | `deployment.outage_impact` | disruptive | Regel |
