@@ -384,6 +384,18 @@ convention in the repository. An existing `naming.yaml` is left untouched.
 (`naming_convention: custom`) is written, as a `naming.yaml` holding the departures alone.
 The rules are in [naming.md](../iac-rendering/references/naming.md#namingyaml-in-the-users-repository--terraform-only).
 
+**Record who reaches what in `wiring:`** when the spec holds more than one resource, from
+what the request says — the diagram draws exactly this and nothing else
+([spec.md](references/spec.md)). `wiring.access` is one `{ from, to, label }` per call the
+request names ("die Web-App liest aus dem Storage" is `app-service` → `storage-account`),
+with `users`, `internet` and `external:<name>` as the actors outside the deployment;
+`wiring.purposes` is a few words per resource in the user's own terms ("Produktbilder");
+`wiring.optional` lists what the user called optional. Never infer a call from the
+resource types: two resources side by side say nothing about who talks to whom, and an
+invented line in a picture the customer signs off on is a decision nobody made. A call
+the request leaves out is an `open:` entry only where the spec cannot work without it;
+otherwise the line is simply absent.
+
 **Write the decision document in the same step**, in the user's language:
 
 ```sh

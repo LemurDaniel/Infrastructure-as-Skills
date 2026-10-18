@@ -1,7 +1,7 @@
 # Evals
 
 End-to-end cases for `claude plugin eval`: a request goes in, the plugin interviews,
-writes `infra/infra-spec.yaml`, draws it, validates it — and the graders check the spec.
+writes `infra/infra-spec.yaml` — and the graders check the spec.
 
 ```powershell
 claude plugin eval plugins/infrastructure-as-skills-azure --allow-tools Write Edit
@@ -23,6 +23,24 @@ most different situations rather than three variations of one:
 | `private-storage-on-platform` | Terraform | production | private | **reference** | **reference** | Complete description, mandate, existing platform |
 | `greenfield-telemetry` | Bicep | staging | private | **create** | **create** | Three resources, given ranges, stated retention |
 | `vague-public-dev` | Terraform | development | public | none | reference | **Missing information** |
+| `diagram-inputs-webshop` | Terraform | development | private | create | create | Three resources, three named calls: the spec records **who reaches what** |
+| `diagram-no-invented-lines` | Bicep | staging | - | - | - | Three resources, **no call named**: no line may be invented |
+| `diagram-external-and-optional` | Terraform | development | private | create | create | Outside parties become `external:` actors; **optional** is recorded |
+
+The three `diagram-*` cases test the half of the diagram a run can reach: the spec. The
+picture is drawn from `wiring.access`, `wiring.purposes` and `wiring.optional` and from
+nothing else, so the cases grade that the spec carries what the request said and nothing
+it did not - an invented line in a picture the customer signs off on is a decision nobody
+made. The drawing itself cannot run in a case (no shell in the eval sandbox on Windows) and
+is tested separately, deterministically and for free:
+
+```powershell
+python3 plugins/infrastructure-as-skills-azure/core/iac-diagram/tests/run_diagram_tests.py
+```
+
+Fixture specs go in, assertions on the `.drawio` come out: zones, one bundled endpoint icon,
+line count and colour, no Python syntax in a label, solid rounded containers, the fallback box
+for a type without an icon. Run it after any change to `new_diagram.py`.
 
 Every case ends the same way, so every case can be graded the same way: no one answers
 follow-up questions (a headless run cannot), and neither a diagram nor code is wanted —

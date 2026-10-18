@@ -1,0 +1,60 @@
+schema_version: "1.1"
+name: diagram-no-invented-lines
+
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: infrastructure-as-skills-azure
+
+  - name: target-bicep
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'target:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?bicep\b'
+
+  # Nothing in the request says who calls whom, so no line starts at any of the three -
+  # neither an access entry nor a role assignment. An invented line in the picture the
+  # customer signs off on is a decision nobody made.
+  - name: no-invented-calls
+    type: regex
+    weight: 3
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'from:\s*\W?(?:app-service|storage-account|sql-server|sql-database)\b'
+    match: not_contains
+
+  # The spec holds all three resources, under whatever key the SQL one takes.
+  - name: has-app-service
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^\s{2}app-service:'
+    flags: m
+
+  - name: has-storage-account
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^\s{2}storage-account:'
+    flags: m
+
+  - name: has-sql
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^\s{2}sql-[a-z-]+:'
+    flags: m
+
+  # The request gives no purpose for anything.
+  - name: no-invented-purposes
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^\s{2}purposes:'
+    flags: m
+    match: not_contains
+
+  - name: no-code-before-confirmation
+    type: file_exists
+    path: '**/*.bicep'
+    exists: false
+
+  - name: no-hand-drawn-diagram
+    type: file_exists
+    path: '**/*.drawio*'
+    exists: false
