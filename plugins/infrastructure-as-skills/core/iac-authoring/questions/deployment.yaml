@@ -26,6 +26,7 @@ groups:
       - id: environment
         ask: Which environment is this for?
         type: enum
+        audience: customer
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         why: >
@@ -37,6 +38,7 @@ groups:
       - id: location
         ask: Which Azure region?
         type: string
+        audience: engineer
         parameterized: true
         why: >
           Always an input variable of the template, never asked: every resource
@@ -49,6 +51,7 @@ groups:
       - id: workload
         ask: Which workload is this for? (short name, goes into every resource name)
         type: string
+        audience: engineer
         parameterized: true
         why: >
           Always an input variable of the template, never asked. It is the one
@@ -61,6 +64,7 @@ groups:
       - id: naming_convention
         ask: Should resource names follow the default convention, or does your organisation have its own?
         type: enum
+        audience: platform
         values: [default, custom]
         default: default
         why: >
@@ -82,6 +86,7 @@ groups:
       - id: subscription_id
         ask: Which subscription does this deploy into?
         type: ref
+        audience: engineer
         ref: subscription
         parameterized: true
         why: >
@@ -93,6 +98,7 @@ groups:
       - id: resource_group_name
         ask: Which resource group?
         type: ref
+        audience: engineer
         ref: resource_group
         parameterized: true
         why: >
@@ -108,6 +114,7 @@ groups:
       - id: module_source
         ask: Should resources render as calls to Azure Verified Modules, or as authored resources?
         type: enum
+        audience: engineer
         values: [avm, authored]
         default: avm
         why: >
@@ -135,6 +142,7 @@ groups:
       - id: module_telemetry
         ask: May the Azure Verified Modules send their deployment telemetry to Microsoft?
         type: enum
+        audience: platform
         values: [enabled, disabled]
         default: enabled
         depends_on: { question: module_source, equals: avm }
@@ -158,6 +166,7 @@ groups:
       - id: landing_zone
         ask: Is there a landing zone platform at all (standalone if not), and if so, which kind of landing zone does this workload go into - internal (corp), internet-facing (online) or a sandbox?
         type: enum
+        audience: platform
         values: [standalone, corp, online, sandbox]
         default: standalone
         confirm_in: [production]
@@ -194,6 +203,7 @@ groups:
       - id: network_exposure
         ask: Should this infrastructure be reachable from the internet?
         type: enum
+        audience: customer
         values: [private, private_with_exceptions, public]
         default: private
         confirm_in: [production]
@@ -216,6 +226,7 @@ groups:
       - id: local_auth
         ask: May resources keep key-based or connection-string auth?
         type: enum
+        audience: engineer
         values: [disabled, allowed_where_unavoidable]
         default: disabled
         confirm_in: [production]
@@ -234,6 +245,7 @@ groups:
       - id: mandates
         ask: Are there compliance or internal mandates this deployment has to satisfy?
         type: list
+        audience: customer
         default: []
         why: >
           Named here once so the decisions below can cite them, and so a reviewer
@@ -248,6 +260,7 @@ groups:
       - id: key_protection
         ask: Do keys have to be HSM-protected?
         type: enum
+        audience: engineer
         values: [software, hsm]
         default: software
         why: >
@@ -265,6 +278,7 @@ groups:
       - id: key_management
         ask: Platform-managed keys, or customer-managed?
         type: enum
+        audience: engineer
         values: [platform_managed, customer_managed]
         default: platform_managed
         confirm_in: [production]
@@ -285,6 +299,7 @@ groups:
       - id: network_ownership
         ask: Should this deployment build its own virtual network, reference an existing one, or does it need none?
         type: enum
+        audience: platform
         values: [create, reference, none]
         default: create
         why: >
@@ -316,6 +331,7 @@ groups:
       - id: existing_vnet
         ask: Which existing virtual network should the deployment reference?
         type: ref
+        audience: platform
         ref: virtual_network
         required: true
         depends_on: { question: network_ownership, equals: reference }
@@ -328,6 +344,7 @@ groups:
       - id: address_space
         ask: Which address space should the new virtual network use?
         type: string
+        audience: platform
         required: true
         depends_on: { question: network_ownership, equals: create }
         why: >
@@ -339,6 +356,7 @@ groups:
       - id: private_endpoint_subnet
         ask: Which existing subnet should private endpoints live in?
         type: ref
+        audience: platform
         ref: subnet
         required: true
         depends_on: { question: network_ownership, equals: reference }
@@ -350,6 +368,7 @@ groups:
       - id: private_endpoint_subnet_prefix
         ask: Which prefix should the private endpoint subnet get?
         type: string
+        audience: platform
         required: true
         depends_on: { question: network_ownership, equals: create }
         why: >
@@ -366,6 +385,7 @@ groups:
       - id: private_dns_ownership
         ask: Who owns the private DNS zones?
         type: enum
+        audience: platform
         values: [platform, deployment]
         default: platform
         forced_when: >
@@ -389,6 +409,7 @@ groups:
       - id: private_dns_records
         ask: Does a platform policy create the DNS records for private endpoints, or does this deployment?
         type: enum
+        audience: platform
         values: [policy, deployment]
         default: policy
         depends_on: { question: private_dns_ownership, equals: platform }
@@ -409,6 +430,7 @@ groups:
       - id: private_dns_zone_scope
         ask: In which subscription and resource group does the platform keep the private DNS zones?
         type: ref
+        audience: platform
         ref: resource_group
         required: true
         depends_on: { question: private_dns_records, equals: deployment }
@@ -431,6 +453,7 @@ groups:
       - id: observability_ownership
         ask: Should this deployment build its own Log Analytics workspace, or reference an existing one?
         type: enum
+        audience: platform
         values: [create, reference]
         default: reference
         forced_when: >
@@ -450,6 +473,7 @@ groups:
       - id: diagnostics_destination
         ask: Which existing Log Analytics workspace should receive diagnostics?
         type: ref
+        audience: platform
         ref: log_analytics_workspace
         required: true
         depends_on: { question: observability_ownership, equals: reference }
@@ -467,6 +491,7 @@ groups:
       - id: log_retention_days
         ask: How long should logs be retained?
         type: int
+        audience: customer
         default: 30
         depends_on: { question: observability_ownership, equals: create }
         why: >
@@ -482,6 +507,7 @@ groups:
       - id: daily_quota_gb
         ask: Should ingestion be capped per day?
         type: int
+        audience: engineer
         default: -1
         confirm_in: [production]
         depends_on: { question: observability_ownership, equals: create }

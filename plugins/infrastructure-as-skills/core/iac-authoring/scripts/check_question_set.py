@@ -22,17 +22,20 @@ a regex cannot see - what references/question-set-format.md promises:
      enum, a value it can take; `from_deployment` and `from_context` name a
      question in the deployment set; `confirm_in` names environments the
      deployment set knows.
-  6. `audience`, where present, is customer, engineer or platform. With
-     --require-audience its absence is an error - the switch the customer
-     interview turns on once every set carries it.
+  6. `audience` is present and is customer, engineer or platform - who answers
+     the question; a question without one would reach the customer by accident.
   7. Unknown fields are reported: a misspelt `default` is a question that is
      silently asked every run.
+  8. With --platform <file>: the platform profile's keys are deployment-set
+     questions with audience platform, enum values are within `values`, and a
+     ref value is a name and resource group, not a resource id.
 
 Needs PyYAML (pip install pyyaml). Without it the script says so and exits 2
 rather than pretending the files are fine.
 
 Usage:
     python3 check_question_set.py <path>...
+    python3 check_question_set.py --platform ./platform.yaml
 
 A path is a questions.yaml, a resource directory, a family directory, the
 resources root, or the deployment set. Directories are searched for
@@ -123,7 +126,7 @@ def kind_matches(qtype, value):
     return True
 
 
-def check_set(path, doc, deployment, require_audience, rel):
+def check_set(path, doc, deployment, rel):
     """Returns (errors, warnings, question count)."""
     errors, warnings = [], []
 
@@ -335,19 +338,63 @@ def check_set(path, doc, deployment, require_audience, rel):
 
         # --- 6. audience
         aud = q.get('audience')
-        if aud is not None and aud not in AUDIENCES:
+        if aud is None:
+            err(f"{where}: audience is missing (customer | engineer | platform) - who answers it?")
+        elif aud not in AUDIENCES:
             err(f"{where}: audience '{aud}' is not one of {', '.join(AUDIENCES)}")
-        if aud is None and require_audience:
-            err(f"{where}: audience is missing")
 
     return errors, warnings, len(qs)
+
+
+PLATFORM_TOP = {'schema_version', 'platform'}
+
+
+def check_platform(doc, deployment, rel):
+    """A platform.yaml: keys are deployment-set questions with audience platform."""
+    errors = []
+
+    def err(t): errors.append(f"{rel}: {t}")
+
+    if not isinstance(doc, dict):
+        err('does not parse as a mapping')
+        return errors
+    if deployment is None:
+        err('the deployment set did not load, so the keys cannot be checked')
+        return errors
+    if 'schema_version' not in doc:
+        err('schema_version is missing')
+    meta = doc.get('platform')
+    if not isinstance(meta, dict) or not meta.get('id'):
+        err("platform.id is missing - a wrong value needs an owner, and the spec names the profile")
+    dep = {q.get('id'): q for _, q in questions_of(deployment)}
+    for k, v in doc.items():
+        if k in PLATFORM_TOP:
+            continue
+        q = dep.get(k)
+        if q is None:
+            err(f"'{k}' is not a deployment-set question")
+            continue
+        if q.get('audience') != 'platform':
+            err(f"'{k}' has audience {q.get('audience')}, not platform - it is not the platform's to fix")
+            continue
+        t, values = q.get('type'), q.get('values')
+        if t == 'enum' and isinstance(values, list) and v not in values:
+            err(f"'{k}': '{v}' is not in {values}")
+        elif t == 'ref':
+            if isinstance(v, str) and v.startswith('/subscriptions/'):
+                err(f"'{k}' is a resource id; the deployment set takes a name and resource group, so no subscription is pinned")
+            elif isinstance(v, dict) and 'name' not in v and 'subscription_id' not in v:
+                err(f"'{k}' names neither a name nor a subscription_id")
+        elif t in ('string', 'int', 'bool', 'list') and not kind_matches(t, v):
+            err(f"'{k}': {v!r} is not a {t}")
+    return errors
 
 
 def main():
     ap = argparse.ArgumentParser(description='Validate question sets against the question-set format.')
     ap.add_argument('paths', nargs='*', help='questions.yaml files or directories holding them; default: the whole plugin')
-    ap.add_argument('--require-audience', action='store_true',
-                    help='fail on a question without an audience (customer | engineer | platform)')
+    ap.add_argument('--platform', metavar='FILE',
+                    help='a platform.yaml to check against the deployment set instead of question sets')
     args = ap.parse_args()
 
     try:
@@ -356,12 +403,6 @@ def main():
         bad('no YAML parser available')
         say('       Install one and re-run:', 'gray')
         say('         pip install pyyaml', 'gray')
-        return 2
-
-    paths = args.paths or [PLUGIN]
-    sets = find_sets(paths)
-    if not sets:
-        bad('no question sets found')
         return 2
 
     def load(p):
@@ -376,6 +417,33 @@ def main():
         except yaml.YAMLError:
             deployment = None
 
+    if args.platform:
+        if not os.path.isfile(args.platform):
+            bad(f"no such file: {args.platform}")
+            return 2
+        say(f"Platform profile check - {os.path.abspath(args.platform)}", 'cyan')
+        print('-' * 70)
+        try:
+            doc = load(args.platform)
+        except yaml.YAMLError as e:
+            bad(f"YAML does not parse: {e}")
+            return 1
+        errors = check_platform(doc, deployment, os.path.basename(args.platform))
+        if errors:
+            bad(f"{len(errors)} violation(s)")
+            for e in errors:
+                say(f"         {e}", 'gray')
+            return 1
+        n = len([k for k in doc if k not in PLATFORM_TOP])
+        say(f"{n} platform value(s), every one a deployment-set question the platform owns.", 'green')
+        return 0
+
+    paths = args.paths or [PLUGIN]
+    sets = find_sets(paths)
+    if not sets:
+        bad('no question sets found')
+        return 2
+
     say(f"Question-set check - {len(sets)} file(s)", 'cyan')
     print('-' * 70)
 
@@ -389,7 +457,7 @@ def main():
             bad(rel)
             continue
         dep = deployment if os.path.abspath(p) != dep_path else None
-        e, w, n = check_set(p, doc, dep, args.require_audience, rel)
+        e, w, n = check_set(p, doc, dep, rel)
         total += n
         errors.extend(e)
         warnings.extend(w)
