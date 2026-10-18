@@ -7,7 +7,10 @@ a layout, follow that and ignore the defaults below.
 
 ```
 main.bicep                  # the deployment entry point
-main.bicepparam             # parameters per environment
+main.development.bicepparam # one file per stage in context.environments - the per-stage values
+main.test.bicepparam
+main.production.bicepparam
+bicepconfig.json            # symbolicNameCodegen for the tests
 modules/
   storage.bicep             # one resource concern per file
   storage.network.bicep     # private endpoint, DNS record
@@ -15,7 +18,14 @@ types.bicep                 # user-defined types shared across files
 infra-spec.yaml
 ```
 
-A `.bicepparam` file per environment beats one parameter file with conditionals inside it.
+A `.bicepparam` file per stage beats one parameter file with conditionals inside it, and
+the stage's subscription is the deployment's scope on the command line
+(`az deployment group create --subscription <stage's> -g <stage's rg>`), one per stage.
+Every decision whose question is `per_environment`, or whose spec value is a map keyed by
+stage, is a `param` without a default whose value lives in the stage file — the address
+range, the subnets, `storageSkuName` and `logRetentionDays` that `non_production_savings`
+sets cheaper outside production — never a literal in the template. A stage whose values
+are still `open:` gets no file.
 The conditionals are where environments silently diverge.
 
 ## Modules
@@ -196,7 +206,8 @@ type storageConfig = {
 
 `location`, `workload` and `resourceGroupName` are `param`s without a default, and the
 subscription is the deployment's target (`az deployment group create --subscription ... -g ...`),
-never a literal. Values the user stated go into `main.bicepparam`, not into the template.
+never a literal. Values the user stated go into the stage's `main.<stage>.bicepparam`, not
+into the template.
 `workload` carries `@minLength`/`@maxLength` for the name-length limit.
 
 ## Names come from vars

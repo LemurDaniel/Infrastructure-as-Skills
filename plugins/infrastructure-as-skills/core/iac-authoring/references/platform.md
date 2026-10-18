@@ -46,7 +46,17 @@ diagnostics_destination:
   resource_group_name: rg-observability-prod-we
 ```
 
-A profile does not have to answer every platform question. One that says only
+A platform fact that differs between the stages — the hub, the subnet, the workspace of
+each stage's subscription — is a map keyed by stage, with the stages the engineer knows:
+
+```yaml
+existing_vnet:
+  development: { name: vnet-hub-dev-we, resource_group_name: rg-network-dev-we }
+  production: { name: vnet-hub-prod-we, resource_group_name: rg-network-prod-we }
+```
+
+A stage the map leaves out is an `open:` entry naming that stage, owned by the platform
+team. A profile does not have to answer every platform question. One that says only
 `landing_zone: standalone` is valid: the rest resolves as the deployment set describes.
 What it does not answer and nobody else can is an `open:` entry in the spec, with the
 platform owner named — never a question put to the customer.

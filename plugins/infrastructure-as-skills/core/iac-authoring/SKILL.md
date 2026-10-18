@@ -94,7 +94,8 @@ customer mode the list is the `requirements` group in prose and nothing technica
 
 ```
 Beschreib kurz, was ihr braucht. Hilfreich ist alles davon, nichts davon ist Pflicht:
-  - Wofür ist es da, und ist es zum Ausprobieren, zum Testen oder für den Echtbetrieb?
+  - Wofür ist es da? Es gibt eine Entwicklungs-, eine Test- und eine Produktionsstufe,
+    außer ihr sagt etwas anderes (nur eine Sandbox zum Ausprobieren, eine Stufe mehr)
   - Wer arbeitet damit, und von wo (nur Mitarbeiter im Firmennetz, Partner, das Internet)?
   - Wie schlimm wäre es, wenn es einen Tag nicht erreichbar ist?
   - Wie weit zurück müsst ihr kommen, wenn jemand versehentlich etwas löscht?
@@ -135,6 +136,14 @@ The same reading settles how the code is split, which the spec records under
 `composition.granularity`:
 
 - An existing `modules/` directory → match what is there, per module and per file
+- **Stages are part of the layout.** `context.environments` — `[development, test,
+  production]` unless the user said otherwise — renders as one root and one parameter
+  file per stage (`environments/<stage>.tfvars`, `main.<stage>.bicepparam`) with one
+  state per stage (a backend key, never a workspace). A value marked `per_environment`
+  in its question is a parameter whose value lives in the stage's file, never a literal
+  in the template; a stage whose values nobody could give gets no file and an `open:`
+  entry naming it. Only what `non_production_savings` relaxes differs between the
+  stages; everything else is identical, which is what the stack is for.
 - An existing `infra-spec.yaml` → its `composition` is `carried`; do not re-decide it
 - A flat repository, or a single resource → `single`
 - Otherwise → `per-concern`
@@ -315,10 +324,14 @@ Defaulted (guardrail baseline):
   Data protection blob soft-delete 7d, container soft-delete 7d, versioning on
   Observability   diagnostics -> Log Analytics, categories: audit + allLogs
 
+Per stage (one file each; development and test open until the platform team answers):
+  production      sub 1111…, rg-invoicing-prod-we, hub vnet-hub-prod-we, ZRS
+  development     sub ?, rg ?, hub ? - LRS (non_production_savings)
+  test            sub ?, rg ?, hub ? - LRS
+
 Asked:
-  environment     production
+  stages          development, test, production (default; "Produktion" named the production stage)
   location        westeurope
-  replication     ZRS
 ```
 
 The deployment block comes first because it is what the rest hangs off, and a forced value
