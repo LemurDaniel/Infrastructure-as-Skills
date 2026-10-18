@@ -101,9 +101,9 @@ SLOT_W, SLOT_H, ICON = 190, 130, 48
 LABEL_W = SLOT_W - 10
 HEAD, PAD, LANE_GAP, TRACK = 44, 20, 120, 14
 
-CONTAINER_STYLE = 'rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;'
+CONTAINER_STYLE = 'rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;'
 EXISTING_STYLE = 'dashed=1;strokeColor=#999999;fontColor=#777777;'
-SUBNET_STYLE = 'rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F3F9FD;strokeColor=#7FBAEA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=2;container=1;collapsible=0;'
+SUBNET_STYLE = 'rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#7FBAEA;fillOpacity=10;strokeColor=#7FBAEA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=2;container=1;collapsible=0;'
 EDGE_BASE = 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;'
 
 
@@ -174,7 +174,7 @@ def format_label(title, sub, note):
 
 
 def icon_style(img, flagged, existing):
-    style = f"image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelWidth={LABEL_W};image={img};"
+    style = f"image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelBackgroundColor=none;labelWidth={LABEL_W};image={img};"
     if existing:
         style += 'opacity=60;fontColor=#777777;'
     if flagged:
@@ -244,6 +244,13 @@ def main():
     pe_subnet_name = split_ref(get_decision(dep, ['private_endpoint_subnet']))['name']
     pe_subnet_prefix = get_decision(dep, ['private_endpoint_subnet_prefix'])
     if not pe_subnet_name:
+        # Under network_ownership: create the deployment set holds only the prefix; the
+        # generated subnet's name is on the resources that use it.
+        for k in with_pe:
+            pe_subnet_name = split_ref(get_decision(resources[k], ['networking', 'private_endpoint_subnet']))['name']
+            if pe_subnet_name:
+                break
+    if not pe_subnet_name:
         pe_subnet_name = 'snet-' + T['peSubnet'].lower().replace(' ', '')
 
     other_subnets = []
@@ -307,7 +314,7 @@ def main():
         else:
             say(f"[warn] no icon for '{kind}' - drawn as a box", 'yellow')
             # Same height and centre as an icon, so edges into it stay straight.
-            style = 'rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#605E5C;'
+            style = 'rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#605E5C;'
             if is_flagged:
                 style += 'fontColor=#D13438;'
             x, y, w, h = slot_x + 20, slot_y + 8, SLOT_W - 40, ICON
@@ -438,7 +445,7 @@ def main():
     if exposure == 'public' and middle:
         iy = min(row_y[k] for k in middle)
         add_cell({'id': 'internet', 'parent': '1', 'x': 30, 'y': iy + 8 + ICON / 2 - 30, 'w': 100, 'h': 60,
-                  'style': 'ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#605E5C;', 'value': T['internet']})
+                  'style': 'ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#605E5C;', 'value': T['internet']})
 
     # Decisions panel, right of the subscription.
     lines = []
@@ -483,7 +490,7 @@ def main():
     panel_lines = sum(max(1, math.ceil(plain_len(line) / 48)) for line in lines)
     panel_h = max(80, panel_lines * 18 + 24)
     add_cell({'id': 'panel', 'parent': '1', 'x': sub_x + sub_w + 40, 'y': sub_y, 'w': panel_w, 'h': panel_h,
-              'style': 'rounded=1;arcSize=3;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;fillColor=#F3F2F1;strokeColor=#C8C6C4;',
+              'style': 'rounded=1;arcSize=3;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;fillColor=#C8C6C4;fillOpacity=15;strokeColor=#C8C6C4;',
               'value': '<br>'.join(lines)})
 
     # --- Edges -------------------------------------------------------------
@@ -518,7 +525,7 @@ def main():
         if line:
             wrapped.append(line)
         edges.append({'id': f"e-role-{r}", 'source': frm, 'target': to, 'value': '<br>'.join(esc(w) for w in wrapped), 'labelAt': 0.7,
-                      'style': EDGE_BASE + 'exitX=1;exitY=0.3;entryX=1;entryY=0.3;strokeColor=#5C2D91;fontColor=#5C2D91;fontSize=10;labelBackgroundColor=#FFFFFF;',
+                      'style': EDGE_BASE + 'exitX=1;exitY=0.3;entryX=1;entryY=0.3;strokeColor=#5C2D91;fontColor=#5C2D91;fontSize=10;labelBackgroundColor=none;',
                       'points': [{'x': tx, 'y': anchor_y(frm, 0.3)}, {'x': tx, 'y': anchor_y(to, 0.3)}]})
         r += 1
     if draw_law:
