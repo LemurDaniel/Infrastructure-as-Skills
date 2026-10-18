@@ -392,10 +392,9 @@ family:
 8. If people would ask for it with a term the
    [azure-resources](../azure-resources/SKILL.md) description does not carry, add the term
    there — that description is the only trigger the resource has.
-9. Validate with the repo's `check_repo_consistency.py` (naming forms, unique ids,
-   `required`/`default`, `why`/`renders`, routing reachability). A dedicated
-   `check_question_set.py` that also checks enum defaults and `depends_on` targets is
-   planned and **not written yet** — do not call it.
+9. Validate with `scripts/check_question_set.py <resource-directory>` — enum defaults,
+   `depends_on` and `from_deployment` targets, the resolution fields, unknown fields —
+   and with the repo's `check_repo_consistency.py` for routing reachability.
 
 A genuinely new family gets a directory under `resources/` with a `routing.md`, and a row in
 the azure-resources table. **Not** a skill directory and **not** a `plugin.json` entry:

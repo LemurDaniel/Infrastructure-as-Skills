@@ -125,17 +125,22 @@ public access is disabled. Gate them rather than asking and discarding.
 
 ## Validate
 
-Today: the repo's `.claude/skills/git-commit-conventions/scripts/check_repo_consistency.py`,
-which checks naming forms, unique ids, `required`/`default` not combined, `why`/`renders`
-present and routing reachability. The dedicated script below is **planned, not written**:
-
 ```powershell
-python3 scripts/check_question_set.py <family-directory>
+python3 <plugin>/core/iac-authoring/scripts/check_question_set.py                       # every set in the plugin
+python3 <plugin>/core/iac-authoring/scripts/check_question_set.py resources/storage      # one family, one resource, or one file
+python3 <plugin>/core/iac-authoring/scripts/check_question_set.py --require-audience    # once every question carries an audience
 ```
 
-It would check every resource's `questions.yaml` in the family for the structural invariants: unique ids,
-`required` and `default` not both set, enum defaults within `values`, `depends_on` pointing
-at a question that exists, `why` and `renders` present, both naming forms and the
-abbreviation declared, the Bicep identifier not carrying an `Azure::` prefix, and every
-resource reachable from the family's 
-outing.md.
+It parses the files (PyYAML) and checks what a regex cannot: the envelope and both
+naming identifiers agreeing; unique group and question ids; the review-order groups in
+order; `id`, `ask`, `type`, `why`, `renders` present; a known `type`, `values` on an
+enum, a default within `values` and of the type's kind, `ref` on a ref question;
+`required`, `default`, `from_deployment` and `parameterized` mutually exclusive and one
+of them present; `depends_on` naming a question in the set and a value it can take;
+`from_deployment` and `from_context` naming a deployment-set question; `confirm_in`
+naming known environments; `audience` one of `customer`, `engineer`, `platform`; and
+unknown fields, which is how a misspelt `default` turns into a question asked every run.
+Exit 0 clean, 1 violations, 2 could not check.
+
+The repo's `check_repo_consistency.py` still runs its regex subset before every commit and
+adds what this script does not: routing reachability and the listing budget.
