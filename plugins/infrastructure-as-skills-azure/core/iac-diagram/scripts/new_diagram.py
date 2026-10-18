@@ -116,11 +116,27 @@ def get_at(m, keys):
     return cur
 
 
+STAGES = {'development', 'test', 'qa', 'uat', 'integration', 'staging', 'preproduction',
+          'production', 'sandbox', 'demo', 'hotfix'}
+
+
+# A per-stage value is a map keyed by stage. The page draws one picture, so it shows
+# the value every stage shares, else production's, else the first stage's - printing
+# the map itself leaks Python's dict syntax into the labels.
+def collapse_stages(v):
+    if isinstance(v, dict) and v and set(v) <= STAGES:
+        vals = list(v.values())
+        if all(x == vals[0] for x in vals):
+            return vals[0]
+        return v.get('production', vals[0])
+    return v
+
+
 # A decision is either { value, source } or a bare value.
 def get_value(node):
     if isinstance(node, dict) and 'value' in node:
-        return node['value']
-    return node
+        return collapse_stages(node['value'])
+    return collapse_stages(node)
 
 
 def get_decision(m, keys):
