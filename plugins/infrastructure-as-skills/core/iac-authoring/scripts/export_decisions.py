@@ -48,7 +48,9 @@ LABELS = {
         'intro': 'What will be built, decided from your answers and the rules behind the defaults. '
                  'Every line is one decision; the key in the appendix is where an engineer finds it in the specification.',
         'as_of': 'As of {date}. Specification: `{spec}`.',
-        'context': 'The system',
+        'context': 'The system', 'stages': 'What differs between the stages',
+        'stages_intro': 'One code base is deployed through these stages; everything not listed here is identical in every stage.',
+        'stage_file': 'in stage', 'savings': 'cheaper outside production',
         'answers': 'What follows from your answers',
         'answered': 'your answer', 'stated': 'from your description', 'assumed_default': 'not said, so the usual answer applies',
         'carried': 'as decided earlier',
@@ -71,7 +73,9 @@ LABELS = {
         'intro': 'Was gebaut wird, entschieden aus euren Antworten und den Regeln hinter den Vorgaben. '
                  'Jede Zeile ist eine Entscheidung; der Schlüssel im Anhang ist, wo ein Engineer sie in der Spezifikation findet.',
         'as_of': 'Stand {date}. Spezifikation: `{spec}`.',
-        'context': 'Das System',
+        'context': 'Das System', 'stages': 'Was sich zwischen den Stufen unterscheidet',
+        'stages_intro': 'Ein Code wird durch diese Stufen ausgerollt; alles, was hier nicht steht, ist in jeder Stufe gleich.',
+        'stage_file': 'in Stufe', 'savings': 'außerhalb der Produktion günstiger',
         'answers': 'Was aus euren Antworten folgt',
         'answered': 'eure Antwort', 'stated': 'aus eurer Beschreibung', 'assumed_default': 'nicht gesagt, daher gilt die übliche Antwort',
         'carried': 'wie früher entschieden',
@@ -117,6 +121,8 @@ class Renderer:
         self.lang = lang
         self.L = labels
         self.fallbacks = 0
+        self.environments = []
+        self.env_q = None
 
     def words(self, mapping):
         """A { en: ..., de: ... } mapping in the requested language, else English marked."""
@@ -127,8 +133,17 @@ class Renderer:
         self.fallbacks += 1
         return f"{mapping.get('en', '')} {self.L['fallback']}"
 
+    def is_stage_map(self, value):
+        return isinstance(value, dict) and bool(value) and all(k in self.environments for k in value)
+
+    def stage_name(self, stage):
+        pv = (self.env_q or {}).get('plain_values') or {}
+        return self.words(pv[stage]) if stage in pv else stage
+
     def value_words(self, q, value):
         pv = (q or {}).get('plain_values') or {}
+        if self.is_stage_map(value):
+            return '; '.join(f"{self.stage_name(k)}: {self.value_words(q, v)}" for k, v in value.items())
         if isinstance(value, bool):
             if value in pv:
                 return self.words(pv[value])
@@ -210,6 +225,8 @@ def main():
                     titles[res] = doc.get('title', res)
 
     ctx = spec.get('context') or {}
+    R.environments = list(ctx.get('environments') or [])
+    R.env_q = dep_q.get('environments', (None, None))[1]
     dep = spec.get('deployment') or {}
     resources = spec.get('resources') or {}
     head = spec.get('spec') or {}
@@ -228,10 +245,39 @@ def main():
     # --- the system: context -------------------------------------------------
     w(f"## {L['context']}")
     w('')
-    for key in ('environment', 'location', 'workload', 'subscription_id', 'resource_group_name'):
-        if key in ctx and key in dep_q:
-            w(f"- {R.line(dep_q[key][1], ctx[key])}")
+    for key in ('environments', 'location', 'workload', 'subscription_id', 'resource_group_name', 'stage_isolation'):
+        src = ctx if key in ctx else ({k: v.get('value') for k, v in dep.items() if isinstance(v, dict)} if key in dep else None)
+        if src is not None and key in src and key in dep_q and not R.is_stage_map(src[key]):
+            w(f"- {R.line(dep_q[key][1], src[key])}")   # per-stage values follow in their own section
     w('')
+
+    # --- what differs between the stages ---------------------------------------
+    stage_lines = []
+    for key, v in ctx.items():
+        if R.is_stage_map(v) and key in dep_q:
+            stage_lines.append(R.line(dep_q[key][1], v))
+    for qid, d in dep.items():
+        if isinstance(d, dict) and R.is_stage_map(d.get('value')) and qid in dep_q:
+            note = f" _({L['savings']})_" if d.get('non_production') == 'default' else ''
+            stage_lines.append(R.line(dep_q[qid][1], d['value']) + note)
+    for res, groups in resources.items():
+        qset = sets.get(res, {})
+        for gid, qs in (groups or {}).items():
+            if not isinstance(qs, dict) or str(gid).startswith('_'):
+                continue
+            for qid, d in qs.items():
+                if isinstance(d, dict) and R.is_stage_map(d.get('value')):
+                    q = qset.get(qid, (None, None))[1]
+                    note = f" _({L['savings']})_" if d.get('non_production') == 'default' else ''
+                    stage_lines.append(f"{titles.get(res, res)}: {R.line(q, d['value'])}{note}")
+    if len(R.environments) > 1:
+        w(f"## {L['stages']}")
+        w('')
+        w(L['stages_intro'])
+        w('')
+        for line in stage_lines:
+            w(f"- {line}")
+        w('')
 
     # --- what follows from your answers --------------------------------------
     derived = {}  # deployment id -> [(resource, line)]
@@ -339,7 +385,9 @@ def main():
         for o in opens:
             if isinstance(o, dict):
                 owner = o.get('owner')
-                w(f"- {o.get('question', o.get('key'))}" + (f" _({L['owner']}: {owner})_" if owner else '') + f" — {L['blocks']}: {o.get('blocks', '?')}")
+                stages = o.get('environments') or []
+                where = f" [{', '.join(R.stage_name(e) for e in stages)}]" if stages else ''
+                w(f"- {o.get('question', o.get('key'))}{where}" + (f" _({L['owner']}: {owner})_" if owner else '') + f" — {L['blocks']}: {o.get('blocks', '?')}")
         w('')
     for qid, d in dep.items():
         if isinstance(d, dict) and d.get('source') == 'assumed' and qid in dep_q:

@@ -28,6 +28,12 @@ An entry may also carry `deployment: <key>` or `wiring: <key>` instead of
 `decision:` for a deployment-level or wiring assertion; coverage ignores
 those, the runner evaluates them.
 
+An entry with `stage: <name>` is evaluated against that stage's parameter
+file instead - `bicep/main.<stage>.bicepparam`, compiled with
+`bicep build-params` - with `path` from the parameters root
+(`parameters.addressSpace.value`). That is how a per-stage value is
+asserted: as the stage file's value, never as a literal in the template.
+
 `path` is dotted, with `[n]` for a list index, from the template root. One
 operator per entry:
 
@@ -172,6 +178,29 @@ def main():
         return 2
     ok(f"compiled - languageVersion {compiled.get('languageVersion')}, resources: {', '.join(compiled['resources'])}")
 
+    stage_params = {}
+
+    def params_of(stage):
+        if stage in stage_params:
+            return stage_params[stage]
+        pfile = os.path.join(os.path.dirname(template), f"main.{stage}.bicepparam")
+        if not os.path.isfile(pfile):
+            stage_params[stage] = None
+            return None
+        p = subprocess.run([bicep, 'build-params', pfile, '--stdout'], capture_output=True, text=True)
+        if p.returncode != 0:
+            bad(f"bicep build-params failed for {pfile}")
+            say(p.stderr.strip(), 'gray')
+            stage_params[stage] = None
+            return None
+        try:
+            stage_params[stage] = json.loads(json.loads(p.stdout)['parametersJson'])
+            ok(f"stage {stage} - {os.path.basename(pfile)} compiled")
+        except (json.JSONDecodeError, KeyError) as e:
+            bad(f"{pfile}: no parameters JSON: {e}")
+            stage_params[stage] = None
+        return stage_params[stage]
+
     total, failures, marked = 0, [], 0
     for f in files:
         with open(os.path.join(tests_dir, f), encoding='utf-8') as fh:
@@ -194,7 +223,13 @@ def main():
                 continue
             label = entry.get('decision') or entry.get('deployment') or entry.get('wiring') or f"{f}#{i}"
             total += 1
-            problem = evaluate(entry, compiled)
+            stage = entry.get('stage')
+            if stage:
+                label = f"{label} [{stage}]"
+                doc = params_of(str(stage))
+                problem = f"no parameter file for stage '{stage}' (bicep/main.{stage}.bicepparam)" if doc is None else evaluate(entry, doc)
+            else:
+                problem = evaluate(entry, compiled)
             if problem:
                 failures.append(f"{label}: {problem}")
     print('-' * 70)

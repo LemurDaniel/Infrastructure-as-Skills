@@ -36,13 +36,21 @@ spec:
   skill_version: 0.1.0
   at: 2026-10-17T09:14:00Z
 
-# Values every resource inherits. Resolved once, not per resource.
+# Values every resource inherits. Resolved once, not per resource. The system is
+# deployed through a stack of stages from one code base; what differs per stage is a
+# map keyed by stage, rendered as a parameter whose value lives in the stage's file.
 context:
-  environment: production
+  environments: [development, test, production]
   location: westeurope
   workload: payments
-  subscription_id: 00000000-0000-0000-0000-000000000000
-  resource_group_name: rg-we-prod-payments-01
+  subscription_id:
+    development: 00000000-0000-0000-0000-00000000dev1
+    test: 00000000-0000-0000-0000-00000000tst1
+    production: 00000000-0000-0000-0000-00000000prd1
+  resource_group_name:
+    development: rg-we-dev-payments-01
+    test: rg-we-tst-payments-01
+    production: rg-we-prod-payments-01
 
   # The tag set this repository uses, taken from it rather than prescribed here.
   tags:
@@ -61,7 +69,12 @@ deployment:
     value: create
     source: asked
   address_space:
-    value: 10.42.0.0/16
+    # per_environment: one value per stage, never a literal in the template. A stage
+    # nobody could answer for is missing here and named in open: below.
+    value:
+      development: 10.42.0.0/16
+      test: 10.43.0.0/16
+      production: 10.44.0.0/16
     source: asked
   private_endpoint_subnet:
     value: snet-data-prod-01
@@ -134,6 +147,43 @@ wiring:
         role: Storage Blob Data Contributor
     source: pattern
 ```
+
+## Stages: one value or a map
+
+`context.environments` lists the stages the code is deployed through — `[development,
+test, production]` by default, `[sandbox]` for one throwaway environment. Every value in
+the spec is then either **one value for every stage** (a scalar, a list, a reference
+object) or **a map keyed by stage**:
+
+```yaml
+      replication:
+        value: { development: LRS, test: LRS, production: ZRS }
+        source: requirement
+        derived_from: deployment.outage_impact
+        non_production: default     # dev and test took the question's non_production_default
+```
+
+A map is required for a `per_environment` question (the value differs per stage by
+nature: ranges, subscriptions, referenced platform parts) and allowed for any other where
+a stage departs — a cost saving, or a departure the user named per stage. Its keys are a
+subset of `context.environments`; a stage missing from the map is an `open:` entry that
+names the stage:
+
+```yaml
+open:
+  - key: deployment.address_space
+    environments: [test, production]
+    question: Which address ranges are assigned to the test and production stages?
+    owner: network / IPAM owner
+    blocks: apply
+```
+
+`non_production: default` marks the stages that took the question's
+`non_production_default` under `deployment.non_production_savings`; a stage the user set
+differently carries `non_production: stated`. The renderer reads a map as a parameter
+and writes each stage's value into that stage's parameter file; a scalar is a literal in
+the template. A reference object (`{ name, resource_group_name }`) is told apart from a
+stage map by its keys, which are never stage names.
 
 ## `source` is what makes it a spec rather than a settings dump
 
@@ -390,6 +440,7 @@ changed, not the whole spec again.
 | A resource added | New key under `resources:`, a `composition.modules` entry or an existing module's `contains` extended, `wiring:` entries if it connects to something |
 | A decision changed | The new value with `source: overridden` and a comment naming the old value. Consequences re-derived |
 | A resource removed | Its key, its `contains` entry and every `wiring:` entry naming it are deleted. Say before rendering that the plan will **destroy** it — a removal in the spec is a deletion in Azure |
+| A stage added or removed | `context.environments` changes; every map gains or loses the key, a gained stage's per-stage values are asked or opened, and a removed stage's state is destroyed — say so before rendering |
 | `naming.yaml` | Carried, never regenerated. A naming change the user asks for is an edit to that file, and the plan will show it as a rename — most Azure resources cannot be renamed, so say that it destroys and recreates them |
 | A question added to the set since | Absent, resolves from its default, recorded as `default`. Name the additions |
 
