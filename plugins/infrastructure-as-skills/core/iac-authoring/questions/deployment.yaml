@@ -48,10 +48,14 @@ groups:
           The first decision of any run, and the one most often left unsaid: one
           code base is deployed through a stack of stages, and nearly everyone
           starts in development. So the stack development, test, production is
-          the default, and a request that names only "production" is read as the
-          production stage of that stack, not as a single environment - the
-          customer changes it only by saying so ("nur prod", "eine Sandbox zum
-          Ausprobieren"). `[sandbox]` is the other shape: one throwaway
+          the default - a default, not an assumption: an instruction not to
+          assume anything unstated leaves every default in place, this one
+          included. A request that names one stage names that stage of the
+          stack: "Produktion" is the production stage, "Staging" joins the
+          stack as a fourth stage (development, test, staging, production);
+          a named stage never replaces the stack. Only the customer's own words
+          shrink it - "nur prod", "nur eine Umgebung", "eine Sandbox zum
+          Ausprobieren" - and `[sandbox]` is the other shape: one throwaway
           environment, no stack. Every stage renders from the same code with its
           own parameter file (environments/<stage>.tfvars, main.<stage>.bicepparam)
           and its own state; a value that differs per stage (per_environment:
@@ -407,9 +411,15 @@ groups:
           aus dem Firmennetz", "öffentlich erreichbar" or "wir haben keine
           Landing Zone" has usually answered it already.
         forced_when: >
-          landing_zone: sandbox refuses environment: production - a production
-          workload in a sandbox is a contradiction to ask about, not a value to
-          record
+          A referenced platform part forces a platform archetype: a request that
+          names an existing hub network, a shared private-endpoint subnet or a
+          central workspace (network_ownership: reference, observability_ownership:
+          reference) says a landing zone platform exists, so standalone is ruled
+          out - corp when network_exposure is private, online when it is public,
+          recorded as forced with the referencing answer as forced_by. Never an
+          open item: the references are the answer. landing_zone: sandbox refuses
+          environments containing production - a production stage in a sandbox is
+          a contradiction to ask about, not a value to record
         renders: >
           pre-answers network_exposure and network_ownership, and under `standalone`
           also private_dns_ownership and

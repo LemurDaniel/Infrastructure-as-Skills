@@ -120,6 +120,18 @@ mapping:
 - **The description may add resources.** "…mit Logs nach Log Analytics" routes a second
   question set through [azure-resources](../azure-resources/SKILL.md) — the same request,
   one interview, one spec.
+- **A default is not an assumption.** "Nimm nichts an, was nicht dasteht" removes guesses,
+  never defaults: the stack `[development, test, production]` stays, with a named stage
+  joining it rather than replacing it, and so does every other default in the sets. What
+  the instruction forbids is inventing a value no default exists for — a range, a
+  subscription, a name.
+- **A referenced platform part answers the landing zone.** A named hub network, shared
+  subnet or central workspace means a platform exists, so `landing_zone` is `corp` (private)
+  or `online` (public), recorded as `forced` by that reference — never `standalone`, and
+  never an open item, because the references are the answer.
+- **Context values are bare.** `context:` holds values (`environments: [...]`,
+  `workload: payments`, a per-stage map), not `value:`/`source:` records; the provenance
+  of a context value is the deployment set's, under `deployment:`.
 
 What remains open goes into Phase 3's batches. The description does not replace them; it
 shrinks them, and usually to the `required` questions nobody mentions unprompted.
