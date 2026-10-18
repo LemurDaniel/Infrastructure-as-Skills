@@ -43,6 +43,10 @@ python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/check_
 # --platform <platform.yaml> checks a platform profile against the deployment set instead.
 python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/check_question_set.py
 
+# Renders fixture specs with the diagram script and asserts on the .drawio: zones, lines,
+# colours, the bundled endpoint icon. The evals cannot draw, so this is where it is tested.
+python3 plugins/infrastructure-as-skills-azure/core/iac-diagram/tests/run_diagram_tests.py
+
 # Renders a spec as the customer's decision document (infra-decisions.md beside it).
 python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/export_decisions.py <spec> --language de
 

@@ -226,6 +226,15 @@ def split_ref(value):
     return {'name': parts[0], 'rg': parts[1] if len(parts) > 1 else None}
 
 
+def subnet_name(value, resource_keys=()):
+    """A subnet is named by what the spec calls it, and a reference may carry the resource's
+    key in front (`virtual-network.snet-app`); the picture shows the name alone."""
+    name = split_ref(value)['name']
+    if name and '.' in name and name.split('.', 1)[0] in resource_keys:
+        return name.split('.', 1)[1]
+    return name
+
+
 def as_list(v):
     if v is None:
         return []
@@ -330,13 +339,13 @@ def main():
     with_pe = [k for k in drawn
                if (is_private or pe_subnet_of(k) is not None) and (pna(k) == 'disabled' or pe_subnet_of(k) is not None)]
 
-    pe_subnet_name = split_ref(get_decision(dep, ['private_endpoint_subnet']))['name']
+    pe_subnet_name = subnet_name(get_decision(dep, ['private_endpoint_subnet']), res_keys)
     pe_subnet_prefix = get_decision(dep, ['private_endpoint_subnet_prefix'])
     if not pe_subnet_name:
         # Under network_ownership: create the deployment set holds only the prefix; the
         # generated subnet's name is on the resources that use it.
         for k in with_pe:
-            pe_subnet_name = split_ref(pe_subnet_of(k))['name']
+            pe_subnet_name = subnet_name(pe_subnet_of(k), res_keys)
             if pe_subnet_name:
                 break
     if not pe_subnet_name:
@@ -406,8 +415,20 @@ def main():
         for k in (compute or paas):
             access.append({'from': 'internet', 'to': k, 'label': 'HTTPS'})
 
+    # Only these are actors outside the deployment. A name that is neither an actor nor a
+    # resource in the spec is a mistake in the spec - drawing it as an actor would put a
+    # resource the deployment does not build into the customer's picture.
     def is_actor(name):
-        return name not in resources
+        return name in ('internet', 'users') or name.startswith('external:')
+
+    valid = []
+    for a in access:
+        bad = [n for n in (a['from'], a['to']) if n not in resources and not is_actor(n)]
+        if bad:
+            say(f"[warn] access {a['from']} -> {a['to']}: '{bad[0]}' is neither a resource in the spec nor internet, users or external:<name> - not drawn", 'yellow')
+        else:
+            valid.append(a)
+    access = valid
 
     actors = []
     for a in access:
@@ -449,7 +470,7 @@ def main():
 
     # --- Geometry, phase A: sizes ------------------------------------------
     def compute_subnet(k):
-        n = split_ref(get_decision(resources[k], ['networking', 'integration_subnet']))['name']
+        n = subnet_name(get_decision(resources[k], ['networking', 'integration_subnet']), res_keys)
         if n:
             return n
         for sn in other_subnets:
@@ -754,8 +775,12 @@ def main():
     def node_id(name):
         return f"res-{name}" if name in resources else actor_ids.get(name)
 
+    def is_outside(name):
+        return is_actor(name) and (name == 'internet' or name.startswith('external:'))
+
     def is_public_edge(a):
-        if is_actor(a['from']) and (a['from'] == 'internet' or a['from'].startswith('external:')):
+        # Either end outside the deployment, or a target whose public access is not disabled.
+        if is_outside(a['from']) or is_outside(a['to']):
             return True
         return a['to'] in drawn and pna(a['to']) != 'disabled'
 
