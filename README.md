@@ -199,9 +199,10 @@ matching skill triggers.
 
 Early, and the shape matters more than the coverage right now. One interview has been run
 end to end; it produced a spec, and the spec is honest about what it could not resolve.
-One spec (`private-storage-on-platform`) has been rendered to both targets — Terraform
-against `azurerm` 5.10 and `LemurDaniel/naming` 1.0 with plan-only tests, Bicep compiled
-and linted with CLI 0.48 — and the two renders diffed. Nothing has been applied.
+One spec (`private-storage-on-platform`) has been rendered to both targets on the Azure
+Verified Modules — Terraform on `avm-res-storage-storageaccount` 0.10 with plan-only
+tests against mocked `azapi`, Bicep on `avm/res/storage/storage-account` 0.33 compiled and
+linted with CLI 0.48 — and the two renders diffed. Nothing has been applied.
 
 - [x] Plugin skeleton, marketplace manifest, grouped layout
 - [x] Shared contract: spec format, question-set format, the interview protocol
@@ -210,8 +211,8 @@ and linted with CLI 0.48 — and the two renders diffed. Nothing has been applie
 - [x] Rendering: naming interfaces, module layout and idiom per target
 - [x] Azure Verified Modules as the primary rendering: the contract, the shared
       interfaces, decision → module input per resource for both targets
-- [ ] The example re-rendered on AVM, with its tests — the authored render is what is
-      committed today
+- [x] The example re-rendered on AVM, both targets, with its tests — which settled the
+      test contract with a module in the middle
 - [x] Guardrails: the rules every question set takes its defaults from, shared with
       `Infrastructure-by-Skill`
 - [x] Three resources: `storage-account`, `virtual-network`, `log-analytics-workspace`

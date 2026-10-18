@@ -47,7 +47,13 @@ Verified Modules first, authored resources second.
 - **Plan-only tests mock the platform.** A referenced vnet or workspace is a `data` block,
   which a plan reads from Azure; `mock_provider "azurerm"` with parseable ids keeps the
   test credential-free. With a module in the middle, `azapi` and `modtm` are mocked the
-  same way and the assert target is the module's `resource` output.
+  same way and the assert target is the module's `resource` output — settled 2026-10-18
+  on the storage module v0.10.0: the account body, identity, name and parent id are
+  observable at plan time, the `private_endpoints` output gives name and a null zone
+  group id; what the module builds in child modules (blob service, diagnostics, role
+  assignments, the endpoint body) is not, and is marked not-testable — 9 of 24 storage
+  decisions. The `resource` output is sensitive, so a failing assert prints
+  `(sensitive value)`; the error message carries the expected value.
 - **Sub-resource names go through `<?SUBNAME>`**, not appended to a finished name. The
   first cross-backend diff found the Terraform render naming a private endpoint
   `…-01-blob` while Bicep said `…-blob-01`; the convention has the token for exactly this.
@@ -71,17 +77,9 @@ Verified Modules first, authored resources second.
 
 ## Open
 
-- **The example is still the authored render.** `private-storage-on-platform` predates
-  AVM-first and now documents `implementation: authored`. Re-rendering it on
-  `avm-res-storage-storageaccount` / `avm/res/storage/storage-account` is the next step,
-  and it needs a machine with registry access (`registry.terraform.io`, `mcr.microsoft.com`,
-  GitHub releases for the `naming` provider) — the session that wrote the AVM references
-  had none, so the module calls in the references are written from the module READMEs and
-  sources, not from a plan.
-- **Which decisions a plan can observe through an AVM module's `resource` output** is
-  undecided until that render: `avm.md` describes the intended test contract (assert on
-  `resource.body` with `azapi` mocked, mark the rest `not-testable` with the module as the
-  reason) and `check_render_coverage.py` accepts either per decision.
+- **Bicep decisions are visible in the compiled ARM** as parameter values of the nested
+  module deployment (checked by hand on 2026-10-18); a Bicep test would assert there.
+  Still no runner.
 - **Todo: an AVM version drift check.** The versions in `avm.md` and the six resource
   references are dated snapshots. A scheduled check that compares them against the MCR
   tag lists and the module repos' git tags and reports only what moved - never edits -
@@ -106,15 +104,15 @@ Verified Modules first, authored resources second.
 - The customer interview (`ROADMAP.md` B): `audience` and `plain` in the question-set
   format, `requirements.yaml`, `platform.yaml`, the role filter in Phase 0 and 3,
   `export_decisions.py`, the three evals graders. None started.
+- A cloud session needs `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
+  release downloads and `mcr.microsoft.com` allowed, and installs `terraform` and `bicep`
+  into `~/.local/bin` itself (neither is in the image). Done once on 2026-10-18.
 
 ## Next
 
-`ROADMAP.md` A1: re-render `private-storage-on-platform` on the AVM modules, both
-targets, from the unchanged spec (`terraform init` with `azapi`/`modtm`/`random` added,
-`terraform test` with the mocked providers, `check_render_coverage.py`, `bicep build`
-against `br/public`), which settles the test contract in `avm.md` and re-measures the
-cross-backend diff. A2 (`check_question_set.py`) is done. A1 needs a session whose
-network policy allows `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
-with `objects.githubusercontent.com` and `api.github.com` (terraform, the providers,
-the `naming` provider, the bicep binary) and `aka.ms`; the 2026-10-18 cloud session had
-only `mcr.microsoft.com`. Then B3 and B1.
+`ROADMAP.md` A is down to A3 (Bicep tests on the compiled ARM), A4 (eval baseline) and A5
+(the sandbox plan, waiting on the owner's subscription). Next in order: B3 and B1 —
+`platform.yaml` and the `audience` field in the question-set format with
+`check_question_set.py --require-audience` turned on — because they are small and change
+the interview at once; then `greenfield-telemetry` as the second example (Bicep, the
+`create` branches), which is also the template for B's evals.
