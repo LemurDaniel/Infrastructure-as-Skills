@@ -5,46 +5,58 @@
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
         <mxCell id="sub" value="&lt;b&gt;Subscription&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;11111111-2222-3333-4444-555555555555&lt;/font&gt;" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;" vertex="1" parent="1">
-          <mxGeometry x="20" y="20" width="998" height="390" as="geometry"/>
+          <mxGeometry x="20" y="80" width="540" height="604" as="geometry"/>
+        </mxCell>
+        <mxCell id="rg" value="&lt;b&gt;rg-invoicing-prod-we&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;westeurope&lt;/font&gt;" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;" vertex="1" parent="sub">
+          <mxGeometry x="20" y="44" width="500" height="540" as="geometry"/>
+        </mxCell>
+        <mxCell id="vnet" value="&lt;b&gt;vnet-hub-prod-we&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;&lt;i&gt;vorhanden - wird nicht erstellt&lt;/i&gt;&lt;/font&gt;" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;dashed=1;strokeColor=#999999;fontColor=#777777;" vertex="1" parent="rg">
+          <mxGeometry x="20" y="54" width="460" height="258" as="geometry"/>
+        </mxCell>
+        <mxCell id="snet-pe" value="&lt;b&gt;snet-privatelink&lt;/b&gt;" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F3F9FD;strokeColor=#7FBAEA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=2;container=1;collapsible=0;dashed=1;strokeColor=#999999;fontColor=#777777;" vertex="1" parent="vnet">
+          <mxGeometry x="20" y="44" width="420" height="174" as="geometry"/>
+        </mxCell>
+        <mxCell id="z-paas" value="Azure PaaS &amp;#8212; öffentlicher Zugriff deaktiviert" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#F7F7F7;strokeColor=#8A8886;fontColor=#323130;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontStyle=1;container=1;collapsible=0;" vertex="1" parent="rg">
+          <mxGeometry x="20" y="342" width="460" height="154" as="geometry"/>
+        </mxCell>
+        <mxCell id="z-monitoring" value="Monitoring" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#F1F8F2;strokeColor=#5BA55B;fontColor=#107C10;verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontStyle=1;container=1;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="600" y="178" width="230" height="224" as="geometry"/>
+        </mxCell>
+        <mxCell id="panel" value="&lt;b&gt;Entscheidungen&lt;/b&gt;&lt;br&gt;Erreichbarkeit: &lt;b&gt;private&lt;/b&gt;&lt;br&gt;Netzwerk: reference&lt;br&gt;Vorgaben: BSI C5&lt;br&gt;Private DNS: platform&lt;br&gt;Diagnose: log-platform-prod-we (rg-observability-prod-we)&lt;br&gt;VNet: vnet-hub-prod-we (rg-network-prod-we)&lt;br&gt;&lt;br&gt;&lt;b&gt;&lt;font color=&apos;#D13438&apos;&gt;Offen&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which subscriptions do the development and test stages deploy into? The request named production&amp;apos;s; the stack is one subscription per stage.&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which resource group does each of the other stages deploy into?&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which hub network do the development and test stages attach to?&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which subnet carries the private endpoints in the development and test hubs?&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which workspace receives the development and test stages&amp;apos; diagnostics?&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Follows deployment.private_endpoint_subnet per stage.&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Follows deployment.diagnostics_destination per stage.&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which tag set does the organisation apply? Nothing in the request, no repository to read it from.&lt;/font&gt; &lt;i&gt;(zuständig: workload owner)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which principal reads and writes the invoices, and which data-plane role does it need? Shared-key auth is off, so an account with no assignment is working as specified and unusable.&lt;/font&gt; &lt;i&gt;(zuständig: workload owner)&lt;/i&gt;" style="rounded=1;arcSize=3;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;fillColor=#F3F2F1;strokeColor=#C8C6C4;" vertex="1" parent="1">
+          <mxGeometry x="870" y="80" width="340" height="672" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend" value="&lt;b&gt;Legende&lt;/b&gt;&lt;br&gt;&lt;font color=&apos;#999999&apos;&gt;&amp;#9477;&amp;#9477;&amp;#9477;&lt;/font&gt; vorhanden, wird hier nicht erstellt&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;&amp;#9679;&lt;/font&gt; offene oder angenommene Entscheidung" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#FFFFFF;strokeColor=#C8C6C4;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="714" width="540" height="76" as="geometry"/>
+        </mxCell>
+        <mxCell id="title" value="&lt;b&gt;invoicing &amp;#8212; Architektur&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=middle;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="20" y="12" width="900" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="Kein Dienst ist aus dem Internet erreichbar: Zugriffe laufen über Private Endpoints. Die Anmeldung läuft über Firmenidentitäten, ohne Schlüssel." style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#605E5C;" vertex="1" parent="1">
+          <mxGeometry x="20" y="46" width="1300" height="22" as="geometry"/>
         </mxCell>
         <mxCell id="sub-icon" value="" style="image;aspect=fixed;html=1;image=img/lib/azure2/general/Subscriptions.svg;" vertex="1" parent="sub">
           <mxGeometry x="6" y="6" width="24" height="24" as="geometry"/>
-        </mxCell>
-        <mxCell id="rg" value="&lt;b&gt;rg-invoicing-prod-we&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;westeurope&lt;/font&gt;" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;" vertex="1" parent="sub">
-          <mxGeometry x="20" y="44" width="958" height="326" as="geometry"/>
         </mxCell>
         <mxCell id="rg-icon" value="" style="image;aspect=fixed;html=1;image=img/lib/azure2/general/Resource_Groups.svg;" vertex="1" parent="rg">
           <mxGeometry x="6" y="6" width="24" height="24" as="geometry"/>
         </mxCell>
         <mxCell id="rg-private" value="&amp;#128274; kein öffentlicher Zugriff" style="text;html=1;align=left;verticalAlign=middle;fontColor=#107C10;fontStyle=2;" vertex="1" parent="rg">
-          <mxGeometry x="20" y="300" width="918" height="20" as="geometry"/>
-        </mxCell>
-        <mxCell id="vnet" value="&lt;b&gt;vnet-hub-prod-we&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;&lt;i&gt;vorhanden - wird nicht erstellt&lt;/i&gt;&lt;/font&gt;" style="rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;dashed=1;strokeColor=#999999;fontColor=#777777;" vertex="1" parent="rg">
-          <mxGeometry x="20" y="54" width="270" height="228" as="geometry"/>
+          <mxGeometry x="20" y="514" width="460" height="20" as="geometry"/>
         </mxCell>
         <mxCell id="vnet-icon" value="" style="image;aspect=fixed;html=1;image=img/lib/azure2/networking/Virtual_Networks.svg;" vertex="1" parent="vnet">
           <mxGeometry x="6" y="6" width="24" height="24" as="geometry"/>
         </mxCell>
-        <mxCell id="snet-pe" value="&lt;b&gt;snet-privatelink&lt;/b&gt;" style="rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F3F9FD;strokeColor=#7FBAEA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=2;container=1;collapsible=0;dashed=1;strokeColor=#999999;fontColor=#777777;" vertex="1" parent="vnet">
-          <mxGeometry x="20" y="44" width="230" height="144" as="geometry"/>
-        </mxCell>
-        <mxCell id="pe-storage-account" value="&lt;b&gt;Private Endpoint&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;storage-account&lt;/font&gt;" style="image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelBackgroundColor=none;labelWidth=180;image=img/lib/azure2/networking/Private_Endpoint.svg;" vertex="1" parent="snet-pe">
+        <mxCell id="pe-bundle" value="&lt;b&gt;Private Endpoints&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;1× storage-account&lt;/font&gt;" style="image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelBackgroundColor=none;labelWidth=180;image=img/lib/azure2/networking/Private_Endpoint.svg;" vertex="1" parent="snet-pe">
           <mxGeometry x="91" y="42" width="48" height="48" as="geometry"/>
         </mxCell>
-        <mxCell id="res-storage-account" value="&lt;b&gt;Storage Account&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;storage-account&lt;/font&gt;" style="image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelBackgroundColor=none;labelWidth=180;image=img/lib/azure2/storage/Storage_Accounts.svg;fontColor=#D13438;" vertex="1" parent="rg">
-          <mxGeometry x="481" y="140" width="48" height="48" as="geometry"/>
+        <mxCell id="res-storage-account" value="&lt;b&gt;Storage Account&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;storage-account&lt;/font&gt;" style="image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelBackgroundColor=none;labelWidth=180;image=img/lib/azure2/storage/Storage_Accounts.svg;fontColor=#D13438;" vertex="1" parent="z-paas">
+          <mxGeometry x="91" y="42" width="48" height="48" as="geometry"/>
         </mxCell>
-        <mxCell id="law" value="&lt;b&gt;Log Analytics&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;log-platform-prod-we&lt;/font&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;&lt;i&gt;vorhanden - wird nicht erstellt&lt;/i&gt;&lt;/font&gt;" style="image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelBackgroundColor=none;labelWidth=180;image=img/lib/azure2/analytics/Log_Analytics_Workspaces.svg;opacity=60;fontColor=#777777;" vertex="1" parent="rg">
-          <mxGeometry x="819" y="140" width="48" height="48" as="geometry"/>
+        <mxCell id="law" value="&lt;b&gt;Log Analytics&lt;/b&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;log-platform-prod-we&lt;/font&gt;&lt;br&gt;&lt;font style=&apos;font-size:10px&apos;&gt;&lt;i&gt;vorhanden - wird nicht erstellt&lt;/i&gt;&lt;/font&gt;" style="image;aspect=fixed;html=1;points=[];align=center;verticalLabelPosition=bottom;verticalAlign=top;whiteSpace=wrap;labelBackgroundColor=none;labelWidth=180;image=img/lib/azure2/analytics/Log_Analytics_Workspaces.svg;opacity=60;fontColor=#777777;" vertex="1" parent="z-monitoring">
+          <mxGeometry x="91" y="42" width="48" height="48" as="geometry"/>
         </mxCell>
-        <mxCell id="panel" value="&lt;b&gt;Entscheidungen&lt;/b&gt;&lt;br&gt;Erreichbarkeit: &lt;b&gt;private&lt;/b&gt;&lt;br&gt;Netzwerk: reference&lt;br&gt;Vorgaben: BSI C5&lt;br&gt;Private DNS: platform&lt;br&gt;Diagnose: log-platform-prod-we (rg-observability-prod-we)&lt;br&gt;VNet: vnet-hub-prod-we (rg-network-prod-we)&lt;br&gt;&lt;br&gt;&lt;b&gt;&lt;font color=&apos;#D13438&apos;&gt;Offen&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which subscriptions do the development and test stages deploy into? The request named production&amp;apos;s; the stack is one subscription per stage.&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which resource group does each of the other stages deploy into?&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which hub network do the development and test stages attach to?&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which subnet carries the private endpoints in the development and test hubs?&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which workspace receives the development and test stages&amp;apos; diagnostics?&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Follows deployment.private_endpoint_subnet per stage.&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Follows deployment.diagnostics_destination per stage.&lt;/font&gt; &lt;i&gt;(zuständig: platform team)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which tag set does the organisation apply? Nothing in the request, no repository to read it from.&lt;/font&gt; &lt;i&gt;(zuständig: workload owner)&lt;/i&gt;&lt;br&gt;&lt;font color=&apos;#D13438&apos;&gt;• Which principal reads and writes the invoices, and which data-plane role does it need? Shared-key auth is off, so an account with no assignment is working as specified and unusable.&lt;/font&gt; &lt;i&gt;(zuständig: workload owner)&lt;/i&gt;" style="rounded=1;arcSize=3;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;fillColor=#F3F2F1;strokeColor=#C8C6C4;" vertex="1" parent="1">
-          <mxGeometry x="1058" y="20" width="340" height="672" as="geometry"/>
-        </mxCell>
-        <mxCell id="e-pe-storage-account" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeColor=#0078D4;" edge="1" parent="1" source="pe-storage-account" target="res-storage-account">
-          <mxGeometry relative="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="e-diag-storage-account" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;exitX=1;exitY=0.7;entryX=0;entryY=0.5;dashed=1;strokeColor=#8A8886;endArrow=open;" edge="1" parent="1" source="res-storage-account" target="law">
-          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="654" y="237.6"/><mxPoint x="654" y="228"/></Array></mxGeometry>
+        <mxCell id="diag-note" value="&lt;i&gt;Diagnose-Einstellungen aller Ressourcen&lt;/i&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontColor=#605E5C;" vertex="1" parent="z-monitoring">
+          <mxGeometry x="12" y="168" width="206" height="32" as="geometry"/>
         </mxCell>
       </root>
     </mxGraphModel>

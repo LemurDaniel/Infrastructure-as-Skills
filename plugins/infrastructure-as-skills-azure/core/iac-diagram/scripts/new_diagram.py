@@ -8,15 +8,20 @@ overlaps by construction. The script still checks for overlaps afterwards and
 fails if it finds one - a layout rule that stopped holding is a bug here, not
 something to fix by hand in draw.io.
 
-Left to right:
+The picture is about who can reach what, drawn in zones:
 
-  Internet | subscription > resource group > [ network | resources | observability ] | decisions
+  external zone | subscription > resource group > [ virtual network (subnets with
+  their compute) / Azure PaaS ] | platform and monitoring zones | decisions
 
-Private endpoints sit in their subnet in one column, each on the same row as
-the resource it fronts, so the endpoint edge is a straight line. A role
-assignment is a purple line on its target's label; diagnostics run right
-into the workspace; DNS zones past four wrap into a second column. A type
-without an icon is drawn as a box and marked as having no question set. Referenced (existing) things are grey and dashed.
+Compute sits in the subnet it integrates with. Every private endpoint of the
+deployment is one bundled icon in the endpoint subnet - one per resource drew a
+column nobody could read. PaaS services sit in their own zone below the network,
+because a PaaS service is not in the VNet, its endpoint is. The lines are access:
+wiring.access (who calls whom), plus a line per role assignment, plus the
+internet when the deployment is public. Diagnostics are one note in the
+monitoring zone, not a line per resource. Referenced (existing) things are grey
+and dashed; wiring.optional marks optional parts faded; wiring.purposes puts
+what a resource is for on its label.
 
 Needs PyYAML (pip install pyyaml). Without it the script exits 2.
 
@@ -27,11 +32,15 @@ Exit 0 written, 1 layout check failed or spec unreadable, 2 could not run.
 """
 
 import argparse
+import glob
 import math
 import os
 import re
 import sys
 from xml.sax.saxutils import escape as _xml_escape
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PLUGIN_RESOURCES = os.path.normpath(os.path.join(HERE, '..', '..', '..', 'resources'))
 
 COLORS = {'green': '32', 'red': '31', 'yellow': '33'}
 USE_COLOR = sys.stdout.isatty() and not os.environ.get('NO_COLOR')
@@ -63,21 +72,43 @@ def s(v):
 
 LABELS = {
     'en': {
-        'internet': 'Internet', 'noPublic': 'no public access', 'existing': 'existing - not created',
+        'internet': 'Internet', 'users': 'Users', 'noPublic': 'no public access', 'existing': 'existing - not created',
         'decisions': 'Decisions', 'open': 'Open', 'assumed': 'Assumed', 'exposure': 'Exposure',
         'network': 'Network', 'mandates': 'Mandates', 'dns': 'Private DNS', 'diag': 'Diagnostics',
         'forces': 'forces', 'peSubnet': 'private endpoints', 'owner': 'owner', 'noSet': 'no question set',
+        'arch': 'Architecture', 'ext': 'Internet and external services', 'monitoring': 'Monitoring',
+        'diagNote': 'Diagnostic settings of all resources', 'nameRes': 'Name resolution',
+        'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'public access disabled',
+        'compute': 'Compute', 'computeSubnet': 'snet-compute', 'delegated': 'delegated to', 'optional': 'optional',
+        'legend': 'Legend', 'legPrivate': 'access over a private endpoint, no public path',
+        'legPublic': 'access from or over the internet', 'legExisting': 'existing, not created here',
+        'legOptional': 'optional component', 'legOpen': 'open or assumed decision',
+        'subPrivate': 'No service is reachable from the internet: access runs over private endpoints.',
+        'subExc': 'Private by default; the named exceptions are reachable from the internet behind a firewall.',
+        'subPublic': 'The system is reachable from the internet by design.',
+        'keyless': ' Sign-in is by company identity, no keys.',
     },
     'de': {
-        'internet': 'Internet', 'noPublic': 'kein öffentlicher Zugriff', 'existing': 'vorhanden - wird nicht erstellt',
+        'internet': 'Internet', 'users': 'Benutzer', 'noPublic': 'kein öffentlicher Zugriff', 'existing': 'vorhanden - wird nicht erstellt',
         'decisions': 'Entscheidungen', 'open': 'Offen', 'assumed': 'Angenommen', 'exposure': 'Erreichbarkeit',
         'network': 'Netzwerk', 'mandates': 'Vorgaben', 'dns': 'Private DNS', 'diag': 'Diagnose',
         'forces': 'erzwingt', 'peSubnet': 'Private Endpoints', 'owner': 'zuständig', 'noSet': 'ohne Fragenset',
+        'arch': 'Architektur', 'ext': 'Internet und externe Dienste', 'monitoring': 'Monitoring',
+        'diagNote': 'Diagnose-Einstellungen aller Ressourcen', 'nameRes': 'Namensauflösung',
+        'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'öffentlicher Zugriff deaktiviert',
+        'compute': 'Compute', 'computeSubnet': 'snet-compute', 'delegated': 'delegiert an', 'optional': 'optional',
+        'legend': 'Legende', 'legPrivate': 'Zugriff über Private Endpoint, kein öffentlicher Weg',
+        'legPublic': 'Zugriff aus dem oder über das Internet', 'legExisting': 'vorhanden, wird hier nicht erstellt',
+        'legOptional': 'optionales Bauteil', 'legOpen': 'offene oder angenommene Entscheidung',
+        'subPrivate': 'Kein Dienst ist aus dem Internet erreichbar: Zugriffe laufen über Private Endpoints.',
+        'subExc': 'Standardmäßig privat; die benannten Ausnahmen sind hinter einer Firewall aus dem Internet erreichbar.',
+        'subPublic': 'Das System ist absichtlich aus dem Internet erreichbar.',
+        'keyless': ' Die Anmeldung läuft über Firmenidentitäten, ohne Schlüssel.',
     },
 }
 
-# Every resource with a question set has a row. Paths verified against draw.io's
-# azure2 library - a wrong path exports as a broken-image placeholder, silently.
+# Paths verified against draw.io's azure2 library - a wrong path exports as a
+# broken-image placeholder, silently. A resource without a row is drawn as a box.
 ICONS = {
     'subscription': 'img/lib/azure2/general/Subscriptions.svg',
     'resource-group': 'img/lib/azure2/general/Resource_Groups.svg',
@@ -88,25 +119,62 @@ ICONS = {
     'log-analytics-workspace': 'img/lib/azure2/analytics/Log_Analytics_Workspaces.svg',
     'key-vault': 'img/lib/azure2/security/Key_Vaults.svg',
     'app-service': 'img/lib/azure2/app_services/App_Services.svg',
+    'function-app': 'img/lib/azure2/compute/Function_Apps.svg',
+    'container-registry': 'img/lib/azure2/containers/Container_Registries.svg',
+    'cosmos-db': 'img/lib/azure2/databases/Azure_Cosmos_DB.svg',
+    'sql-server': 'img/lib/azure2/databases/SQL_Server.svg',
+    'redis-cache': 'img/lib/azure2/databases/Cache_Redis.svg',
+    'service-bus': 'img/lib/azure2/integration/Service_Bus.svg',
+    'application-insights': 'img/lib/azure2/devops/Application_Insights.svg',
+    'users': 'img/lib/azure2/identity/Users.svg',
+    'entra-id': 'img/lib/azure2/identity/Azure_Active_Directory.svg',
 }
 TYPE_NAMES = {
     'storage-account': 'Storage Account', 'virtual-network': 'Virtual Network',
     'log-analytics-workspace': 'Log Analytics Workspace', 'key-vault': 'Key Vault',
-    'app-service': 'App Service',
+    'app-service': 'App Service', 'function-app': 'Function App', 'container-registry': 'Container Registry',
+    'cosmos-db': 'Cosmos DB', 'sql-server': 'SQL Server', 'redis-cache': 'Redis Cache', 'service-bus': 'Service Bus',
+    'application-insights': 'Application Insights',
 }
+
+ACTOR_TITLES = {'entra-id': 'Entra ID', 'sharepoint-online': 'SharePoint Online', 'm365': 'Microsoft 365',
+                'azure-devops': 'Azure DevOps', 'github': 'GitHub'}
+
+# Compute is what runs code and integrates with a subnet; monitoring is what receives
+# the logs; everything else that is not the network is PaaS, reached through an endpoint.
+COMPUTE_KINDS = {'app-service', 'function-app', 'container-app', 'container-apps-environment', 'virtual-machine', 'aks'}
+MONITOR_KINDS = {'log-analytics-workspace', 'application-insights'}
+DELEGATIONS = {'app-service': 'Microsoft.Web/serverFarms', 'function-app': 'Microsoft.Web/serverFarms',
+               'container-apps-environment': 'Microsoft.App/environments'}
 
 # A slot holds an icon and up to four label lines below it. The label is given
 # the slot's width via labelWidth - without it draw.io wraps the label to the
 # 48px image and breaks after every word.
 SLOT_W, SLOT_H, ICON = 190, 130, 48
 LABEL_W = SLOT_W - 10
-HEAD, PAD, LANE_GAP, TRACK = 44, 20, 120, 14
-COL_GAP = 90   # between the DNS zone columns: the zone names are long and unwrapped
+HEAD, ZHEAD, PAD = 44, 34, 20
+ZONE_W = SLOT_W + 40
+TOP = 80
 
 CONTAINER_STYLE = 'rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;'
 EXISTING_STYLE = 'dashed=1;strokeColor=#999999;fontColor=#777777;'
 SUBNET_STYLE = 'rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F3F9FD;strokeColor=#7FBAEA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=2;container=1;collapsible=0;'
 EDGE_BASE = 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;'
+PRIVATE_COLOR, PUBLIC_COLOR = '#0078D4', '#D83B01'
+
+
+def zone_style(fill, stroke, font):
+    return (f"rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor={fill};strokeColor={stroke};fontColor={font};"
+            "verticalAlign=top;align=left;spacingLeft=12;spacingTop=6;fontStyle=1;container=1;collapsible=0;")
+
+
+ZONES = {
+    'external': zone_style('#FBF3EA', '#C19C77', '#8A5A2B'),
+    'paas': zone_style('#F7F7F7', '#8A8886', '#323130'),
+    'platform': zone_style('#F5F0FA', '#8661C5', '#5C2D91'),
+    'monitoring': zone_style('#F1F8F2', '#5BA55B', '#107C10'),
+    'compute': zone_style('#F3F9FD', '#0078D4', '#005A9E'),
+}
 
 
 def get_at(m, keys):
@@ -166,6 +234,10 @@ def as_list(v):
     return [v]
 
 
+def plain_len(html):
+    return len(re.sub(r'<[^>]+>', '', html))
+
+
 def format_label(title, sub, note):
     label = f"<b>{esc(title)}</b>"
     if sub:
@@ -188,8 +260,12 @@ def icon_style(img, flagged, existing):
     return style
 
 
-def plain_len(html):
-    return len(re.sub(r'<[^>]+>', '', html))
+def has_question_set(key):
+    return bool(glob.glob(os.path.join(PLUGIN_RESOURCES, '*', key, 'questions.yaml')))
+
+
+def pitch_of(label):
+    return max(100, 8 + ICON + 4 + 16 * label_lines(label) + 8)
 
 
 def main():
@@ -238,14 +314,21 @@ def main():
     draw_vnet = has_vnet_res or net_ownership in ('create', 'reference')
     vnet_existing = (not has_vnet_res) and net_ownership == 'reference'
 
-    # Resources drawn in the middle column: everything that is not the network or the workspace.
-    middle = [k for k in res_keys if k not in ('virtual-network', 'log-analytics-workspace')]
+    compute = [k for k in res_keys if k in COMPUTE_KINDS]
+    paas = [k for k in res_keys if k not in COMPUTE_KINDS and k not in MONITOR_KINDS and k != 'virtual-network']
+    drawn = compute + paas
 
-    # Which resources get a private endpoint: an explicit subnet on the resource, or
-    # a private posture. The workspace is reached through AMPLS, not drawn here.
-    with_pe = [k for k in middle
-               if is_private or get_decision(resources[k], ['networking', 'private_endpoint_subnet']) is not None]
-    without_pe = [k for k in middle if k not in with_pe]
+    def pna(k):
+        v = s(get_decision(resources[k], ['networking', 'public_network_access']))
+        return v or ('disabled' if is_private else 'enabled')
+
+    def pe_subnet_of(k):
+        return get_decision(resources[k], ['networking', 'private_endpoint_subnet'])
+
+    # Which resources get a private endpoint: a private posture or an explicit subnet,
+    # and not a public-access departure.
+    with_pe = [k for k in drawn
+               if (is_private or pe_subnet_of(k) is not None) and (pna(k) == 'disabled' or pe_subnet_of(k) is not None)]
 
     pe_subnet_name = split_ref(get_decision(dep, ['private_endpoint_subnet']))['name']
     pe_subnet_prefix = get_decision(dep, ['private_endpoint_subnet_prefix'])
@@ -253,7 +336,7 @@ def main():
         # Under network_ownership: create the deployment set holds only the prefix; the
         # generated subnet's name is on the resources that use it.
         for k in with_pe:
-            pe_subnet_name = split_ref(get_decision(resources[k], ['networking', 'private_endpoint_subnet']))['name']
+            pe_subnet_name = split_ref(pe_subnet_of(k))['name']
             if pe_subnet_name:
                 break
     if not pe_subnet_name:
@@ -275,12 +358,16 @@ def main():
         if name and name != pe_subnet_name:
             other_subnets.append({'name': name, 'prefix': prefix})
 
-    roles = [r for r in as_list(get_decision(spec, ['wiring', 'role_assignments'])) if r]
+    roles = [r for r in as_list(get_decision(spec, ['wiring', 'role_assignments'])) if isinstance(r, dict)]
     zones = [z for z in as_list(get_decision(spec, ['wiring', 'private_dns_zones'])) if z]
+    optional = {s(k) for k in as_list(get_decision(spec, ['wiring', 'optional']))}
+    purposes = get_decision(spec, ['wiring', 'purposes'])
+    purposes = purposes if isinstance(purposes, dict) else {}
     diag_ref = split_ref(get_decision(dep, ['diagnostics_destination']))
     diag_target = diag_ref['name']
     vnet_ref = split_ref(get_decision(dep, ['existing_vnet']))
     draw_law = has_law_res or bool(diag_target)
+    has_ai = 'application-insights' in res_keys
 
     # assumed values anywhere in the spec, by dotted path
     assumed = []
@@ -295,32 +382,178 @@ def main():
     find_assumed(spec, '')
     open_items = [o for o in as_list(get_at(spec, ['open'])) if o]
 
-    # A resource is flagged when an open or assumed entry points into it.
+    # A resource is flagged when an open or assumed entry points at it or into it.
     def flagged(key):
-        prefix = f"resources.{key}."
-        if any(a.startswith(prefix) for a in assumed):
+        prefix = f"resources.{key}"
+        if any(a == prefix or a.startswith(prefix + '.') for a in assumed):
             return True
-        return any(s(o.get('key') if isinstance(o, dict) else None).startswith(prefix) for o in open_items)
+        return any(isinstance(o, dict) and (s(o.get('key')) == prefix or s(o.get('key')).startswith(prefix + '.'))
+                   for o in open_items)
 
-    # --- Layout ------------------------------------------------------------
-    # All geometry is absolute while laying out; the emitter converts children to
-    # coordinates relative to their container, which is what draw.io expects.
-    cells = []
+    # --- Access: who reaches what ------------------------------------------
+    access = []
+    seen = set()
+    for a in as_list(get_decision(spec, ['wiring', 'access'])):
+        if isinstance(a, dict) and a.get('from') and a.get('to'):
+            access.append({'from': s(a['from']), 'to': s(a['to']), 'label': s(a.get('label'))})
+            seen.add((s(a['from']), s(a['to'])))
+    for ra in roles:
+        pair = (s(ra.get('from')), s(ra.get('to')))
+        if pair not in seen:
+            access.append({'from': pair[0], 'to': pair[1], 'label': ''})
+            seen.add(pair)
+    if exposure == 'public' and not any(a['from'] == 'internet' for a in access):
+        for k in (compute or paas):
+            access.append({'from': 'internet', 'to': k, 'label': 'HTTPS'})
 
-    def add_cell(c):
-        cells.append(c)
+    def is_actor(name):
+        return name not in resources
+
+    actors = []
+    for a in access:
+        for name in (a['from'], a['to']):
+            if is_actor(name) and name not in actors:
+                actors.append(name)
+
+    def actor_base(name):
+        return name.split(':', 1)[1] if name.startswith('external:') else name
+
+    def actor_title(name):
+        base = actor_base(name)
+        if base == 'internet':
+            return T['internet']
+        if base == 'users':
+            return T['users']
+        if base in ACTOR_TITLES:
+            return ACTOR_TITLES[base]
+        return base.replace('-', ' ').title() if base.islower() else base
+
+    # A role assignment is a line on the target's label as well: which role is what a
+    # bare arrow cannot say.
+    role_lines = {}
+    for ra in roles:
+        if s(ra.get('to')) in resources:
+            role_lines.setdefault(s(ra.get('to')), []).append(f"{s(ra.get('from'))}: {s(ra.get('role'))}")
+
+    def resource_label(k):
+        kind_title = TYPE_NAMES.get(k, k.replace('-', ' ').title())
+        sub = s(purposes.get(k)) or k
+        note = ' · '.join(n for n in (T['noSet'] if not has_question_set(k) else '', T['optional'] if k in optional else '') if n)
+        label = format_label(kind_title, sub, note)
+        for line in role_lines.get(k, []):
+            label += f"<br><font style='font-size:10px' color='#5C2D91'>&#8592; {esc(line)}</font>"
+        return label
+
+    labels = {k: resource_label(k) for k in drawn + (['application-insights'] if has_ai else [])}
+    pitch = {k: pitch_of(labels[k]) for k in drawn}
+
+    # --- Geometry, phase A: sizes ------------------------------------------
+    def compute_subnet(k):
+        n = split_ref(get_decision(resources[k], ['networking', 'integration_subnet']))['name']
+        if n:
+            return n
+        for sn in other_subnets:
+            if 'integration' in sn['name'] or 'app' in sn['name']:
+                return sn['name']
+        return other_subnets[0]['name'] if other_subnets else T['computeSubnet']
+
+    groups = {}
+    for k in compute:
+        groups.setdefault(compute_subnet(k), []).append(k)
+    meta = {sn['name']: sn for sn in other_subnets}
+    strips = [sn for sn in other_subnets if sn['name'] not in groups]
+
+    def rows_of(keys, cols):
+        return [keys[i:i + cols] for i in range(0, len(keys), cols)]
+
+    def rows_height(keys, cols):
+        return sum(max(pitch[k] for k in r) for r in rows_of(keys, cols))
+
+    cols_c = min(max([len(v) for v in groups.values()] or [1]), 4)
+    cols_p = min(max(len(paas), 1), 5)
+    w_main = max(cols_c * SLOT_W + 4 * PAD, cols_p * SLOT_W + 2 * PAD, 2 * SLOT_W + 4 * PAD)
+
+    def delegation(keys):
+        for k in keys:
+            if k in DELEGATIONS:
+                return f"{T['delegated']} {DELEGATIONS[k]}"
+        return ''
+
+    group_boxes = []   # (name, keys, header_h, h)
+    for name, keys in groups.items():
+        hh = 34 + (16 if delegation(keys) else 0)
+        group_boxes.append((name, keys, hh, hh + rows_height(keys, cols_c) + 10))
+
+    show_pe = draw_vnet and bool(with_pe)
+    pe_box_h = ZHEAD + SLOT_H + 10
+    vn_h = 0
+    if draw_vnet:
+        vn_h = HEAD
+        for _, _, _, h in group_boxes:
+            vn_h += h + PAD
+        if show_pe:
+            vn_h += pe_box_h + PAD
+        vn_h += len(strips) * (44 + 10)
+        vn_h += PAD - (10 if strips else 0)
+    elif compute:
+        vn_h = ZHEAD + rows_height(compute, cols_c) + PAD
+    paas_h = (ZHEAD + rows_height(paas, cols_p) + PAD) if paas else 0
+
+    # One bus lane per compute resource that calls PaaS, between the network and the PaaS zone.
+    callers = []
+    for a in access:
+        if a['from'] in compute and a['to'] in paas and a['from'] not in callers:
+            callers.append(a['from'])
+    gap = 30 + 10 * len(callers)
+    main_h = vn_h + (gap if (vn_h and paas_h) else 0) + paas_h
+
+    # Right column: platform and monitoring zones. Created things belong to the
+    # resource group, referenced ones sit outside the subscription.
+    law_existing = (not has_law_res) and obs_ownership != 'create'
+    dns_existing = dns_ownership != 'deployment'
+    right = []   # dicts: id, h, inside
+    if draw_law or has_ai:
+        right.append({'id': 'monitoring', 'h': ZHEAD + SLOT_H * ((1 if draw_law else 0) + (1 if has_ai else 0)) + 40 + PAD,
+                      'inside': not law_existing})
+    if zones:
+        right.append({'id': 'dnszones', 'h': ZHEAD + SLOT_H + PAD, 'inside': not dns_existing})
+    right_in = [r for r in right if r['inside']]
+    right_out = [r for r in right if not r['inside']]
+    in_h = sum(r['h'] + PAD for r in right_in) - (PAD if right_in else 0)
+
+    # --- Geometry, phase B: positions --------------------------------------
+    ext_w = ZONE_W if actors else 0
+    sub_x, sub_y = 20 + (ext_w + 40 if actors else 0), TOP
+    rg_x, rg_y = sub_x + PAD, sub_y + HEAD
+    main_x, main_y = rg_x + PAD, rg_y + HEAD + 10
+    rin_x = main_x + w_main + PAD
+    rg_w = (rin_x + ZONE_W + PAD - rg_x) if right_in else (main_x + w_main + PAD - rg_x)
+    content_h = max(main_h, in_h, 140)
+    rg_h = HEAD + 10 + content_h + PAD + (24 if is_private else 0)
+    sub_w = rg_w + 2 * PAD
+    sub_h = rg_h + HEAD + PAD
+    out_x = sub_x + sub_w + 40
+    out_w = ZONE_W if right_out else 0
+    panel_x = out_x + (out_w + 40 if right_out else 0)
+
+    # --- Cells -------------------------------------------------------------
+    containers, icons = [], []
+
+    def add_container(c):
+        containers.append(c)
         return c
 
-    # One icon in a fixed slot: centred horizontally, label below inside the slot.
-    def add_icon(cid, parent, slot_x, slot_y, kind, label, is_flagged=False, existing=False, slot_h=SLOT_H):
+    def add_icon(cid, parent, slot_x, slot_y, kind, label, is_flagged=False, existing=False, slot_h=SLOT_H, warn=True):
         img = ICONS.get(kind)
         if img:
             style = icon_style(img, is_flagged, existing)
             x, y, w, h = slot_x + (SLOT_W - ICON) / 2, slot_y + 8, ICON, ICON
         else:
-            say(f"[warn] no icon for '{kind}' - drawn as a box", 'yellow')
-            # Same height and centre as an icon, so edges into it stay straight.
+            if warn:
+                say(f"[warn] no icon for '{kind}' - drawn as a box", 'yellow')
             style = 'rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#605E5C;'
+            if existing:
+                style += 'opacity=60;'
             if is_flagged:
                 style += 'fontColor=#D13438;'
             x, y, w, h = slot_x + 20, slot_y + 8, SLOT_W - 40, ICON
@@ -329,116 +562,68 @@ def main():
             title, _, rest = label.partition('<br>')
             label = title
             if rest:
-                add_cell({'id': f"{cid}-icon", 'parent': parent, 'x': x, 'y': y + h + 2, 'w': w, 'h': 16 * label_lines(rest) + 4,
-                          'style': 'text;html=1;align=center;verticalAlign=top;whiteSpace=wrap;', 'value': rest})
-        add_cell({'id': cid, 'parent': parent, 'x': x, 'y': y, 'w': w, 'h': h, 'style': style, 'value': label,
-                  'slot': {'x': slot_x, 'y': slot_y, 'w': SLOT_W, 'h': slot_h}, 'labelBelow': bool(img)})
+                icons.append({'id': f"{cid}-icon", 'parent': parent, 'x': x, 'y': y + h + 2, 'w': w, 'h': 16 * label_lines(rest) + 4,
+                              'style': 'text;html=1;align=center;verticalAlign=top;whiteSpace=wrap;', 'value': rest})
+        icons.append({'id': cid, 'parent': parent, 'x': x, 'y': y, 'w': w, 'h': h, 'style': style, 'value': label,
+                      'slot': {'x': slot_x, 'y': slot_y, 'w': SLOT_W, 'h': slot_h}, 'labelBelow': bool(img)})
 
-    # A role assignment is a line on the target's label, not an edge: with several
-    # roles from one principal the edges become a bundle nobody can follow.
-    role_lines = {}
-    for ra in roles:
-        ra = ra if isinstance(ra, dict) else {}
-        if f"res-{s(ra.get('from'))}" not in {f"res-{m}" for m in middle} or f"res-{s(ra.get('to'))}" not in {f"res-{m}" for m in middle}:
-            say(f"[warn] role assignment {s(ra.get('from'))} -> {s(ra.get('to'))}: endpoint not drawn", 'yellow')
-            continue
-        role_lines.setdefault(s(ra.get('to')), []).append(f"{s(ra.get('from'))}: {s(ra.get('role'))}")
+    def place_grid(keys, parent, gx, gy, cols):
+        y = gy
+        for row in rows_of(keys, cols):
+            rh = max(pitch[k] for k in row)
+            for c, k in enumerate(row):
+                add_icon(f"res-{k}", parent, gx + c * SLOT_W, y, k, labels[k], flagged(k), k in optional, slot_h=rh)
+            y += rh
 
-    def resource_label(k):
-        label = format_label(TYPE_NAMES.get(k, k.replace('-', ' ').title()), k, T['noSet'] if k not in ICONS else '')
-        for line in role_lines.get(k, []):
-            label += f"<br><font style='font-size:10px' color='#5C2D91'>&#8592; {esc(line)}</font>"
-        return label
+    def add_text(cid, parent, x, y, w, h, value, style):
+        icons.append({'id': cid, 'parent': parent, 'x': x, 'y': y, 'w': w, 'h': h, 'style': style, 'value': value})
 
-    # One row per resource, shared by its endpoint and itself; as tall as its label needs.
-    pitch = {k: max(100, 8 + ICON + 4 + 16 * label_lines(resource_label(k)) + 8) for k in middle}
+    # Title and subtitle
+    workload = s(get_value(ctx.get('workload'))) or s(get_at(spec, ['spec', 'id']))
+    sub_line = {'private': T['subPrivate'], 'private_with_exceptions': T['subExc'], 'public': T['subPublic']}.get(exposure, '')
+    if sub_line and s(get_decision(dep, ['local_auth'])) == 'disabled':
+        sub_line += T['keyless']
+    add_text('title', '1', 20, 12, 900, 30, f"<b>{esc(workload)} &#8212; {T['arch']}</b>",
+             'text;html=1;align=left;verticalAlign=middle;fontSize=20;')
+    if sub_line:
+        add_text('subtitle', '1', 20, 46, 1300, 22, esc(sub_line), 'text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#605E5C;')
 
-    internet_w = 160 if exposure == 'public' else 0
-    sub_x, sub_y = 20 + internet_w, 20
-    rg_x, rg_y = sub_x + PAD, sub_y + HEAD
-    lane_y = rg_y + HEAD + 10
-    lane_x = rg_x + PAD
+    # External zone with its actors
+    actor_ids = {}
+    if actors:
+        ext_h = ZHEAD + len(actors) * 110 + PAD
+        add_container({'id': 'z-ext', 'parent': '1', 'x': 20, 'y': main_y, 'w': ext_w, 'h': ext_h, 'style': ZONES['external'], 'value': esc(T['ext'])})
+        for i, name in enumerate(actors):
+            cid = f"act-{re.sub('[^a-z0-9]+', '-', name.lower())}"
+            actor_ids[name] = cid
+            slot_x, slot_y = 20 + (ext_w - SLOT_W) / 2, main_y + ZHEAD + i * 110
+            if actor_base(name) == 'internet':
+                icons.append({'id': cid, 'parent': 'z-ext', 'x': slot_x + (SLOT_W - 64) / 2, 'y': slot_y + 8, 'w': 64, 'h': 44,
+                              'style': 'ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#605E5C;verticalLabelPosition=bottom;verticalAlign=top;labelBackgroundColor=none;',
+                              'value': f"<b>{esc(actor_title(name))}</b>",
+                              'slot': {'x': slot_x, 'y': slot_y, 'w': SLOT_W, 'h': 110}, 'labelBelow': True})
+            else:
+                add_icon(cid, 'z-ext', slot_x, slot_y, actor_base(name), f"<b>{esc(actor_title(name))}</b>", False, False, slot_h=110, warn=False)
 
-    # Network lane
-    row_y = {}   # resource key -> absolute row y, shared by its endpoint and itself
-    net_right = lane_x - LANE_GAP
-    vn_x = vn_y = vn_w = vn_h = 0
-    pe_sn = None
-    other_boxes = []
-    if draw_vnet:
-        vn_x, vn_y = lane_x, lane_y
-        sn_x = vn_x + PAD
-        cursor = vn_y + HEAD
-
-        pe_total = sum(pitch[k] for k in with_pe) or SLOT_H
-        pe_sn = {'x': sn_x, 'y': cursor, 'w': SLOT_W + 2 * PAD, 'h': 34 + pe_total + 10}
-        ry = pe_sn['y'] + 34
-        for k in with_pe:
-            row_y[k] = ry
-            ry += pitch[k]
-        cursor += pe_sn['h'] + PAD
-
-        for sn in other_subnets:
-            other_boxes.append({'name': sn['name'], 'prefix': sn['prefix'], 'x': sn_x, 'y': cursor, 'w': pe_sn['w'], 'h': 44})
-            cursor += 44 + 10
-        vn_w = pe_sn['w'] + 2 * PAD
-        vn_h = cursor - vn_y + PAD - (10 if other_boxes else 0)
-        net_right = vn_x + vn_w
-    else:
-        ry = lane_y
-        for k in with_pe:
-            row_y[k] = ry
-            ry += pitch[k]
-
-    # Resource lane: endpoint-backed resources on their endpoint's row, the rest after.
-    res_x = net_right + LANE_GAP
-    nxt = lane_y
-    if with_pe:
-        nxt = max(row_y[k] + pitch[k] for k in with_pe)
-    for k in without_pe:
-        row_y[k] = nxt
-        nxt += pitch[k]
-    res_bottom = max(row_y[k] + pitch[k] for k in middle) if middle else lane_y
-    # Right of the resource column runs one vertical track shared by every diagnostics edge.
-    diag_track_x = res_x + SLOT_W + TRACK
-    res_right = (diag_track_x + TRACK) if middle else (res_x - LANE_GAP)
-
-    # Observability lane: workspace on top, then the DNS zones.
-    obs_x = res_right + LANE_GAP
-    obs_y = min(row_y[k] for k in middle) if middle else lane_y
-    obs_count = (1 if draw_law else 0) + len(zones)
-    # Zones carry no edges, so past four they wrap into a second column instead of a tall one.
-    obs_cols = 2 if obs_count > 5 else 1
-    obs_rows = math.ceil(obs_count / obs_cols)
-    obs_right = (obs_x + (obs_cols - 1) * (SLOT_W + COL_GAP) + SLOT_W) if obs_count else res_right
-    obs_bottom = obs_y + obs_rows * SLOT_H
-
-    content_bottom = max(res_bottom, obs_bottom, lane_y + SLOT_H)
-    if draw_vnet:
-        content_bottom = max(content_bottom, vn_y + vn_h)
-    rg_w = obs_right + PAD - rg_x
-    rg_h = content_bottom + PAD - rg_y + (24 if is_private else 0)
-    sub_w = rg_w + 2 * PAD
-    sub_h = rg_h + HEAD + PAD
-
-    # --- Cells -------------------------------------------------------------
+    # Subscription and resource group
     sub_label = format_label('Subscription', s(get_value(ctx.get('subscription_id'))), '')
-    add_cell({'id': 'sub', 'parent': '1', 'x': sub_x, 'y': sub_y, 'w': sub_w, 'h': sub_h, 'style': CONTAINER_STYLE, 'value': sub_label})
-    add_cell({'id': 'sub-icon', 'parent': 'sub', 'x': sub_x + 6, 'y': sub_y + 6, 'w': 24, 'h': 24,
-              'style': f"image;aspect=fixed;html=1;image={ICONS['subscription']};", 'value': ''})
-
+    add_container({'id': 'sub', 'parent': '1', 'x': sub_x, 'y': sub_y, 'w': sub_w, 'h': sub_h, 'style': CONTAINER_STYLE, 'value': sub_label})
+    icons.append({'id': 'sub-icon', 'parent': 'sub', 'x': sub_x + 6, 'y': sub_y + 6, 'w': 24, 'h': 24,
+                  'style': f"image;aspect=fixed;html=1;image={ICONS['subscription']};", 'value': ''})
     loc, env_ = s(get_value(ctx.get('location'))), s(get_value(ctx.get('environment')))
     rg_name = get_value(ctx.get('resource_group_name'))
     rg_label = format_label(s(rg_name if rg_name is not None else 'resource group'), ' · '.join(p for p in (loc, env_) if p != ''), '')
-    add_cell({'id': 'rg', 'parent': 'sub', 'x': rg_x, 'y': rg_y, 'w': rg_w, 'h': rg_h, 'style': CONTAINER_STYLE, 'value': rg_label})
-    add_cell({'id': 'rg-icon', 'parent': 'rg', 'x': rg_x + 6, 'y': rg_y + 6, 'w': 24, 'h': 24,
-              'style': f"image;aspect=fixed;html=1;image={ICONS['resource-group']};", 'value': ''})
-
+    add_container({'id': 'rg', 'parent': 'sub', 'x': rg_x, 'y': rg_y, 'w': rg_w, 'h': rg_h, 'style': CONTAINER_STYLE, 'value': rg_label})
+    icons.append({'id': 'rg-icon', 'parent': 'rg', 'x': rg_x + 6, 'y': rg_y + 6, 'w': 24, 'h': 24,
+                  'style': f"image;aspect=fixed;html=1;image={ICONS['resource-group']};", 'value': ''})
     if is_private:
-        add_cell({'id': 'rg-private', 'parent': 'rg', 'x': rg_x + PAD, 'y': rg_y + rg_h - 26, 'w': rg_w - 2 * PAD, 'h': 20,
-                  'style': 'text;html=1;align=left;verticalAlign=middle;fontColor=#107C10;fontStyle=2;', 'value': f"&#128274; {T['noPublic']}"})
+        add_text('rg-private', 'rg', rg_x + PAD, rg_y + rg_h - 26, rg_w - 2 * PAD, 20, f"&#128274; {T['noPublic']}",
+                 'text;html=1;align=left;verticalAlign=middle;fontColor=#107C10;fontStyle=2;')
 
+    # Network zone: subnets with their compute, then the bundled endpoints
     vn_sub = ''
+    paas_y = main_y + vn_h + (gap if (vn_h and paas_h) else 0)
+    bus_base = main_y + vn_h + 14
     if draw_vnet:
         vn_name = vnet_ref['name'] if (vnet_existing and vnet_ref['name']) else 'Virtual Network'
         addr = get_decision(dep, ['address_space'])
@@ -447,50 +632,78 @@ def main():
         vn_sub = s(addr)
         vn_note = T['existing'] if vnet_existing else ''
         style = CONTAINER_STYLE + (EXISTING_STYLE if vnet_existing else '')
-        add_cell({'id': 'vnet', 'parent': 'rg', 'x': vn_x, 'y': vn_y, 'w': vn_w, 'h': vn_h, 'style': style, 'value': format_label(vn_name, vn_sub, vn_note)})
-        add_cell({'id': 'vnet-icon', 'parent': 'vnet', 'x': vn_x + 6, 'y': vn_y + 6, 'w': 24, 'h': 24,
-                  'style': f"image;aspect=fixed;html=1;image={ICONS['virtual-network']};", 'value': ''})
+        add_container({'id': 'vnet', 'parent': 'rg', 'x': main_x, 'y': main_y, 'w': w_main, 'h': vn_h, 'style': style, 'value': format_label(vn_name, vn_sub, vn_note)})
+        icons.append({'id': 'vnet-icon', 'parent': 'vnet', 'x': main_x + 6, 'y': main_y + 6, 'w': 24, 'h': 24,
+                      'style': f"image;aspect=fixed;html=1;image={ICONS['virtual-network']};", 'value': ''})
+        sn_x, sn_w, cursor = main_x + PAD, w_main - 2 * PAD, main_y + HEAD
+        sn_style = SUBNET_STYLE + (EXISTING_STYLE if vnet_existing else '')
+        for gi, (name, keys, hh, h) in enumerate(group_boxes):
+            prefix = s(meta.get(name, {}).get('prefix'))
+            note = delegation(keys)
+            lbl = f"<b>{esc(name)}</b>" + (f"  <font style='font-size:10px'>{esc(prefix)}</font>" if prefix else '')
+            if note:
+                lbl += f"<br><font style='font-size:10px'><i>{esc(note)}</i></font>"
+            add_container({'id': f"snet-c{gi}", 'parent': 'vnet', 'x': sn_x, 'y': cursor, 'w': sn_w, 'h': h, 'style': sn_style, 'value': lbl})
+            place_grid(keys, f"snet-c{gi}", sn_x + PAD, cursor + hh, cols_c)
+            cursor += h + PAD
+        if show_pe:
+            pe_label = f"<b>{esc(pe_subnet_name)}</b>" + (f"  <font style='font-size:10px'>{esc(pe_subnet_prefix)}</font>" if pe_subnet_prefix else '')
+            add_container({'id': 'snet-pe', 'parent': 'vnet', 'x': sn_x, 'y': cursor, 'w': sn_w, 'h': pe_box_h, 'style': sn_style, 'value': pe_label})
+            names = ', '.join(with_pe[:2]) + (f" +{len(with_pe) - 2}" if len(with_pe) > 2 else '')
+            add_icon('pe-bundle', 'snet-pe', sn_x + PAD, cursor + ZHEAD, 'private-endpoint',
+                     format_label(T['peBundle'], f"{len(with_pe)}× {names}", ''), slot_h=SLOT_H)
+            cursor += pe_box_h + PAD
+        for j, sn in enumerate(strips):
+            lbl = f"<b>{esc(sn['name'])}</b>" + (f"  <font style='font-size:10px'>{esc(sn['prefix'])}</font>" if sn['prefix'] else '')
+            add_container({'id': f"snet-{j}", 'parent': 'vnet', 'x': sn_x, 'y': cursor, 'w': sn_w, 'h': 44, 'style': sn_style, 'value': lbl})
+            cursor += 44 + 10
+    elif compute:
+        add_container({'id': 'z-compute', 'parent': 'rg', 'x': main_x, 'y': main_y, 'w': w_main, 'h': vn_h, 'style': ZONES['compute'], 'value': esc(T['compute'])})
+        place_grid(compute, 'z-compute', main_x + PAD, main_y + ZHEAD, cols_c)
 
-        pe_label = f"<b>{esc(pe_subnet_name)}</b>" + (f"  <font style='font-size:10px'>{pe_subnet_prefix}</font>" if pe_subnet_prefix else '')
-        add_cell({'id': 'snet-pe', 'parent': 'vnet', 'x': pe_sn['x'], 'y': pe_sn['y'], 'w': pe_sn['w'], 'h': pe_sn['h'],
-                  'style': SUBNET_STYLE + (EXISTING_STYLE if vnet_existing else ''), 'value': pe_label})
-        for k in with_pe:
-            add_icon(f"pe-{k}", 'snet-pe', pe_sn['x'] + PAD, row_y[k], 'private-endpoint', format_label('Private Endpoint', k, ''), slot_h=pitch[k])
-        for j, b in enumerate(other_boxes):
-            lbl = f"<b>{esc(b['name'])}</b>" + (f"  <font style='font-size:10px'>{b['prefix']}</font>" if b['prefix'] else '')
-            add_cell({'id': f"snet-{j}", 'parent': 'vnet', 'x': b['x'], 'y': b['y'], 'w': b['w'], 'h': b['h'], 'style': SUBNET_STYLE, 'value': lbl})
+    # PaaS zone
+    if paas:
+        all_private = all(pna(k) == 'disabled' for k in paas)
+        title = f"{T['paas']} &#8212; {esc(T['paasPrivate'])}" if all_private else T['paas']
+        add_container({'id': 'z-paas', 'parent': 'rg', 'x': main_x, 'y': paas_y, 'w': w_main, 'h': paas_h, 'style': ZONES['paas'], 'value': title})
+        place_grid(paas, 'z-paas', main_x + PAD, paas_y + ZHEAD, cols_p)
 
-    for k in middle:
-        add_icon(f"res-{k}", 'rg', res_x, row_y[k], k, resource_label(k), flagged(k), slot_h=pitch[k])
+    # Platform and monitoring zones
+    ry_in, ry_out = main_y, main_y
+    for r in right:
+        inside = r['inside']
+        px, parent = (rin_x, 'rg') if inside else (out_x, '1')
+        py = ry_in if inside else ry_out
+        is_mon = r['id'] == 'monitoring'
+        existing = law_existing if is_mon else dns_existing
+        add_container({'id': f"z-{r['id']}", 'parent': parent, 'x': px, 'y': py, 'w': ZONE_W, 'h': r['h'],
+                       'style': ZONES['monitoring'] if is_mon else ZONES['platform'],
+                       'value': esc(T['monitoring'] if is_mon else T['nameRes'])})
+        sx, sy = px + (ZONE_W - SLOT_W) / 2, py + ZHEAD
+        if is_mon:
+            if draw_law:
+                law_name = s(diag_target) if diag_target else 'log-analytics-workspace'
+                add_icon('law', f"z-{r['id']}", sx, sy, 'log-analytics-workspace',
+                         format_label('Log Analytics', law_name, T['existing'] if existing else ''),
+                         flagged('log-analytics-workspace'), existing)
+                sy += SLOT_H
+            if has_ai:
+                add_icon('res-application-insights', f"z-{r['id']}", sx, sy, 'application-insights',
+                         labels['application-insights'], flagged('application-insights'))
+                sy += SLOT_H
+            add_text('diag-note', f"z-{r['id']}", px + 12, sy + 4, ZONE_W - 24, 32, f"<i>{esc(T['diagNote'])}</i>",
+                     'text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontColor=#605E5C;')
+        else:
+            add_icon('dns', f"z-{r['id']}", sx, sy, 'private-dns-zone',
+                     format_label('Private DNS Zones', f"{len(zones)}× privatelink.*", T['existing'] if existing else ''),
+                     False, existing)
+        if inside:
+            ry_in += r['h'] + PAD
+        else:
+            ry_out += r['h'] + PAD
 
-    obs_i = 0
-
-    def obs_slot():
-        nonlocal obs_i
-        pos = (obs_x + (obs_i % obs_cols) * (SLOT_W + COL_GAP), obs_y + (obs_i // obs_cols) * SLOT_H)
-        obs_i += 1
-        return pos
-
-    if draw_law:
-        law_existing = (not has_law_res) and obs_ownership != 'create'
-        law_name = s(diag_target) if diag_target else 'log-analytics-workspace'
-        lx, ly = obs_slot()
-        add_icon('law', 'rg', lx, ly, 'log-analytics-workspace',
-                 format_label('Log Analytics', law_name, T['existing'] if law_existing else ''),
-                 flagged('log-analytics-workspace'), law_existing)
-    for z, zone in enumerate(zones):
-        z_existing = dns_ownership != 'deployment'
-        zx, zy = obs_slot()
-        add_icon(f"dns-{z}", 'rg', zx, zy, 'private-dns-zone', format_label(s(zone), '', T['existing'] if z_existing else ''), False, z_existing)
-
-    if exposure == 'public' and middle:
-        iy = min(row_y[k] for k in middle)
-        add_cell({'id': 'internet', 'parent': '1', 'x': 30, 'y': iy + 8 + ICON / 2 - 30, 'w': 100, 'h': 60,
-                  'style': 'ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#605E5C;', 'value': T['internet']})
-
-    # Decisions panel, right of the subscription.
-    lines = []
-    lines.append(f"<b>{T['decisions']}</b>")
+    # Decisions panel, right of everything.
+    lines = [f"<b>{T['decisions']}</b>"]
     if exposure:
         lines.append(f"{T['exposure']}: <b>{esc(exposure)}</b>")
     if net_ownership:
@@ -504,7 +717,6 @@ def main():
         lines.append(f"{T['diag']}: {esc(diag_target)}" + (f" ({esc(diag_ref['rg'])})" if diag_ref['rg'] else ''))
     if vnet_existing and vnet_ref['rg']:
         lines.append(f"VNet: {esc(vnet_ref['name'])} ({esc(vnet_ref['rg'])})")
-    # forced chains: deployment answers carrying `forces`
     if isinstance(dep, dict):
         for k in dep:
             for entry in [e for e in as_list(get_at(dep, [k, 'forces'])) if e]:
@@ -530,31 +742,70 @@ def main():
     # Rough wrap estimate: ~48 characters per line at 12px in 340px.
     panel_lines = sum(max(1, math.ceil(plain_len(line) / 48)) for line in lines)
     panel_h = max(80, panel_lines * 18 + 24)
-    add_cell({'id': 'panel', 'parent': '1', 'x': sub_x + sub_w + 40, 'y': sub_y, 'w': panel_w, 'h': panel_h,
-              'style': 'rounded=1;arcSize=3;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;fillColor=#F3F2F1;strokeColor=#C8C6C4;',
-              'value': '<br>'.join(lines)})
+    add_container({'id': 'panel', 'parent': '1', 'x': panel_x, 'y': sub_y, 'w': panel_w, 'h': panel_h,
+                   'style': 'rounded=1;arcSize=3;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;fillColor=#F3F2F1;strokeColor=#C8C6C4;',
+                   'value': '<br>'.join(lines)})
 
-    # --- Edges -------------------------------------------------------------
-    by_id = {c['id']: c for c in cells}
-
-    def anchor_y(cid, fy):
-        return by_id[cid]['y'] + by_id[cid]['h'] * fy
-
+    # --- Edges: access -----------------------------------------------------
+    by_id = {c['id']: c for c in containers + icons}
     edges = []
-    for k in with_pe:
-        if draw_vnet:
-            edges.append({'id': f"e-pe-{k}", 'source': f"pe-{k}", 'target': f"res-{k}",
-                          'style': EDGE_BASE + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeColor=#0078D4;', 'value': ''})
-    if draw_law:
-        law_y = anchor_y('law', 0.5)
-        for k in middle:
-            edges.append({'id': f"e-diag-{k}", 'source': f"res-{k}", 'target': 'law', 'value': '',
-                          'style': EDGE_BASE + 'exitX=1;exitY=0.7;entryX=0;entryY=0.5;dashed=1;strokeColor=#8A8886;endArrow=open;',
-                          'points': [{'x': diag_track_x, 'y': anchor_y(f"res-{k}", 0.7)}, {'x': diag_track_x, 'y': law_y}]})
-    if exposure == 'public':
-        for k in middle:
-            edges.append({'id': f"e-inet-{k}", 'source': 'internet', 'target': f"res-{k}", 'value': '',
-                          'style': EDGE_BASE + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeColor=#D83B01;'})
+    caller_i = {k: i for i, k in enumerate(callers)}
+
+    def node_id(name):
+        return f"res-{name}" if name in resources else actor_ids.get(name)
+
+    def is_public_edge(a):
+        if is_actor(a['from']) and (a['from'] == 'internet' or a['from'].startswith('external:')):
+            return True
+        return a['to'] in drawn and pna(a['to']) != 'disabled'
+
+    for n, a in enumerate(access):
+        src, dst = node_id(a['from']), node_id(a['to'])
+        if src not in by_id or dst not in by_id:
+            say(f"[warn] access {a['from']} -> {a['to']}: endpoint not drawn", 'yellow')
+            continue
+        color = PUBLIC_COLOR if is_public_edge(a) else PRIVATE_COLOR
+        style = EDGE_BASE + f"strokeColor={color};fontColor={color};fontSize=10;labelBackgroundColor=#FFFFFF;"
+        sc, dc = by_id[src], by_id[dst]
+        edge = {'id': f"e-{n}", 'source': src, 'target': dst, 'value': a['label']}
+        if a['from'] in caller_i and a['to'] in paas:
+            # One track down per caller, shared by all its edges: they split on the bus
+            # lane, like a tree, instead of running side by side.
+            tx = sc['slot']['x'] + SLOT_W - 14
+            bus_y = bus_base + 10 * caller_i[a['from']]
+            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0.5;entryY=0;'
+            edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': bus_y}, {'x': dc['x'] + dc['w'] / 2, 'y': bus_y}]
+        elif is_actor(a['to']):
+            # Outbound to an external service: out of the left side towards the external zone.
+            # Up over the row and out along the subnet's left edge, so the line does not
+            # run through the icons to the left of its source.
+            edge['style'] = style + 'exitX=0.5;exitY=0;entryX=1;entryY=0.5;'
+            left = by_id[sc['parent']]['x'] + 10 if sc['parent'] in by_id else sc['slot']['x']
+            edge['points'] = [{'x': sc['x'] + sc['w'] / 2, 'y': sc['slot']['y'] + 3}, {'x': left, 'y': sc['slot']['y'] + 3}]
+        else:
+            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
+        edges.append(edge)
+
+    # Legend: only what the picture uses.
+    legend = [f"<b>{esc(T['legend'])}</b>"]
+    if any(PRIVATE_COLOR in e['style'] for e in edges):
+        legend.append(f"<font color='{PRIVATE_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPrivate'])}")
+    if any(PUBLIC_COLOR in e['style'] for e in edges):
+        legend.append(f"<font color='{PUBLIC_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPublic'])}")
+    if vnet_existing or law_existing or (zones and dns_existing):
+        legend.append(f"<font color='#999999'>&#9477;&#9477;&#9477;</font> {esc(T['legExisting'])}")
+    if optional:
+        legend.append(f"<font color='#999999'>&#9679;</font> {esc(T['legOptional'])}")
+    if open_items or assumed:
+        legend.append(f"<font color='#D13438'>&#9679;</font> {esc(T['legOpen'])}")
+    if len(legend) > 1:
+        add_container({'id': 'legend', 'parent': '1', 'x': sub_x, 'y': sub_y + sub_h + 30, 'w': min(max(sub_w, 420), 560), 'h': len(legend) * 20 + 16,
+                       'style': 'rounded=1;arcSize=4;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#FFFFFF;strokeColor=#C8C6C4;fontSize=11;',
+                       'value': '<br>'.join(legend)})
+
+    # Containers first, then icons, so icons are drawn on top.
+    cells = containers + icons
+    by_id = {c['id']: c for c in cells}
 
     # --- Overlap check -----------------------------------------------------
     # Siblings must not overlap. An icon is checked by its slot (icon + label), not
@@ -565,7 +816,7 @@ def main():
     problems = []
     by_parent = {}
     for c in cells:
-        if c['id'].endswith('-icon') or c['id'] == 'rg-private':
+        if c['id'].endswith('-icon') or c['id'] in ('rg-private', 'diag-note'):
             continue
         by_parent.setdefault(c['parent'], []).append(c)
     for group in by_parent.values():
@@ -579,9 +830,8 @@ def main():
     for c in cells:
         if not c.get('labelBelow'):
             continue
-        line_count = sum(max(1, math.ceil(plain_len(part) / 26)) for part in c['value'].split('<br>'))
-        if c['y'] + c['h'] + 4 + line_count * 16 > c['slot']['y'] + c['slot']['h']:
-            problems.append(f"{c['id']}: label of {line_count} lines does not fit its slot")
+        if c['y'] + c['h'] + 4 + label_lines(c['value']) * 16 > c['slot']['y'] + c['slot']['h']:
+            problems.append(f"{c['id']}: label of {label_lines(c['value'])} lines does not fit its slot")
     # Children must fit inside their container.
     for c in cells:
         if c['parent'] == '1':
@@ -615,10 +865,7 @@ def main():
         if e.get('points'):
             # Waypoints are absolute, since every edge's parent is the root layer.
             pts = ''.join(f'<mxPoint x="{num(p["x"])}" y="{num(p["y"])}"/>' for p in e['points'])
-            label_pos = f' x="{num(e["labelAt"])}"' if e.get('labelAt') else ''
-            # A label rides above its segment rather than on it, so it never covers the arrowhead.
-            offset = '<mxPoint y="-16" as="offset"/>' if e.get('labelAt') else ''
-            o.append(f'          <mxGeometry relative="1"{label_pos} as="geometry"><Array as="points">{pts}</Array>{offset}</mxGeometry>')
+            o.append(f'          <mxGeometry relative="1" as="geometry"><Array as="points">{pts}</Array></mxGeometry>')
         else:
             o.append('          <mxGeometry relative="1" as="geometry"/>')
         o.append('        </mxCell>')

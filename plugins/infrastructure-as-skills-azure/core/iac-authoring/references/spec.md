@@ -146,6 +146,20 @@ wiring:
         to: storage-account
         role: Storage Blob Data Contributor
     source: pattern
+  # Read by the diagram (core/iac-diagram), optional: who reaches what, what a
+  # resource is for, and what is optional. `from`/`to` are resource keys or actors
+  # (internet, users, external:<name>).
+  access:
+    value:
+      - { from: users, to: app-service, label: HTTPS 443 }
+      - { from: app-service, to: storage-account }
+    source: stated
+  purposes:
+    value: { app-service: Webshop frontend, storage-account: Product images }
+    source: stated
+  optional:
+    value: [redis-cache]
+    source: stated
 ```
 
 ## Stages: one value or a map

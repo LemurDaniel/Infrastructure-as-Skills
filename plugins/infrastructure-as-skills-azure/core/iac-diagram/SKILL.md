@@ -58,21 +58,32 @@ the customer makes in the picture is a change to a decision, and it goes back in
 One page, the decisions a customer can judge. Not forty attributes.
 
 ```
- Internet │ subscription > resource group > [ network │ resources │ observability ] │ decisions
+ external zone │ subscription > resource group > [ virtual network: subnets with their compute │ Azure PaaS ] │ monitoring, name resolution │ decisions
 ```
+
+The picture answers one question: **who can reach what.** It is drawn in zones, and the
+lines are access, not plumbing.
 
 | Spec | Drawn as |
 |---|---|
-| `context` | Nested containers: subscription → resource group, region and environment in the group's label |
-| `deployment.address_space`, `virtual-network` subnets | A virtual network container, the private-endpoint subnet and every other subnet inside it with their ranges |
-| `resources:` | One Azure icon per resource, labelled with its type and spec key |
-| Private endpoint | In its subnet, on the same row as the resource it fronts — a straight edge |
-| `deployment.network_exposure` | `public`: an *Internet* actor with an edge to each resource. `private`: endpoints for every resource, and the group marked as having no public access |
-| `wiring.role_assignments` | A purple line on the target's label (`← principal: role`), not an edge - several roles from one principal made a bundle of lines nobody could follow |
+| `context` | Nested containers: subscription → resource group, region and environment in the group's label; title and one-line subtitle (exposure, keyless) above |
+| `virtual-network` subnets, `deployment.address_space` | A virtual network zone with its subnets and ranges. A subnet that hosts compute carries its delegation (`delegated to Microsoft.Web/serverFarms`) |
+| Compute (`app-service`, `function-app`, `container-app`, `virtual-machine`, …) | An icon inside the subnet named by its `networking.integration_subnet` decision, else the first integration-like subnet |
+| Other `resources:` (storage, vault, database, bus, registry, …) | An icon in the *Azure PaaS* zone below the network, titled *public access disabled* when every one is. A PaaS service is not in the VNet; its endpoint is |
+| Private endpoints | **One** bundled icon in the endpoint subnet (`9× app-service, function-app +7`), not one per resource |
+| `wiring.access` | The lines: `{ from, to, label }`. `from` and `to` are resource keys or actors - `internet`, `users`, `external:<name>` - which sit in the *Internet and external services* zone. A line to a PaaS service runs on a shared track and splits on a bus lane, like a tree |
+| `wiring.role_assignments` | A line as well, if `wiring.access` has none for the pair, and `← principal: role` in purple on the target's label |
+| `deployment.network_exposure: public` | An *Internet* actor with an orange line to each compute resource (or PaaS service if there is no compute) |
+| Blue and orange lines | Blue: private path, no public route. Orange: from or over the internet, or to a target whose public access is not disabled |
+| `wiring.purposes` | What a resource is for, under its type (`Storage Account · Product images`); without one, the spec key |
+| `wiring.optional` | The listed resources marked *optional* and faded; the legend says so |
 | A resource type with no icon | A box with the type's name, marked as having no question set; the script warns |
-| Diagnostics | Dashed edges on a shared track into the workspace |
-| `network_ownership: reference`, a referenced workspace, platform-owned DNS zones | Grey and faded, labelled as existing and not created |
+| Diagnostics | **Not** a line per resource: a *Monitoring* zone with the workspace and the note *Diagnostic settings of all resources* |
+| Private DNS zones | One bundled icon in a *Name resolution* zone (`8× privatelink.*`) |
+| Referenced things (`network_ownership: reference`, a central workspace, platform DNS) | Grey and dashed, outside the subscription, labelled as existing and not created |
 | `open:` entries, `assumed` values | The affected resource in red, and listed in the panel |
+
+A legend at the bottom lists only what the picture uses.
 
 Plus a **decisions panel** on the right: exposure, network, mandates, DNS and diagnostics
 ownership, every forced chain (`key_protection: hsm → forces key-vault.sku = premium`), and
