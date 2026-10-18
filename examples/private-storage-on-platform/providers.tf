@@ -5,8 +5,12 @@ terraform {
   # One state per stage, selected at init by the backend key, never by a workspace:
   #   terraform init -backend-config="key=invoicing/production.tfstate"
   #   terraform plan -var-file=environments/production.tfvars
-  # The backend block itself is the consuming repository's (its storage account, its
-  # container); an example has none.
+  # The backend's values (its storage account, its container, the key) are the
+  # consuming repository's and arrive as -backend-config from the pipeline. The block
+  # itself is empty and must exist: -backend-config without a backend block is ignored
+  # without an error, and the state would be local. For a local run without a state:
+  # terraform init -backend=false.
+  backend "azurerm" {}
 
   required_providers {
     # The root's own use: the data blocks that reference the platform. The module

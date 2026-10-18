@@ -7,7 +7,7 @@ idiom, a reviewer sees what `source:` buys.
 
 | Example | Targets | Scenario | Why it is here |
 |---|---|---|---|
-| [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account on the default stack (development, test, production - the request named production), behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec on the **Azure Verified Modules** (`avm-res-storage-storageaccount` v0.10.0, `avm/res/storage/storage-account` 0.33.1, resolved 2026-10-18), so the two can be diffed. The git history before that date holds the authored render of the same spec |
+| [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account on the default stack (development, test, production - the request named production), behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec on the **Azure Verified Modules** (`avm-res-storage-storageaccount` v0.10.0, `avm/res/storage/storage-account` 0.33.1, resolved 2026-10-18), so the two can be diffed. The git history before that date holds the authored render of the same spec. A second request (`request.pipeline.md`, an extension run) added `deploy_mechanism: github` and the **GitHub Actions pipeline** - all three stage blocks, with placeholder stage files for development and test, which are still `open:`; the pipeline refuses to deploy a placeholder |
 | [`greenfield-telemetry/`](greenfield-telemetry/) | Bicep | Three resources on a four-stage stack (the request named staging), nothing referenced: own network with two subnets, own workspace, private storage, `landing_zone: standalone`; only staging's stage file is resolved | The `create` branches the first example never reaches, including the privatelink zone the deployment owns and links. Four AVM modules in one root, the wiring between them in the root. The first render with tests against the compiled ARM, and the first spec carrying `source: requirement` |
 
 
@@ -16,6 +16,7 @@ idiom, a reviewer sees what `source:` buys.
 ```
 <case>/
   request.md            # the user's words, verbatim
+  request.pipeline.md   # a follow-up request, where an extension run added to the spec
   infra-spec.yaml       # the interview's output - the artefact everything else follows from
   infra-decisions.md    # the spec as the customer reads it, rendered by export_decisions.py
   naming.yaml           # the convention, a full copy of naming.default.yaml - Terraform only
@@ -26,6 +27,10 @@ idiom, a reviewer sees what `source:` buys.
                         # assert per spec decision, checked by check_render_coverage.py
   tests/*.armtest.yaml  # the Bicep tests: one entry per decision against the compiled
                         # ARM, run by run_arm_tests.py, counted by the same coverage check
+  .github/workflows/    # the pipeline for deploy_mechanism: github, one stage block per
+                        # stage; inert here (GitHub reads only the repository root),
+                        # checked by check_pipeline.py
+  # an open stage's environments/<stage>.tfvars holds placeholders (00000000-..., OPEN-...)
   bicep/main.bicep      # the Bicep render of the same spec
   bicep/main.bicepparam # its parameters - the same values as terraform.tfvars
   bicep/bicepconfig.json # symbolicNameCodegen on, so the tests can address resources by name
@@ -35,11 +40,13 @@ idiom, a reviewer sees what `source:` buys.
 
 ```powershell
 cd examples/private-storage-on-platform
-terraform init          # a real root adds -backend-config="key=invoicing/production.tfstate"
+terraform init -backend=false   # the root holds an empty backend "azurerm" {}; the pipeline passes
+                                # -backend-config="key=invoicing/production.tfstate" and the rest
 terraform fmt -check -recursive
 terraform validate      # terraform plan -var-file=environments/production.tfvars needs credentials
 terraform test
 python3 ../../plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
+python3 ../../plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_pipeline.py ./infra-spec.yaml
 python3 ../../plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/export_decisions.py ./infra-spec.yaml --language de
 
 bicep build --stdout bicep/main.bicep > $null

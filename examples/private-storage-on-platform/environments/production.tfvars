@@ -1,5 +1,5 @@
 # The production stage, rendered from ../infra-spec.yaml: context: and every per-stage
-# value for `production`. development and test get their own files once their
+# value for `production`. development.tfvars and test.tfvars hold placeholders until their
 # subscriptions, groups and platform parts are answered (spec: open). One state per
 # stage: terraform init -backend-config="key=invoicing/production.tfstate".
 environment         = "production"
