@@ -6,7 +6,7 @@ spec:
   generated_by: infrastructure-as-skills
   skill: azure-resources
   skill_version: 0.1.0
-  at: 2026-10-17T18:50:00Z
+  at: 2026-10-18T10:30:00Z
 
 # Values every resource inherits. Resolved once, not per resource.
 # All stated in the request - nothing here was guessed.
@@ -25,10 +25,13 @@ deployment:
     value: default
     source: default
   module_source:
-    value: authored
-    source: stated          # rendered before AVM became the default; the committed
-                            # render is authored and stays so until re-rendered on
-                            # avm-res-storage-storageaccount / avm/res/storage/storage-account
+    value: avm
+    source: default         # Azure/avm-res-storage-storageaccount (terraform),
+                            # br/public:avm/res/storage/storage-account (bicep);
+                            # the versions are pinned in the renders, never here
+  module_telemetry:
+    value: enabled
+    source: default
   landing_zone:
     value: corp
     source: stated          # "nur aus dem Firmennetz" over an existing hub

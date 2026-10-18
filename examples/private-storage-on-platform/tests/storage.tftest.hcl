@@ -1,14 +1,26 @@
 # Plan-only, so it needs no credentials. The platform is referenced through data
 # sources, which a real plan would have to read from Azure - the mock provider
-# answers them with placeholder values instead. The naming provider stays real,
-# so rendered names are asserted as they will be deployed.
+# answers them with placeholder values instead. The AVM module plans against a
+# mocked azapi and modtm the same way; the naming provider stays real, so
+# rendered names are asserted as they will be deployed.
 #
 # Every decision under resources: in ../infra-spec.yaml is asserted exactly once,
 # named by its key path in a `# decision:` comment; what a plan cannot observe is
-# marked `# not-testable:` with its reason. Test-RenderCoverage.ps1 checks both.
+# marked `# not-testable:` with its reason. check_render_coverage.py checks both.
+#
+# With a module in the middle the assert target is the module's `resource` output:
+# the azapi_resource the module creates, whose `body` is what this root passed in
+# and is known at plan time. Sub-resources the module creates in its own child
+# modules (blob service, diagnostic settings, role assignments) are not reachable
+# from a test of the root - those decisions lean on the module's own tests.
 mock_provider "azurerm" {
   # The provider validates every referenced id's shape, so the mocked data
   # sources need ids that parse - a random placeholder string does not.
+  mock_data "azurerm_resource_group" {
+    defaults = {
+      id = "/subscriptions/11111111-2222-3333-4444-555555555555/resourceGroups/rg-invoicing-prod-we"
+    }
+  }
   mock_data "azurerm_virtual_network" {
     defaults = {
       id = "/subscriptions/11111111-2222-3333-4444-555555555555/resourceGroups/rg-network-prod-we/providers/Microsoft.Network/virtualNetworks/vnet-hub-prod-we"
@@ -25,6 +37,9 @@ mock_provider "azurerm" {
     }
   }
 }
+
+mock_provider "azapi" {}
+mock_provider "modtm" {}
 
 variables {
   environment         = "production"
@@ -44,13 +59,19 @@ run "naming" {
   command = plan
 
   assert {
-    condition     = azurerm_storage_account.this.name == "stweprodinvoicing01"
+    condition     = module.storage.resource.name == "stweprodinvoicing01"
     error_message = "Storage account name must come from naming.yaml: stweprodinvoicing01."
   }
 
   assert {
-    condition     = azurerm_private_endpoint.storage["blob"].name == "pep-we-prod-invoicing-blob-01"
+    condition     = module.storage.private_endpoints["blob"].name == "pep-we-prod-invoicing-blob-01"
     error_message = "Private endpoint name must come from naming.yaml, <?SUBNAME> before the index."
+  }
+
+  # The module takes the group as an id, not a name - the wrong one is a silent misplacement.
+  assert {
+    condition     = module.storage.resource.parent_id == data.azurerm_resource_group.this.id
+    error_message = "The account is placed into the context's resource group."
   }
 }
 
@@ -59,28 +80,29 @@ run "networking" {
 
   # decision: storage-account.networking.public_network_access
   assert {
-    condition     = azurerm_storage_account.this.public_network_access == "Disabled" && length(azurerm_storage_account.this.network_rules) == 0
-    error_message = "Private: no public endpoint, and no ACL that would suggest one."
+    condition     = module.storage.resource.body.properties.publicNetworkAccess == "Disabled"
+    error_message = "Private: the module must send publicNetworkAccess Disabled."
   }
 
-  # decision: storage-account.networking.private_endpoint_subnet
+  # decision: storage-account.networking.allow_azure_services_bypass
   assert {
-    condition     = azurerm_private_endpoint.storage["blob"].subnet_id == data.azurerm_subnet.private_endpoints.id
-    error_message = "The endpoint goes into the platform's private-endpoint subnet."
+    condition     = module.storage.resource.body.properties.networkAcls.defaultAction == "Deny" && module.storage.resource.body.properties.networkAcls.bypass == "AzureServices"
+    error_message = "The ACL documents the posture: default Deny, trusted Azure services bypass."
   }
 
+  # not-testable: storage-account.networking.private_endpoint_subnet - the subnet id is an
+  # input to the module's private_endpoint child module, whose azapi body the root cannot
+  # reach; the module's own tests cover subnet_resource_id -> properties.subnet.id
   # decision: storage-account.networking.private_endpoint_subresources
   assert {
-    condition     = length(azurerm_private_endpoint.storage) == 1 && azurerm_private_endpoint.storage["blob"].private_service_connection[0].subresource_names[0] == "blob"
+    condition     = length(module.storage.private_endpoints) == 1 && contains(keys(module.storage.private_endpoints), "blob")
     error_message = "One endpoint per listed sub-resource, blob only."
   }
 
-  # not-testable: storage-account.networking.allow_azure_services_bypass - network_rules
-  # is not rendered with public access disabled; nothing in the plan carries the bypass
-
-  # deployment.private_dns_records: policy
+  # deployment.private_dns_records: policy - with manage_dns_zone_group false the module
+  # renders no zone group, and its id comes back null rather than unknown.
   assert {
-    condition     = length(azurerm_private_endpoint.storage["blob"].private_dns_zone_group) == 0
+    condition     = module.storage.private_endpoints["blob"].private_dns_zone_group_id == null
     error_message = "private_dns_records: policy - the platform writes the record, not this code."
   }
 }
@@ -90,15 +112,13 @@ run "identity" {
 
   # decision: storage-account.identity.managed_identity
   assert {
-    condition     = azurerm_storage_account.this.identity[0].type == "SystemAssigned"
+    condition     = module.storage.resource.identity[0].type == "SystemAssigned"
     error_message = "System-assigned identity."
   }
 
-  # decision: storage-account.identity.role_assignments
-  assert {
-    condition     = length(azurerm_role_assignment.data) == 0
-    error_message = "No consumer named yet, so no assignment - open in the spec."
-  }
+  # not-testable: storage-account.identity.role_assignments - rendered by the module's
+  # role_assignments child module from an empty map; nothing of it reaches an output.
+  # The variable is empty and the spec says open, which is the state being asserted.
 }
 
 run "security" {
@@ -106,43 +126,43 @@ run "security" {
 
   # decision: storage-account.security.shared_access_key_enabled
   assert {
-    condition     = azurerm_storage_account.this.shared_access_key_enabled == false
+    condition     = module.storage.resource.body.properties.allowSharedKeyAccess == false
     error_message = "Shared key auth must stay off; access is via Entra ID and RBAC."
   }
 
   # decision: storage-account.security.min_tls_version
   assert {
-    condition     = azurerm_storage_account.this.min_tls_version == "TLS1_2"
+    condition     = module.storage.resource.body.properties.minimumTlsVersion == "TLS1_2"
     error_message = "TLS 1.2 is the floor."
   }
 
   # decision: storage-account.security.https_traffic_only
   assert {
-    condition     = azurerm_storage_account.this.https_traffic_only_enabled == true
+    condition     = module.storage.resource.body.properties.supportsHttpsTrafficOnly == true
     error_message = "No plain HTTP."
   }
 
   # decision: storage-account.security.allow_blob_public_access
   assert {
-    condition     = azurerm_storage_account.this.allow_nested_items_to_be_public == false
+    condition     = module.storage.resource.body.properties.allowBlobPublicAccess == false
     error_message = "Anonymous container access must not be possible at the account level."
   }
 
   # decision: storage-account.security.infrastructure_encryption_enabled
   assert {
-    condition     = azurerm_storage_account.this.infrastructure_encryption_enabled == true
+    condition     = module.storage.resource.body.properties.encryption.requireInfrastructureEncryption == true
     error_message = "Infrastructure encryption is settable only at creation and must be on."
   }
 
   # decision: storage-account.security.key_management
   assert {
-    condition     = length(azurerm_storage_account.this.customer_managed_key) == 0
-    error_message = "Platform-managed keys: no CMK block."
+    condition     = module.storage.resource.body.properties.encryption.keySource == "Microsoft.Storage"
+    error_message = "Platform-managed keys: keySource Microsoft.Storage, no Key Vault reference."
   }
 
   # decision: storage-account.security.sftp_enabled
   assert {
-    condition     = azurerm_storage_account.this.sftp_enabled == false
+    condition     = module.storage.resource.body.properties.isSftpEnabled == false
     error_message = "SFTP brings local users - credentials outside Entra ID."
   }
 }
@@ -152,71 +172,45 @@ run "data_protection" {
 
   # decision: storage-account.data_protection.replication
   assert {
-    condition     = azurerm_storage_account.this.account_replication_type == "ZRS"
+    condition     = module.storage.resource.body.sku.name == "Standard_ZRS"
     error_message = "ZRS: survives a zone loss at roughly LRS cost."
   }
 
   # decision: storage-account.data_protection.access_tier
   assert {
-    condition     = azurerm_storage_account.this.access_tier == "Hot"
+    condition     = module.storage.resource.body.properties.accessTier == "Hot"
     error_message = "Hot tier by default."
-  }
-
-  # decision: storage-account.data_protection.blob_soft_delete_days
-  assert {
-    condition     = azurerm_storage_account.this.blob_properties[0].delete_retention_policy[0].days == 7
-    error_message = "Blob soft delete 7 days."
-  }
-
-  # decision: storage-account.data_protection.container_soft_delete_days
-  assert {
-    condition     = azurerm_storage_account.this.blob_properties[0].container_delete_retention_policy[0].days == 7
-    error_message = "Container soft delete 7 days."
-  }
-
-  # decision: storage-account.data_protection.versioning_enabled
-  assert {
-    condition     = azurerm_storage_account.this.blob_properties[0].versioning_enabled == true
-    error_message = "Versioning on: protects against overwrite, which soft delete does not."
-  }
-
-  # decision: storage-account.data_protection.change_feed_enabled
-  assert {
-    condition     = azurerm_storage_account.this.blob_properties[0].change_feed_enabled == false
-    error_message = "Change feed off unless something consumes it."
-  }
-
-  # decision: storage-account.data_protection.point_in_time_restore_days
-  assert {
-    condition     = length(azurerm_storage_account.this.blob_properties[0].restore_policy) == 0
-    error_message = "Point-in-time restore off: no restore_policy block."
   }
 
   # decision: storage-account.data_protection.immutability
   assert {
-    condition     = length(azurerm_storage_account.this.immutability_policy) == 0
+    condition     = module.storage.resource.body.properties.immutableStorageWithVersioning == null
     error_message = "No WORM policy unless a mandate names one."
   }
+
+  # The blob service is a child module of the AVM module; its azapi body is not reachable
+  # from a test of this root. The call passes the values (storage.tf, blob_properties);
+  # the module's own tests cover blob_properties -> blobServices/default.
+  # not-testable: storage-account.data_protection.blob_soft_delete_days - set through the module's blob_properties input; the module's own tests cover the mapping
+  # not-testable: storage-account.data_protection.container_soft_delete_days - set through the module's blob_properties input; the module's own tests cover the mapping
+  # not-testable: storage-account.data_protection.versioning_enabled - set through the module's blob_properties input; the module's own tests cover the mapping
+  # not-testable: storage-account.data_protection.change_feed_enabled - set through the module's blob_properties input; the module's own tests cover the mapping
+  # not-testable: storage-account.data_protection.point_in_time_restore_days - set through the module's blob_properties input (absent restore_policy); the module's own tests cover the mapping
 }
 
 run "observability" {
   command = plan
 
-  # decision: storage-account.observability.diagnostic_workspace
-  assert {
-    condition     = azurerm_monitor_diagnostic_setting.storage.log_analytics_workspace_id == data.azurerm_log_analytics_workspace.platform.id && azurerm_monitor_diagnostic_setting.storage_blob.log_analytics_workspace_id == data.azurerm_log_analytics_workspace.platform.id
-    error_message = "Both settings route to the platform workspace."
-  }
+  # The diagnostic settings are child modules of the AVM module; nothing of them reaches
+  # an output. The call passes workspace, categories and metrics (storage.tf,
+  # diagnostic_settings_storage_account / _blob).
+  # not-testable: storage-account.observability.diagnostic_workspace - set through the module's diagnostic_settings_* inputs; the module's own tests cover the mapping
+  # not-testable: storage-account.observability.diagnostic_categories - set through the module's diagnostic_settings_blob input; the module's own tests cover the mapping
+  # not-testable: storage-account.observability.metrics_enabled - set through the module's diagnostic_settings_* inputs; the module's own tests cover the mapping
 
-  # decision: storage-account.observability.diagnostic_categories
+  # deployment.module_telemetry: enabled - the module's telemetry resource exists.
   assert {
-    condition     = length(azurerm_monitor_diagnostic_setting.storage_blob.enabled_log) == 1 && contains([for l in azurerm_monitor_diagnostic_setting.storage_blob.enabled_log : l.category_group], "audit")
-    error_message = "audit on the blob service, and nothing else in production."
-  }
-
-  # decision: storage-account.observability.metrics_enabled
-  assert {
-    condition     = length(azurerm_monitor_diagnostic_setting.storage.enabled_metric) == 1 && length(azurerm_monitor_diagnostic_setting.storage_blob.enabled_metric) == 1
-    error_message = "AllMetrics on both targets."
+    condition     = module.storage.resource.create_headers != null
+    error_message = "module_telemetry: enabled - the module tags its requests with the AVM header."
   }
 }

@@ -1,10 +1,27 @@
 terraform {
-  required_version = ">= 1.7"
+  # The AVM storage module requires >= 1.10 (write-only arguments, ephemeral values).
+  required_version = ">= 1.10"
 
   required_providers {
+    # The root's own use: the data blocks that reference the platform. The module
+    # itself does not use azurerm at all.
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 5.0"
+    }
+    # Required by the module (AzAPI-based since 0.7). Declared here so one init
+    # resolves one version for the whole configuration and the lock file pins it.
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.11"
+    }
+    modtm = {
+      source  = "Azure/modtm"
+      version = "~> 0.3"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
     }
     naming = {
       source  = "LemurDaniel/naming"
@@ -16,11 +33,16 @@ terraform {
 provider "azurerm" {
   subscription_id = var.subscription_id
 
-  # Shared-key auth is off on the account (deployment.local_auth: disabled), so the
-  # provider itself has to reach the data plane with Entra ID.
+  # Shared-key auth is off on the account (deployment.local_auth: disabled), so any
+  # azurerm data-plane resource added beside the module has to reach it with Entra ID.
+  # The module itself authenticates with Entra ID regardless.
   storage_use_azuread = true
 
   features {}
+}
+
+provider "azapi" {
+  subscription_id = var.subscription_id
 }
 
 # The convention is declared once, for the whole configuration. `naming` points at

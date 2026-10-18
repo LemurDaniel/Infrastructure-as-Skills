@@ -82,11 +82,10 @@ variable "private_endpoint_subresources" {
 }
 
 variable "role_assignments" {
-  description = "Data-plane role assignments on the account. Empty means a working account nobody can read - open in the spec until the consumer is named."
+  description = "Data-plane role assignments on the account, role by name. Empty means a working account nobody can read - open in the spec until the consumer is named. A container-scoped assignment goes on the module's containers input, not here."
   type = list(object({
     principal_id = string
     role         = string
-    scope        = optional(string)
   }))
   default = []
 }
