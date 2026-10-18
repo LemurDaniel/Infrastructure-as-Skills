@@ -70,23 +70,26 @@ graders:
     target: { source: file, path: infra/infra-spec.yaml }
     pattern: 'public_network_access:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?disabled\b'
 
-  # A created network is a spoke: "nothing exists yet" is the workload, not the
-  # platform. DNS zones stay in the hub; the platform's policy writes the records.
-  - name: dns-stays-with-platform
+  # Nothing in the request names a landing zone platform, so landing_zone takes its
+  # default, standalone - and with no platform to own them, the privatelink zones are
+  # the deployment's (forced), not referenced from a hub that does not exist.
+  - name: standalone-landing-zone
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'landing_zone:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?standalone\b'
+
+  - name: dns-owned-by-deployment
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'private_dns_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?platform\b'
+    pattern: 'private_dns_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?deployment\b'
 
-  - name: dns-records-by-policy
+  # The requirements were not stated, so the derived storage values carry the default
+  # answers - and say which requirement they follow.
+  - name: replication-derived-from-outage-impact
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'private_dns_records:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?policy\b'
-
-  - name: corp-landing-zone
-    type: regex
-    target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'landing_zone:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?corp\b'
+    pattern: 'replication:[\s\S]{0,200}derived_from:\s*deployment\.outage_impact'
 
   - name: naming-convention-written
     type: file_exists
