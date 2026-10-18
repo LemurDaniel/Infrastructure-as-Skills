@@ -36,25 +36,25 @@ python3 .claude/skills/git-commit-conventions/scripts/check_repo_consistency.py
 
 # Validates a generated spec. --require-applyable also fails on assumed values and
 # open items. Needs PyYAML (pip install pyyaml).
-python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_spec.py <spec>
+python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/check_spec.py <spec>
 
 # Validates every question set (or the paths given) against the format: enum defaults,
 # depends_on / from_deployment targets, resolution fields, audience, unknown fields.
 # --platform <platform.yaml> checks a platform profile against the deployment set instead.
-python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_question_set.py
+python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/check_question_set.py
 
 # Renders a spec as the customer's decision document (infra-decisions.md beside it).
-python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/export_decisions.py <spec> --language de
+python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/export_decisions.py <spec> --language de
 
 # A rendered example: fmt, validate, plan-only tests with a mocked platform - and the
 # Bicep render of the same spec compiled and linted.
 terraform -chdir=examples/private-storage-on-platform init && terraform -chdir=examples/private-storage-on-platform test
 # Every decision in the spec asserted by those tests, or marked not-testable with a reason.
-python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py examples/private-storage-on-platform/infra-spec.yaml
+python3 plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_render_coverage.py examples/private-storage-on-platform/infra-spec.yaml
 bicep build --stdout examples/private-storage-on-platform/bicep/main.bicep > $null && bicep lint examples/private-storage-on-platform/bicep/main.bicep
 # The Bicep example: its tests run against the compiled ARM, then the same coverage check.
-python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/run_arm_tests.py examples/greenfield-telemetry/infra-spec.yaml
-python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py examples/greenfield-telemetry/infra-spec.yaml
+python3 plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/run_arm_tests.py examples/greenfield-telemetry/infra-spec.yaml
+python3 plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_render_coverage.py examples/greenfield-telemetry/infra-spec.yaml
 ```
 
 There is no build. The artefacts are Markdown and YAML; the scripts and the examples'

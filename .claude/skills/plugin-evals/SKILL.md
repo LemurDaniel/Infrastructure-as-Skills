@@ -1,12 +1,12 @@
 ---
 name: plugin-evals
-description: Writing, running and reading the plugin's eval suite (claude plugin eval, plugins/infrastructure-as-skills/evals/). Use when adding or changing an eval case or grader, running the suite, interpreting results, or after a bug found in a real run should become a regression case. Triggers on "eval", "evals", "testcase", "Testfall", "grader", "plugin eval", "Regression", "wie gut ist der Output".
+description: Writing, running and reading the plugin's eval suite (claude plugin eval, plugins/infrastructure-as-skills-azure/evals/). Use when adding or changing an eval case or grader, running the suite, interpreting results, or after a bug found in a real run should become a regression case. Triggers on "eval", "evals", "testcase", "Testfall", "grader", "plugin eval", "Regression", "wie gut ist der Output".
 ---
 
-# Plugin evals — Infrastructure-as-Skills
+# Plugin evals — Infrastructure-as-Skills-Azure
 
-The suite lives in `plugins/infrastructure-as-skills/evals/`, one directory per case, and
-runs with `claude plugin eval`. Its [README](../../../plugins/infrastructure-as-skills/evals/README.md)
+The suite lives in `plugins/infrastructure-as-skills-azure/evals/`, one directory per case, and
+runs with `claude plugin eval`. Its [README](../../../plugins/infrastructure-as-skills-azure/evals/README.md)
 holds the case matrix and the method; this file holds how to work on it without repeating
 the mistakes already made once.
 
@@ -108,7 +108,7 @@ each run, so `0` loads and validates every case and starts none:
 
 ```powershell
 $claude = (Get-Item "$HOME/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude.exe" | Select-Object -Last 1).FullName
-& $claude plugin eval plugins/infrastructure-as-skills --trust-plugin --no-publish --max-cost-usd 0 --runs 1 --ablation none --allow-tools Write Edit
+& $claude plugin eval plugins/infrastructure-as-skills-azure --trust-plugin --no-publish --max-cost-usd 0 --runs 1 --ablation none --allow-tools Write Edit
 ```
 
 `--case` filters *before* loading, so it cannot be used for this.
@@ -116,7 +116,7 @@ $claude = (Get-Item "$HOME/.vscode/extensions/anthropic.claude-code-*/resources/
 A first look — one run per case, no baseline arm, in parallel:
 
 ```powershell
-& $claude plugin eval plugins/infrastructure-as-skills --trust-plugin --no-publish --runs 1 --ablation none -j 3 --allow-tools Write Edit --keep-temp --json <scratch>/eval.json
+& $claude plugin eval plugins/infrastructure-as-skills-azure --trust-plugin --no-publish --runs 1 --ablation none -j 3 --allow-tools Write Edit --keep-temp --json <scratch>/eval.json
 ```
 
 The full measurement is the default: 3 runs per case and the no-plugin arm, so
@@ -150,7 +150,7 @@ with a harness error is refused as a baseline.
 Then validate the produced specs yourself, since the case cannot:
 
 ```powershell
-python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_spec.py <kept workspace>/infra/infra-spec.yaml
+python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/check_spec.py <kept workspace>/infra/infra-spec.yaml
 ```
 
 `--keep-temp` keeps each run's directory under `%TEMP%\claude-eval-*`. Everything in it

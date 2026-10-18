@@ -3,7 +3,7 @@ schema_version: 1
 spec:
   id: invoicing-prod
   target: terraform
-  generated_by: infrastructure-as-skills
+  generated_by: infrastructure-as-skills-azure
   skill: azure-resources
   skill_version: 0.1.0
   at: 2026-10-18T10:30:00Z

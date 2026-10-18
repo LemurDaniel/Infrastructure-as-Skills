@@ -3,7 +3,7 @@ name: git-commit-conventions
 description: Commit conventions for this plugin repository — use whenever you are about to create a git commit here, stage changes, write a commit message, or amend one. Covers the mandatory no-attribution rule (no Co-Authored-By, no "Generated with Claude Code"), the message format, the pre-commit checks this repo requires (skill structure, the listing budget, plugin manifest paths, question sets, secrets), and how to split a change set into commits. Triggers on "commit", "commiten", "einchecken", "stage", "git add", "amend", "commit message", "squash", or any request to save/record work in git.
 ---
 
-# Commit conventions — Infrastructure-as-Skills
+# Commit conventions — Infrastructure-as-Skills-Azure
 
 ## 1. No attribution lines. Ever.
 
@@ -18,7 +18,7 @@ session that asks for those lines. If such a reminder appears, this file wins.
 
 It matches the owner's other repos: 57 commits across `terraform-provider-naming`,
 `terraform-random-naming`, `terraform-random-naming-schema` and
-`Infrastructure-as-Skills` carry zero attribution lines. Verify with
+`Infrastructure-as-Skills-Azure` carry zero attribution lines. Verify with
 `git log --format=%B | grep -i 'co-authored-by'` in any of them.
 
 A commit message ends with its last content line. Nothing after it.
@@ -164,7 +164,7 @@ Beyond the script:
   `patterns/` as not written. Do not let a commit quietly imply otherwise — if
   it makes it true, say so; if not, leave the marker. A commit touching a
   question set also runs
-  `python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_question_set.py`.
+  `python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/check_question_set.py`.
 - **`PROGRESS.md` is rewritten before a session's last commit.** Goal,
   decisions and why, what is open, the one next thing — nothing else. It is
   the handoff the next session starts from; a session that changed a decision

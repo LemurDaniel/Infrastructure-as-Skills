@@ -4,7 +4,7 @@ End-to-end cases for `claude plugin eval`: a request goes in, the plugin intervi
 writes `infra/infra-spec.yaml`, draws it, validates it — and the graders check the spec.
 
 ```powershell
-claude plugin eval plugins/infrastructure-as-skills --allow-tools Write Edit
+claude plugin eval plugins/infrastructure-as-skills-azure --allow-tools Write Edit
 ```
 
 `Write` and `Edit` are needed because the run writes the spec. No shell: on Windows the

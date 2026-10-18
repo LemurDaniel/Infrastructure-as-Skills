@@ -1,20 +1,20 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "infrastructure-as-skills",
+  "name": "infrastructure-as-skills-azure",
   "description": "Interview-driven Azure infrastructure authoring for Claude Code: question sets that ask the decisions a resource actually has, settled once per deployment where they hold for all of it. Renders Terraform or Bicep from the same answers.",
   "owner": {
     "name": "LemurDaniel"
   },
   "plugins": [
     {
-      "name": "infrastructure-as-skills",
+      "name": "infrastructure-as-skills-azure",
       "description": "Author Azure infrastructure as Terraform or Bicep by answering the decisions each resource actually has. Each resource carries a grouped question set (placement, networking, identity, security, data protection, observability), and a deployment-wide set settles posture, network ownership and mandates once for everything in a deployment. Renders Azure Verified Modules first, authored resources as the fallback.",
       "author": {
         "name": "LemurDaniel"
       },
       "category": "devops",
-      "source": "./plugins/infrastructure-as-skills",
-      "homepage": "https://github.com/LemurDaniel/Infrastructure-as-Skills"
+      "source": "./plugins/infrastructure-as-skills-azure",
+      "homepage": "https://github.com/LemurDaniel/Infrastructure-as-Skills-Azure"
     }
   ]
 }

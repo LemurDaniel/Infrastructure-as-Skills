@@ -40,7 +40,7 @@ USE_COLOR = sys.stdout.isatty() and not os.environ.get('NO_COLOR')
 
 DEFAULT_BASELINE = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..',
-    'plugins', 'infrastructure-as-skills', 'evals', 'baseline.json'))
+    'plugins', 'infrastructure-as-skills-azure', 'evals', 'baseline.json'))
 
 
 def say(text, color=None):

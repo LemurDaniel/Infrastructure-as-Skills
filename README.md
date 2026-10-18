@@ -101,9 +101,9 @@ reference.
 ## Layout
 
 ```
-Infrastructure-as-Skills/
+Infrastructure-as-Skills-Azure/
 ├── .claude-plugin/marketplace.json
-└── plugins/infrastructure-as-skills/
+└── plugins/infrastructure-as-skills-azure/
     ├── .claude-plugin/plugin.json
     ├── core/                       # the shared contract
     │   ├── iac-authoring/          # interview protocol, the spec, question-set format
@@ -183,14 +183,14 @@ the second: three resources, nothing referenced, the `create` branches, in Bicep
 On Claude Code 2.1.275 or later, one step:
 
 ```
-/plugin install infrastructure-as-skills --marketplace LemurDaniel/Infrastructure-as-Skills
+/plugin install infrastructure-as-skills-azure --marketplace LemurDaniel/Infrastructure-as-Skills-Azure
 ```
 
 Before that, the marketplace is added first:
 
 ```
-/plugin marketplace add LemurDaniel/Infrastructure-as-Skills
-/plugin install infrastructure-as-skills
+/plugin marketplace add LemurDaniel/Infrastructure-as-Skills-Azure
+/plugin install infrastructure-as-skills-azure
 ```
 
 Then just say what you need — `"ich brauch ein storage account für terraform"` — and the
@@ -243,7 +243,7 @@ Nothing has been applied.
 - [ ] Evals per pattern, plus a consistency run: same spec many times, measure the spread
 - [ ] Cross-backend check: one spec through both backends, diff the result
 
-Run `claude plugin validate ./plugins/infrastructure-as-skills` before trusting the manifest
+Run `claude plugin validate ./plugins/infrastructure-as-skills-azure` before trusting the manifest
 — the grouped `skills` array is the part most likely to be wrong.
 
 ## Relation to `Infrastructure-by-Skill`

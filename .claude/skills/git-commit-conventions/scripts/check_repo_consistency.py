@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pre-commit consistency checks for the Infrastructure-as-Skills repo.
+"""Pre-commit consistency checks for the Infrastructure-as-Skills-Azure repo.
 
 Read-only. Verifies the things that can actually go wrong in a Claude Code
 plugin repo whose content is Markdown and YAML:
@@ -142,7 +142,7 @@ def main():
     if not tracked:
         say('[info] nothing tracked yet - checks run against the index only', 'darkyellow')
 
-    plugin_root = os.path.join(repo, 'plugins', 'infrastructure-as-skills')
+    plugin_root = os.path.join(repo, 'plugins', 'infrastructure-as-skills-azure')
 
     # Every SKILL.md shipped in the plugin (repo-maintenance skills under
     # .claude/ are not part of the listing a consumer gets).

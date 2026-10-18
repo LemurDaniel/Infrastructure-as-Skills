@@ -39,8 +39,8 @@ terraform init          # a real root adds -backend-config="key=invoicing/produc
 terraform fmt -check -recursive
 terraform validate      # terraform plan -var-file=environments/production.tfvars needs credentials
 terraform test
-python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
-python3 ../../plugins/infrastructure-as-skills/core/iac-authoring/scripts/export_decisions.py ./infra-spec.yaml --language de
+python3 ../../plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
+python3 ../../plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/export_decisions.py ./infra-spec.yaml --language de
 
 bicep build --stdout bicep/main.bicep > $null
 bicep build-params bicep/main.staging.bicepparam --stdout > $null   # one per resolved stage
@@ -48,8 +48,8 @@ bicep lint bicep/main.bicep
 
 cd ../greenfield-telemetry
 bicep build --stdout bicep/main.bicep > $null && bicep lint bicep/main.bicep
-python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/run_arm_tests.py ./infra-spec.yaml
-python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
+python3 ../../plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/run_arm_tests.py ./infra-spec.yaml
+python3 ../../plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
 ```
 
 Needs the AVM module and the `azurerm`, `azapi`, `modtm`, `random` and

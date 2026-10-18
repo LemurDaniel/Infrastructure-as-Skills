@@ -557,7 +557,7 @@ def main():
     # --- Emit --------------------------------------------------------------
     diagram_name = get_at(spec, ['spec', 'id'])
     o = []
-    o.append('<mxfile host="infrastructure-as-skills">')
+    o.append('<mxfile host="infrastructure-as-skills-azure">')
     o.append(f'  <diagram id="infra" name="{esc(diagram_name if diagram_name is not None else "infra")}">')
     o.append('    <mxGraphModel grid="1" gridSize="10" page="0" math="0" shadow="0">')
     o.append('      <root>')

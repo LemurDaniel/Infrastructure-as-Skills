@@ -5,7 +5,7 @@ graders:
   - name: skill-fired
     type: tool_used
     tool: Skill
-    input_match: infrastructure-as-skills
+    input_match: infrastructure-as-skills-azure
 
   - name: target-bicep
     type: regex
