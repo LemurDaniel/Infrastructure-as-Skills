@@ -92,6 +92,17 @@ Verified Modules first, authored resources second.
   the deployment owns the workspace - six, the budget. `iac-authoring` now has the two
   modes: customer (default; only `customer` questions asked, the rest resolved or
   opened) and engineer.
+- **The decision document is rendered, not written.** B5, 2026-10-18. Every question
+  carries `plain` (`en` and `de`, `{value}` where the value goes) and, where a raw value
+  means nothing to a customer, `plain_values`; `export_decisions.py` turns a spec into
+  `infra-decisions.md` in the customer's language - what follows from their answers with
+  the derived decisions under each, what the rules set, departures, open items, an
+  appendix with every key. Both examples carry theirs. Word is a `pandoc` conversion
+  offered once in Phase 5, never a second source.
+- **`naming.yaml` is copied for Terraform only.** Owner's call, 2026-10-18: the provider
+  reads it at plan time, nothing in a Bicep deployment does. A Bicep root gets its name
+  vars generated from the plugin's convention and a `naming.yaml` only for a stated
+  `custom` departure, holding the departures alone.
 - **No registry alias, no registry modules — for the owner's own registry.** `br/public:`
   needs no alias and is the default; `br/modules:` is only rendered when
   `bicepconfig.json` already has it (`implementation: reuse`).
@@ -119,19 +130,20 @@ Verified Modules first, authored resources second.
 - **A sandbox subscription for real plans, applies and the deploy agent** (`ROADMAP.md`
   A5, E): the owner sets it up — subscription, federated credential for OIDC, a fenced
   resource group. Not available yet (2026-10-18).
-- The customer interview (`ROADMAP.md` B), still open: `plain` on every question and
-  `export_decisions.py` (B5), the evals graders (B6) - a grader that counts the
-  questions put to the customer and one that fails on Azure vocabulary in them.
+- The customer interview (`ROADMAP.md` B), still open: the evals graders (B6) - a
+  grader that counts the questions put to the customer and one that fails on Azure
+  vocabulary in them. The decision document's `open:` lines stay English, because the
+  spec's `open:` questions are English; a run translates them in the conversation.
 - A cloud session needs `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
   release downloads and `mcr.microsoft.com` allowed, and installs `terraform` and `bicep`
   into `~/.local/bin` itself (neither is in the image). Done once on 2026-10-18.
 
 ## Next
 
-B5: the `plain` line on every question and `export_decisions.py`, which turns a spec
-into the customer's decision document (Markdown, their language; `derived_from` read
-back as "because you said", `open:` as what is still needed from whom), offered in
-Phase 5 beside the diagram. Then A4, the eval baseline - the suite has three cases and
-corrected graders and has never been run against the current question sets - and B6's
-two graders on `greenfield-telemetry`. A5 (the sandbox plan) waits on the owner's
-subscription.
+A4, the eval baseline: the suite has three cases with corrected graders and has never
+run against the current question sets (audience, requirements, derived values, the
+decision document in Phase 5); run it, read the failed runs' specs before touching a
+grader, commit `baseline.json`. B6's two graders on `greenfield-telemetry` go in with it.
+Then `ROADMAP.md` C1: the `security` family (Key Vault, user-assigned identity) and
+`compute` (App Service, Container Apps), each with `audience`, `plain`, both rendering
+references and a diagram icon. A5 (the sandbox plan) waits on the owner's subscription.

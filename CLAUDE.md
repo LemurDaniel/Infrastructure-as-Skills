@@ -43,6 +43,9 @@ python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_spec.p
 # --platform <platform.yaml> checks a platform profile against the deployment set instead.
 python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_question_set.py
 
+# Renders a spec as the customer's decision document (infra-decisions.md beside it).
+python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/export_decisions.py <spec> --language de
+
 # A rendered example: fmt, validate, plan-only tests with a mocked platform - and the
 # Bicep render of the same spec compiled and linted.
 terraform -chdir=examples/private-storage-on-platform init && terraform -chdir=examples/private-storage-on-platform test
