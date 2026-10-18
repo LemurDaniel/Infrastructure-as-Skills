@@ -12,10 +12,26 @@ graders:
     target: { source: file, path: infra/infra-spec.yaml }
     pattern: 'target:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?bicep\b'
 
-  - name: environment-staging
+  # The stack is the default; the request's "Staging" is one stage of it, beside
+  # development, test and production.
+  - name: stages-stack-with-staging
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'environments:\s*\[(?=[^\]]*\bdevelopment\b)(?=[^\]]*\btest\b)(?=[^\]]*\bstaging\b)(?=[^\]]*\bproduction\b)[^\]]*\]'
+
+  # The stated range is staging's value, not every stage's: a per-stage map, and the
+  # other stages named as open.
+  - name: address-space-per-stage
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'address_space:\s*(?:#[^\n]*\s*)*value:\s*(?:#[^\n]*\s*)*(?:\{\s*)?staging:\s*10\.20\.0\.0/16'
+
+  - name: other-stages-open
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'environment:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?staging\b'
+    pattern: 'open:[\s\S]*environments:\s*\[[^\]]*\bproduction\b'
 
   - name: location-gwc
     type: regex
@@ -89,7 +105,7 @@ graders:
   - name: replication-derived-from-outage-impact
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'replication:[\s\S]{0,200}derived_from:\s*deployment\.outage_impact'
+    pattern: 'replication:[\s\S]{0,500}derived_from:\s*deployment\.outage_impact'
 
   # A Bicep target gets no naming.yaml copy - its name vars are generated from the
   # convention, and the request stated no departure.

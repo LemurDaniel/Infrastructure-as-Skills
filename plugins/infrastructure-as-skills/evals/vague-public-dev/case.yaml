@@ -19,10 +19,11 @@ graders:
     target: { source: file, path: infra/infra-spec.yaml }
     pattern: 'network_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?none\b'
 
-  - name: environment-development
+  # "dev" names the development stage of the default stack, not a single environment.
+  - name: stages-default-stack
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'environment:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?development\b'
+    pattern: 'environments:\s*\[(?=[^\]]*\bdevelopment\b)(?=[^\]]*\bproduction\b)[^\]]*\]'
 
   # The four things nobody said. Each must be an open item, not a value.
   - name: open-subscription
