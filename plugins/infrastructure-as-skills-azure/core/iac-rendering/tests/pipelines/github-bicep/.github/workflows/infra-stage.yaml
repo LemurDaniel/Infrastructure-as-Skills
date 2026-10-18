@@ -1,0 +1,83 @@
+name: Infrastructure stage
+
+on:
+  workflow_call:
+    inputs:
+      stage: { type: string, required: true }
+      gated: { type: boolean, required: true }
+
+permissions:
+  contents: read
+
+# Queue, never cancel: an apply cut off halfway is how state and reality part.
+concurrency:
+  group: infra-${{ inputs.stage }}
+  cancel-in-progress: false
+
+env:
+  STAGE: ${{ inputs.stage }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    permissions: { contents: read, id-token: write }
+    outputs:
+      changes: ${{ steps.whatif.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Refuse placeholder values
+        run: |
+          f="main.${STAGE}.bicepparam"
+          [ -f "$f" ] || { echo "::error::$f is missing"; exit 1; }
+          if grep -Eq '00000000-0000-0000-0000-000000000000|OPEN-' "$f"; then
+            echo "::error file=$f::Stage ${STAGE} still holds placeholder values - answer the open items first."
+            exit 1
+          fi
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: What-if
+        id: whatif
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          az deployment group what-if --resource-group "$RESOURCE_GROUP" \
+            --template-file main.bicep --parameters "main.${STAGE}.bicepparam" \
+            --no-pretty-print > whatif.json
+          n=$(jq '[.changes[] | select(.changeType != "NoChange" and .changeType != "Ignore")] | length' whatif.json)
+          echo "changes=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          { echo "### What-if: ${STAGE}"; echo '```'; jq -r '.changes[] | select(.changeType != "NoChange" and .changeType != "Ignore") | "\(.changeType)\t\(.resourceId)"' whatif.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  approve:
+    needs: plan
+    if: ${{ inputs.gated && needs.plan.outputs.changes == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}-approval
+    steps:
+      - run: echo "Approved for ${{ inputs.stage }}."
+
+
+  apply:
+    needs: [plan, approve]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.changes == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      # The approver read a prediction: what-if is read-only and create redeploys. Same
+      # commit, template and parameter file as the plan job - nothing else is promised.
+      - name: Deploy
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          az deployment group create --name "payments-${STAGE}" --resource-group "$RESOURCE_GROUP" \
+            --template-file main.bicep --parameters "main.${STAGE}.bicepparam"

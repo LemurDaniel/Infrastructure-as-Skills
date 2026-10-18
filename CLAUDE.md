@@ -47,6 +47,12 @@ python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/check_
 # colours, the bundled endpoint icon. The evals cannot draw, so this is where it is tested.
 python3 plugins/infrastructure-as-skills-azure/core/iac-diagram/tests/run_diagram_tests.py
 
+# Checks a rendered pipeline (GitHub, Azure DevOps, GitLab or local) against the
+# invariants of references/pipelines.md; the test runner breaks one invariant per
+# case in a copy of tests/pipelines/<platform>-<target> and asserts the check names it.
+python3 plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_pipeline.py <spec> [--root <dir>]
+python3 plugins/infrastructure-as-skills-azure/core/iac-rendering/tests/run_pipeline_tests.py
+
 # Renders a spec as the customer's decision document (infra-decisions.md beside it).
 python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/export_decisions.py <spec> --language de
 

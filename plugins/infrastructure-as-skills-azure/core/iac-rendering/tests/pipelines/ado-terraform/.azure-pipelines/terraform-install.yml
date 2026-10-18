@@ -1,0 +1,11 @@
+steps:
+  - bash: |
+      set -euo pipefail
+      v="$(TF_VERSION)"
+      cd "$(Agent.TempDirectory)"
+      curl -fsSLO "https://releases.hashicorp.com/terraform/${v}/terraform_${v}_linux_amd64.zip"
+      curl -fsSLO "https://releases.hashicorp.com/terraform/${v}/terraform_${v}_SHA256SUMS"
+      grep "terraform_${v}_linux_amd64.zip" "terraform_${v}_SHA256SUMS" | sha256sum -c -
+      mkdir -p "$(Agent.TempDirectory)/tf" && unzip -oq "terraform_${v}_linux_amd64.zip" -d "$(Agent.TempDirectory)/tf"
+      echo "##vso[task.prependpath]$(Agent.TempDirectory)/tf"
+    displayName: Install Terraform $(TF_VERSION)

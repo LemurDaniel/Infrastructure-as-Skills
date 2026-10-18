@@ -1,0 +1,49 @@
+# Rendered from infra-spec.yaml. Platform prerequisites: see pipelines.github.md.
+name: Infrastructure
+
+on:
+  pull_request:
+    paths: ["**.tf", "**.tfvars", "**.bicep", "**.bicepparam", ".github/workflows/infra*.yaml"]
+  push:
+    branches: [master]
+    paths: ["**.tf", "**.tfvars", "**.bicep", "**.bicepparam", ".github/workflows/infra*.yaml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~> 1.16.0"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - run: terraform test
+
+  development:
+    needs: validate
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/infra-stage.yaml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      stage: development
+      gated: false
+
+  test:
+    needs: development
+    uses: ./.github/workflows/infra-stage.yaml
+    permissions: { contents: read, id-token: write }
+    with: { stage: test, gated: false }
+
+  production:
+    needs: test
+    uses: ./.github/workflows/infra-stage.yaml
+    permissions: { contents: read, id-token: write }
+    with: { stage: production, gated: true }   # pipeline_approvals: production

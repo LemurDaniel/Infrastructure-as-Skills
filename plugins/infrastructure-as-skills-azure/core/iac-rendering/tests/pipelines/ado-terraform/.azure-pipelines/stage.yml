@@ -1,0 +1,96 @@
+parameters:
+  - name: stage
+    type: string
+  - name: dependsOn
+    type: string
+  - name: gated
+    type: boolean
+  - name: serviceConnection
+    type: string
+
+stages:
+  - stage: ${{ parameters.stage }}
+    displayName: ${{ parameters.stage }}
+    dependsOn: ${{ parameters.dependsOn }}
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    variables:
+      - group: iac-payments-${{ parameters.stage }}
+      - name: STAGE
+        value: ${{ parameters.stage }}
+    jobs:
+      - job: plan
+        steps:
+          - checkout: self
+          - bash: |
+              f="environments/$(STAGE).tfvars"      # Bicep: main.$(STAGE).bicepparam
+              [ -f "$f" ] || { echo "##vso[task.logissue type=error]$f is missing"; exit 1; }
+              if grep -Eq '00000000-0000-0000-0000-000000000000|OPEN-' "$f"; then
+                echo "##vso[task.logissue type=error]Stage $(STAGE) still holds placeholder values in $f - answer the open items first."
+                exit 1
+              fi
+            displayName: Refuse placeholder values
+          # Terraform:
+          - template: terraform-install.yml
+          - task: AzureCLI@2
+            displayName: Init and plan
+            name: plan
+            inputs:
+              azureSubscription: ${{ parameters.serviceConnection }}
+              addSpnToEnvironment: true
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -uo pipefail
+                export ARM_USE_OIDC=true ARM_USE_AZUREAD=true
+                export ARM_CLIENT_ID="$servicePrincipalId" ARM_TENANT_ID="$tenantId" ARM_OIDC_TOKEN="$idToken"
+                terraform init -input=false \
+                  -backend-config="subscription_id=$(TF_STATE_SUBSCRIPTION_ID)" \
+                  -backend-config="resource_group_name=$(TF_STATE_RESOURCE_GROUP)" \
+                  -backend-config="storage_account_name=$(TF_STATE_STORAGE_ACCOUNT)" \
+                  -backend-config="container_name=$(TF_STATE_CONTAINER)" \
+                  -backend-config="key=payments/$(STAGE).tfstate" \
+                  -backend-config="use_azuread_auth=true" || exit 1
+                terraform plan -input=false -detailed-exitcode \
+                  -var-file="environments/$(STAGE).tfvars" -out="$(Build.ArtifactStagingDirectory)/tfplan"
+                code=$?
+                [ "$code" -eq 1 ] && exit 1
+                echo "##vso[task.setvariable variable=changes;isOutput=true]$([ "$code" -eq 2 ] && echo true || echo false)"
+                terraform show -no-color "$(Build.ArtifactStagingDirectory)/tfplan"
+          - task: PublishPipelineArtifact@1
+            condition: eq(variables['plan.changes'], 'true')
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/tfplan
+              artifact: tfplan-${{ parameters.stage }}
+
+      # A deployment job runs in the environment, so the environment's approval check
+      # stops it - and a skipped job never asks. No change, no approval.
+      - deployment: apply
+        dependsOn: plan
+        condition: eq(dependencies.plan.outputs['plan.changes'], 'true')
+        environment: ${{ parameters.stage }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - template: terraform-install.yml
+                # the plan artifact is downloaded to $(Pipeline.Workspace)/tfplan-<stage>/tfplan
+                - task: AzureCLI@2
+                  displayName: Apply the approved plan
+                  inputs:
+                    azureSubscription: ${{ parameters.serviceConnection }}
+                    addSpnToEnvironment: true
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      export ARM_USE_OIDC=true ARM_USE_AZUREAD=true
+                      export ARM_CLIENT_ID="$servicePrincipalId" ARM_TENANT_ID="$tenantId" ARM_OIDC_TOKEN="$idToken"
+                      terraform init -input=false \
+                        -backend-config="subscription_id=$(TF_STATE_SUBSCRIPTION_ID)" \
+                        -backend-config="resource_group_name=$(TF_STATE_RESOURCE_GROUP)" \
+                        -backend-config="storage_account_name=$(TF_STATE_STORAGE_ACCOUNT)" \
+                        -backend-config="container_name=$(TF_STATE_CONTAINER)" \
+                        -backend-config="key=payments/$(STAGE).tfstate" \
+                        -backend-config="use_azuread_auth=true"
+                      terraform apply -input=false "$(Pipeline.Workspace)/tfplan-$(STAGE)/tfplan"

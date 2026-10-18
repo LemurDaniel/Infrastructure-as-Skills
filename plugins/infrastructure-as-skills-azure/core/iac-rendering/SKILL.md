@@ -78,6 +78,14 @@ than inferring the shape from an example spec.
    that was declined before the render is drawn anyway. If the export cannot run (no
    draw.io CLI), hand over the `.drawio` and say the PNG is missing - never skip the
    diagram.
+10. **Render the pipeline the spec chose.** `deployment.deploy_mechanism` names the system
+    (`github`, `azure_devops`, `gitlab`, `local`); the stages, the approval gate and the
+    login come from the same spec as the code. Read [pipelines.md](references/pipelines.md),
+    then that system's file, and hand over the platform prerequisites it lists - a pipeline
+    that cannot run until an identity and its environments exist must say so. Run
+    `scripts/check_pipeline.py <spec>` before handing over; it fails on a missing stage, a
+    gate that does not match `pipeline_approvals`, an apply without a saved plan and a
+    secret in the file.
 
 ## Do not invent attributes
 
@@ -107,7 +115,10 @@ is spelled. A port that reads as a transliteration has usually lost one of them.
 | [references/naming.md](references/naming.md) | Always, before rendering a name |
 | [references/terraform-idiom.md](references/terraform-idiom.md) | Target is Terraform |
 | [references/bicep-idiom.md](references/bicep-idiom.md) | Target is Bicep |
+| [references/pipelines.md](references/pipelines.md) | Always, after the code: the flow and invariants every pipeline shares |
+| [references/pipelines.github.md](references/pipelines.github.md), [.ado.md](references/pipelines.ado.md), [.gitlab.md](references/pipelines.gitlab.md), [.local.md](references/pipelines.local.md) | `deploy_mechanism` is that system |
 | [../iac-authoring/references/spec.md](../iac-authoring/references/spec.md) | Reading the spec you render from |
 | [../iac-authoring/references/guardrails.md](../iac-authoring/references/guardrails.md) | A value in the spec looks wrong and you need the rule behind it |
 | `scripts/run_arm_tests.py` | A Bicep render: its `tests/*.armtest.yaml` against the compiled ARM |
+| `scripts/check_pipeline.py` | After rendering a pipeline: the invariants of `pipelines.md`, per platform |
 | `scripts/check_render_coverage.py` | After rendering, either target: every spec decision asserted or marked, nothing stale |

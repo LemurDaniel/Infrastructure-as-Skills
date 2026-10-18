@@ -1,0 +1,51 @@
+# Rendered from infra-spec.yaml. Platform prerequisites: see pipelines.ado.md.
+trigger:
+  branches: { include: [master] }
+  paths: { include: ["**/*.tf", "**/*.tfvars", "**/*.bicep", "**/*.bicepparam", "azure-pipelines.yml", ".azure-pipelines/**"] }
+pr:
+  branches: { include: [master] }
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - name: TF_VERSION
+    value: "1.16.6"           # the newest patch of the ~> 1.16.0 constraint on 2026-10-18; re-resolve on render
+
+stages:
+  - stage: validate
+    displayName: Validate
+    jobs:
+      - job: validate
+        steps:
+          - checkout: self
+          - template: .azure-pipelines/terraform-install.yml
+          - script: terraform fmt -check -recursive
+            displayName: Format
+          - script: terraform init -backend=false -input=false
+            displayName: Init (no backend)
+          - script: terraform validate
+            displayName: Validate
+          - script: terraform test
+            displayName: Test
+
+  - template: .azure-pipelines/stage.yml
+    parameters:
+      stage: development
+      dependsOn: validate
+      gated: false
+      serviceConnection: sc-payments-development
+
+  - template: .azure-pipelines/stage.yml
+    parameters:
+      stage: test
+      dependsOn: development
+      gated: false
+      serviceConnection: sc-payments-test
+
+  - template: .azure-pipelines/stage.yml
+    parameters:
+      stage: production
+      dependsOn: test
+      gated: true             # pipeline_approvals: production - the check lives on the environment
+      serviceConnection: sc-payments-production

@@ -1,0 +1,46 @@
+# Rendered from infra-spec.yaml. Platform prerequisites: see pipelines.github.md.
+name: Infrastructure
+
+on:
+  pull_request:
+    paths: ["**.tf", "**.tfvars", "**.bicep", "**.bicepparam", ".github/workflows/infra*.yaml"]
+  push:
+    branches: [master]
+    paths: ["**.tf", "**.tfvars", "**.bicep", "**.bicepparam", ".github/workflows/infra*.yaml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: az bicep build --file main.bicep --stdout > /dev/null
+      - run: az bicep lint --file main.bicep
+      - name: Parameter files compile against the template
+        run: for f in main.*.bicepparam; do az bicep build-params --file "$f" --stdout > /dev/null; done
+
+  development:
+    needs: validate
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/infra-stage.yaml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      stage: development
+      gated: false
+
+  test:
+    needs: development
+    uses: ./.github/workflows/infra-stage.yaml
+    permissions: { contents: read, id-token: write }
+    with: { stage: test, gated: false }
+
+  production:
+    needs: test
+    uses: ./.github/workflows/infra-stage.yaml
+    permissions: { contents: read, id-token: write }
+    with: { stage: production, gated: true }   # pipeline_approvals: production
