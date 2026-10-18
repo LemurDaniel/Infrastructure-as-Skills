@@ -421,8 +421,10 @@ and says how many did — translate those in the conversation rather than editin
 Then stop and ask. The spec and the document are finished artefacts on their own, and the
 steps after them are the user's to start — each one produces files in their repository.
 
-**First: a diagram?** Ask whether to draw the spec with
-[iac-diagram](../iac-diagram/SKILL.md). Recommend it when someone other than the person in
+**First: a diagram before the code?** The diagram is always delivered with a render
+([iac-rendering](../iac-rendering/SKILL.md), last step); what is asked here is whether the
+person wants to see it *before* the code, as the sign-off. Ask whether to draw the spec with
+[iac-diagram](../iac-diagram/SKILL.md) now. Recommend it when someone other than the person in
 the conversation has to sign off, or when the spec holds more than one resource; skip the
 recommendation for a single resource the user clearly understands. Offer the document as
 Word in the same question, once: the Markdown is already written, the `.docx` is a
@@ -434,7 +436,7 @@ Die Spec liegt in infra/infra-spec.yaml, die Entscheidungen lesbar in infra/infr
 Soll ich daraus ein Diagramm erstellen, und das Dokument auch als Word-Datei?
   - Diagramm, ja (empfohlen)  -> infra-diagram.drawio.png, zum Prüfen oder Weitergeben
   - Word-Datei, ja            -> infra-decisions.docx neben der Markdown-Datei
-  - Nein                      -> weiter zur Prüfung
+  - Nein                      -> weiter zur Prüfung (das Diagramm kommt mit dem Code trotzdem)
 ```
 
 **Second: does it match, and should the code be generated?** Show what the user is

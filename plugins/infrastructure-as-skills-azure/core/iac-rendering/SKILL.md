@@ -71,6 +71,13 @@ than inferring the shape from an example spec.
 8. **Validate before handing over.** Syntactically valid is not done — `fmt` →
    `validate` → `test` → `plan` / `what-if`, then say which diffs are service-affecting.
    The commands are at the end of each idiom file.
+9. **Ship the diagram with the code, every time.** A render is not handed over without
+   `infra-diagram.drawio` and `infra-diagram.drawio.png` beside the spec, drawn from the
+   spec as it stands now ([iac-diagram](../iac-diagram/SKILL.md)). It is regenerated on
+   every render, so a re-render that moved a decision moves the picture too, and a diagram
+   that was declined before the render is drawn anyway. If the export cannot run (no
+   draw.io CLI), hand over the `.drawio` and say the PNG is missing - never skip the
+   diagram.
 
 ## Do not invent attributes
 
