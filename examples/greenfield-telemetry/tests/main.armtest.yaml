@@ -80,7 +80,7 @@
 
 - decision: log-analytics-workspace.access.public_network_access
   path: resources.workspace.properties.parameters
-  matches: '"publicNetworkAccessForIngestion": \{"value": "Disabled"\}.*"publicNetworkAccessForQuery": \{"value": "Disabled"\}'
+  matches: '"publicNetworkAccessForIngestion": \{"value": "Enabled"\}.*"publicNetworkAccessForQuery": \{"value": "Enabled"\}'
 
 - decision: log-analytics-workspace.access.local_auth
   path: resources.workspace.properties.parameters.features.value.disableLocalAuth

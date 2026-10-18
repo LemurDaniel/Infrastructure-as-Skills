@@ -174,11 +174,11 @@ resources:
         source: default
     access:
       public_network_access:
-        # network_exposure: private. Consequence to say in the handover: with public
-        # query access off, reading the logs needs an Azure Monitor Private Link
-        # Scope, which this deployment does not create.
-        value: disabled
-        source: deployment
+        # Not inherited from the private posture: `disabled` needs an Azure Monitor
+        # Private Link Scope, which only a platform owns and standalone has none of.
+        # Ingestion and query stay Entra-authenticated and encrypted.
+        value: enabled
+        source: default
       local_auth:
         value: false
         source: deployment        # local_auth: disabled

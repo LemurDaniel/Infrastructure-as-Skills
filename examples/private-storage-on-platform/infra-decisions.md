@@ -45,7 +45,7 @@ Nichts davon wurde gefragt; jede Zeile folgt einer Regel oder einer der Antworte
 
 - Der Code wird aus Microsofts geprüften, getesteten Bausteinen (Azure Verified Modules) gebaut.
 - Nutzungstelemetrie an Microsoft ist eingeschaltet: eine Zählung pro Ausrollen, keine eurer Daten.
-- Das System landet in dem internen Teil der Firmenplattform, verbunden mit dem Firmennetz.
+- Das System landet in dem internen Teil der Firmenplattform, verbunden mit dem Firmennetz. — weil: Das Netz wird das bestehende, hier genutzt und nie verändert.
 - Passwörter und Zugriffsschlüssel sind abgeschaltet; der Zugriff läuft über Firmenkonten, damit jede Aktion zuordenbar ist.
 - Verschlüsselungsschlüssel sind in Software geschützt, der Standard, ausreichend ohne Vorgabe für Hardware.
 - Verschlüsselungsschlüssel sind von Azure verwaltet: verschlüsselt, rotiert, kein Aufwand bei euch.
@@ -105,7 +105,7 @@ Solange diese Punkte offen sind, wird nichts ausgerollt.
 | `deployment.outage_impact` | disruptive | Regel |
 | `deployment.data_loss_tolerance` | one_week | Regel |
 | `deployment.data_access_pattern` | active | Regel |
-| `deployment.landing_zone` | corp | eure Beschreibung |
+| `deployment.landing_zone` | corp | erzwungen |
 | `deployment.network_exposure` | private | eure Beschreibung |
 | `deployment.local_auth` | disabled | Regel |
 | `deployment.mandates` | ["BSI C5"] | eure Beschreibung |

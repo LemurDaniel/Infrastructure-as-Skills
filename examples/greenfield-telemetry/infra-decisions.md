@@ -78,7 +78,7 @@ Nichts davon wurde gefragt; jede Zeile folgt einer Regel oder einer der Antworte
 - Protokolle werden Entwicklung: 30; Test: 30; Vorproduktion: 30; Echtbetrieb: 90 Tage aufbewahrt.
 - Tägliche Obergrenze für Protokolle: -1 GB (-1: keine).
 - Abgerechnet pro Gigabyte, nach Verbrauch.
-- Der Protokoll-Arbeitsbereich ist aus dem Internet nicht erreichbar; zum Lesen braucht es dann einen privaten Zugang.
+- Der Protokoll-Arbeitsbereich ist aus dem Internet erreichbar, mit Firmenkonten und Verschlüsselung; einen privaten Zugang dafür gibt es nicht.
 - Protokolle mit dem Arbeitsbereichs-Schlüssel zu senden ist nicht möglich, Agenten nutzen Firmenidentitäten.
 - Wer Protokolle lesen darf, entscheiden die Berechtigungen des Arbeitsbereichs selbst.
 - Ein gelöschter Arbeitsbereich kann 14 Tage lang wiederhergestellt werden.
@@ -159,7 +159,7 @@ Solange diese Punkte offen sind, wird nichts ausgerollt.
 | `log-analytics-workspace.cost.retention_days` | {"development": 30, "test": 30, "staging": 30, "production": 90} | übernommen |
 | `log-analytics-workspace.cost.daily_quota_gb` | -1 | übernommen |
 | `log-analytics-workspace.cost.sku` | PerGB2018 | Regel |
-| `log-analytics-workspace.access.public_network_access` | disabled | übernommen |
+| `log-analytics-workspace.access.public_network_access` | enabled | Regel |
 | `log-analytics-workspace.access.local_auth` | false | übernommen |
 | `log-analytics-workspace.access.rbac_only_access` | true | Regel |
 | `log-analytics-workspace.data_protection.immediate_purge_protection` | true | Regel |

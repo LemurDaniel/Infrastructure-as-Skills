@@ -54,8 +54,11 @@ deployment:
     value: active
     source: default
   landing_zone:
+    # A referenced hub and central workspace say a platform exists, so standalone is
+    # out; private exposure makes it corp. Forced by the references, not inferred.
     value: corp
-    source: stated          # "nur aus dem Firmennetz" over an existing hub
+    source: forced
+    forced_by: deployment.network_ownership   # reference - vnet-hub-prod-we
   network_exposure:
     value: private
     source: stated          # "Zugriff nur aus dem Firmennetz"

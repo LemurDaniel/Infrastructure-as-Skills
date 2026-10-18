@@ -144,11 +144,12 @@ module workspace 'br/public:avm/res/operational-insights/workspace:0.16.1' = {
     // decision: log-analytics-workspace.cost.daily_quota_gb - a string on this module, -1 is no cap
     dailyQuotaGb: '-1'
 
-    // decision: log-analytics-workspace.access.public_network_access - both, or logs arrive
-    // and nobody can read them. The module defaults are Enabled. Reading the logs now
-    // needs an Azure Monitor Private Link Scope, which this deployment does not create.
-    publicNetworkAccessForIngestion: 'Disabled'
-    publicNetworkAccessForQuery: 'Disabled'
+    // decision: log-analytics-workspace.access.public_network_access - enabled: Disabled
+    // needs an Azure Monitor Private Link Scope, which only a platform owns and this
+    // standalone deployment has none of; ingestion and query stay Entra-authenticated.
+    // Written although it matches the module default, as every decision is.
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
 
     features: {
       // decision: log-analytics-workspace.access.local_auth - the workspace key is a
