@@ -27,13 +27,21 @@ What it produces, with `location: westeurope`, `environment: production`,
 | Storage account | `<TYPE><LOCATION><ENVIRONMENT><NAME><INDEX>`, lowercase | `stweprodpayments01` |
 | Key vault | `<TYPE>-<ENVIRONMENT>-<NAME>-<UNIQUE_ID_4>` | `kv-prod-payments-a1b2` |
 
-### `naming.yaml` in the user's repository
+### `naming.yaml` in the user's repository — Terraform only
 
-The first run writes a **full copy** of the default as `naming.yaml` next to
-`infra-spec.yaml`. From then on that file is the user's convention: they edit it, every
-later run reads it, and **no run overwrites it**.
+For a **Terraform** target the first run writes a **full copy** of the default as
+`naming.yaml` next to `infra-spec.yaml`: the provider reads it at plan time, so the file is
+part of the deployed configuration. From then on that file is the user's convention: they
+edit it, every later run reads it, and **no run overwrites it**.
 
-A full copy rather than an empty override file, for two reasons:
+A **Bicep** target gets no copy. Nothing in a Bicep deployment reads the file — the names
+are `var`s generated into the template from the plugin's default convention
+([below](#bicep-names-from-vars)) — so a copy would be five hundred lines nobody reads and
+a second place for the convention to drift. A Bicep root carries a `naming.yaml` only when
+`deployment.naming_convention` is `custom`: then it holds the departures, and only the
+departures, as the source the `var` block is regenerated from.
+
+A full copy on the Terraform side rather than an empty override file, for two reasons:
 
 - **Names are part of the deployed state.** Most Azure resources cannot be renamed — a
   changed name is a destroy and a create. A convention that silently followed the plugin's
@@ -170,13 +178,15 @@ under `modules/utility/naming/` (`schema` + `generator`, exporting `genName` /
 it.** It is not ready to ship, and a template importing it is a template that breaks when
 its interface moves. Never import `utility/naming/*`, never call `genName` or `genNameId`.
 
-Assemble the name from `var`s instead, **generated from the repository's `naming.yaml`** —
-never typed from memory, or the two targets name the same resource differently:
+Assemble the name from `var`s instead, **generated from the convention** — the plugin's
+[naming.default.yaml](naming.default.yaml), with the repository's `naming.yaml` merged over
+it where one exists (`naming_convention: custom`) — never typed from memory, or the two
+targets name the same resource differently:
 
 - the two maps hold exactly the `mappings.location` and `mappings.environment` entries the
-  deployment uses, copied from `naming.yaml`;
-- each name follows the pattern `naming.yaml` gives its type (`patterns.Azure.<type>`, else
-  `patterns.Azure.default`), with the abbreviation from `abbreviations.Azure`;
+  deployment uses, copied from the convention;
+- each name follows the pattern the convention gives its type (`patterns.Azure.<type>`,
+  else `patterns.Azure.default`), with the abbreviation from `abbreviations.Azure`;
 - `@allowed` on `environment` lists the keys of `mappings.environment`, so the template
   rejects what the convention cannot name.
 

@@ -88,6 +88,123 @@ groups:
 | `from_deployment` | no | The deployment-set question whose answer this one takes. Mutually exclusive with `default` and `required`. |
 | `forced_when` | no | Which answer elsewhere removes a value from `values`, or determines this one. Prose, because the conditions are not uniform enough to encode. Recorded as `forced` with `forced_by` in the spec. |
 | `from_context` | no | The value comes from the spec's `context:` rather than being asked per resource. |
+| `audience` | yes | Who answers it: `customer`, `engineer` or `platform`. See below. |
+| `plain` | yes | One line per language (`en` required, `de` and others optional) saying what the decision means to the customer, with `{value}` where the value goes. Read by the decision document. See below. |
+| `plain_values` | no | For an enum, list or bool: the customer's words for each value, per language — what `{value}` becomes. Keys are the question's values. |
+| `per_environment` | no | `true` means the value differs per stage: it renders as a parameter whose value lives in each stage's parameter file, never as a literal in the template, and the spec holds a map keyed by stage. See *Stages*. |
+| `non_production_default` | no | The value every stage but production takes while `deployment.non_production_savings` is enabled. Cost knobs only: refused in the security, networking, identity, access, DNS, compliance and posture groups. |
+| `derived_from` | no | `{ question: <deployment id>, map: { <answer>: <value> } }` — the value follows from a customer's answer in the deployment set's `requirements` group, mapped through this table. Mutually exclusive with `default`, `required` and `from_deployment`. See below. |
+
+## Who answers: `audience`
+
+The person in front of the interview is, by default, the customer — someone who can say
+what the system is for and who uses it, and who cannot say which subnet carries private
+endpoints. Every question therefore names who can answer it, and the interview puts a
+question only to the audience that can:
+
+| `audience` | Can answer | Example | When nobody of that audience is there |
+|---|---|---|---|
+| `customer` | What the system needs: who uses it, how bad an outage or a loss is, which rules apply, how long data lives | `environment`, `network_exposure`, `replication`, `blob_soft_delete_days`, `mandates` | Asked — these are the questions the interview exists for |
+| `engineer` | A technical choice of the workload's engineer, with a safe default from the guardrails | `min_tls_version`, `private_endpoint_subresources`, `diagnostic_categories`, `key_management` | Defaulted and reported, never asked of a customer; a `required` one becomes an `open:` entry owned by the engineer |
+| `platform` | A fact of the organisation's platform, the same for every deployment on it | `landing_zone`, `existing_vnet`, `private_endpoint_subnet`, `private_dns_records`, `diagnostics_destination` | Read from [`platform.yaml`](platform.md); without one, defaulted where a default exists and otherwise an `open:` entry owned by the platform team |
+
+The test for `customer` is whether the question can be put in the customer's own words
+with no Azure vocabulary in it. "How long must deleted data stay restorable?" passes;
+"Which subnet should the private endpoint live in?" does not, however it is phrased —
+it is `platform`. An inherited question (`from_deployment`, `from_context`) carries the
+audience that may override it per resource, which is usually `engineer`.
+
+Keep `customer` scarce for the same reason as `required`: each one is a question put to
+someone who did not come to answer questions. Six per interview is the budget
+(`ROADMAP.md`); a seventh means a question set is missing a default.
+
+## The customer's line: `plain` and `plain_values`
+
+`why` is for the reviewer; `plain` is for the customer. One line per language, in the
+customer's words, with `{value}` where the decision's value goes — and, where a raw value
+would mean nothing to them, `plain_values` giving the words per value:
+
+```yaml
+        plain:
+          en: "The data is kept {value}."
+          de: "Die Daten liegen {value}."
+        plain_values:
+          LRS:  { en: "three times in one datacenter", de: "dreifach in einem Rechenzentrum" }
+          ZRS:  { en: "in three datacenters of the region, so one can fail", de: "in drei Rechenzentren der Region, eines darf ausfallen" }
+```
+
+The decision document (`scripts/export_decisions.py`) renders every decision in the spec
+through these: a `requirement` value becomes "because you said *disruptive* → the data is
+kept in three datacenters", a default becomes a line under "set by the rules". `en` is
+required, because the document falls back to it and says so; the plugin's own sets carry
+`de` as well. A line without `{value}` is fine where the value is implied (a `required`
+reference); a bool or enum without `plain_values` prints the raw value, which is rarely
+what a customer should read.
+
+## Stages: `per_environment` and `non_production_default`
+
+One code base is deployed through a stack of stages — `context.environments`, default
+`[development, test, production]`, a `[sandbox]` for the throwaway case — each from its
+own parameter file with its own state. Two fields say how a decision behaves across them:
+
+- **`per_environment: true`** marks a value that differs per stage by nature: an address
+  range, a subnet prefix, the subscription and resource group, a referenced hub, subnet or
+  workspace. It is never a literal in the template. The render makes it a parameter and
+  writes each stage's value into that stage's file; the spec holds the values as a map
+  keyed by stage, and a stage nobody could answer for is an `open:` entry naming the stage.
+  A question inheriting a per-stage deployment question through `from_deployment` is
+  per-stage too, and the check says so.
+- **`non_production_default`** is the value every stage but production takes while
+  `deployment.non_production_savings` is enabled (the default): `replication: LRS`,
+  `log_retention_days: 30`. It exists for cost and for nothing else — the check refuses
+  it in the security, networking, identity, access, DNS, compliance and posture groups,
+  because a development stage that is less secure than production is where the breach
+  happens. Everything else is identical in every stage: parity is what the stack is for.
+
+A value the customer states holds in every stage unless they say which stage they mean —
+the savings relax defaults and derived values, never a stated one. A derived value
+(`derived_from`) is production's, and the non-production stages take the savings default
+where one exists.
+
+## Requirements, and `derived_from`
+
+A resource question whose answer the customer could give — how much redundancy, how far
+back a delete must be recoverable, how the data is used — is not asked per resource and
+not asked in the resource's vocabulary. The deployment set's `requirements` group asks it
+once, in the customer's terms (`outage_impact`, `data_loss_tolerance`,
+`data_access_pattern`), and the resource question **derives** its value:
+
+```yaml
+      - id: replication
+        type: enum
+        audience: engineer
+        values: [LRS, ZRS, GRS, GZRS]
+        derived_from:
+          question: outage_impact
+          map: { tolerable: LRS, disruptive: ZRS, critical: GZRS }
+```
+
+The map lives on the resource question, not on the requirement: the resource knows its
+own vocabulary, and a new resource derives from an existing requirement without editing
+the deployment set. The spec records the value with `source: requirement` and
+`derived_from: deployment.outage_impact`, which is what lets the decision document say
+"because you said an outage would be disruptive, the data is kept in three datacenters".
+
+Three rules:
+
+- **Every answer maps.** The map covers every value the requirement can take; the check
+  fails on a gap. A value the map cannot reach (`GRS` above) is an engineer's departure,
+  recorded `overridden`.
+- **The default answer derives the guardrail default.** `disruptive` → `ZRS`,
+  `one_week` → 7 days, `active` → `Hot`. An unanswered requirement changes nothing; it
+  only lets the customer change things. A map whose default-answer row departs from
+  [guardrails.md](guardrails.md) is a bug in one of the two.
+- **A derived question's `audience` is `engineer`**: the customer answered the
+  requirement; a per-resource departure from the derivation is the engineer's.
+
+What cannot be mapped mechanically stays an engineer's question with a default and is
+named as a consequence in Phase 4 — `immutability` follows a mandate, but a mandate is
+free text, so the engineer names it rather than a table.
 
 ## Rules that matter
 
@@ -125,17 +242,24 @@ public access is disabled. Gate them rather than asking and discarding.
 
 ## Validate
 
-Today: the repo's `.claude/skills/git-commit-conventions/scripts/check_repo_consistency.py`,
-which checks naming forms, unique ids, `required`/`default` not combined, `why`/`renders`
-present and routing reachability. The dedicated script below is **planned, not written**:
-
 ```powershell
-python3 scripts/check_question_set.py <family-directory>
+python3 <plugin>/core/iac-authoring/scripts/check_question_set.py                       # every set in the plugin
+python3 <plugin>/core/iac-authoring/scripts/check_question_set.py resources/storage      # one family, one resource, or one file
+python3 <plugin>/core/iac-authoring/scripts/check_question_set.py --platform ./platform.yaml   # a platform profile against the deployment set
 ```
 
-It would check every resource's `questions.yaml` in the family for the structural invariants: unique ids,
-`required` and `default` not both set, enum defaults within `values`, `depends_on` pointing
-at a question that exists, `why` and `renders` present, both naming forms and the
-abbreviation declared, the Bicep identifier not carrying an `Azure::` prefix, and every
-resource reachable from the family's 
-outing.md.
+It parses the files (PyYAML) and checks what a regex cannot: the envelope and both
+naming identifiers agreeing; unique group and question ids; the review-order groups in
+order; `id`, `ask`, `type`, `why`, `renders` present; a known `type`, `values` on an
+enum, a default within `values` and of the type's kind, `ref` on a ref question;
+`required`, `default`, `from_deployment` and `parameterized` mutually exclusive and one
+of them present; `depends_on` naming a question in the set and a value it can take;
+`from_deployment` and `from_context` naming a deployment-set question; `confirm_in`
+naming known environments; `derived_from` naming a customer question in the deployment
+set with a map covering every answer; `audience` present and one of `customer`, `engineer`,
+`platform`; and
+unknown fields, which is how a misspelt `default` turns into a question asked every run.
+Exit 0 clean, 1 violations, 2 could not check.
+
+The repo's `check_repo_consistency.py` still runs its regex subset before every commit and
+adds what this script does not: routing reachability and the listing budget.

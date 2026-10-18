@@ -161,9 +161,10 @@ Beyond the script:
   survives into a review of generated infrastructure. A commit adding questions
   without it is incomplete, not minimal.
 - **Documented capabilities match reality.** `README.md` currently marks
-  `check_question_set.py` and `patterns/` as not written. Do not let a commit
-  quietly imply otherwise — if it makes one of them true, say so; if not, leave
-  the marker.
+  `patterns/` as not written. Do not let a commit quietly imply otherwise — if
+  it makes it true, say so; if not, leave the marker. A commit touching a
+  question set also runs
+  `python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_question_set.py`.
 - **`PROGRESS.md` is rewritten before a session's last commit.** Goal,
   decisions and why, what is open, the one next thing — nothing else. It is
   the handoff the next session starts from; a session that changed a decision

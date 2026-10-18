@@ -2,7 +2,8 @@
 
 The handoff between sessions. Read it at the start of one, rewrite it at the end of one —
 the goal rarely changes, the rest does. Keep it tight: what is here is what the next
-session starts from, and what is not here it re-derives.
+session starts from, and what is not here it re-derives. The direction behind the next
+thing is `ROADMAP.md`.
 
 ## Goal
 
@@ -46,32 +47,84 @@ Verified Modules first, authored resources second.
 - **Plan-only tests mock the platform.** A referenced vnet or workspace is a `data` block,
   which a plan reads from Azure; `mock_provider "azurerm"` with parseable ids keeps the
   test credential-free. With a module in the middle, `azapi` and `modtm` are mocked the
-  same way and the assert target is the module's `resource` output.
+  same way and the assert target is the module's `resource` output — settled 2026-10-18
+  on the storage module v0.10.0: the account body, identity, name and parent id are
+  observable at plan time, the `private_endpoints` output gives name and a null zone
+  group id; what the module builds in child modules (blob service, diagnostics, role
+  assignments, the endpoint body) is not, and is marked not-testable — 9 of 24 storage
+  decisions. The `resource` output is sensitive, so a failing assert prints
+  `(sensitive value)`; the error message carries the expected value.
 - **Sub-resource names go through `<?SUBNAME>`**, not appended to a finished name. The
   first cross-backend diff found the Terraform render naming a private endpoint
   `…-01-blob` while Bicep said `…-blob-01`; the convention has the token for exactly this.
-- **Tests are part of the render, with coverage as the contract.** One assert per spec
-  decision, named by its key path; a decision a plan cannot observe is marked with its
-  reason. `check_render_coverage.py` checks spec against tests, so "everything is tested"
-  is a gate, not an intention. Bicep has no equivalent yet (see Open).
+- **Tests are part of the render, with coverage as the contract - both targets.** One
+  assert per spec decision, named by its key path; a decision the target cannot observe
+  is marked with its reason. Terraform asserts on the plan (`terraform test`); Bicep
+  asserts on the compiled ARM (`tests/*.armtest.yaml`, `run_arm_tests.py`, 2026-10-18):
+  a module call is a nested deployment whose parameter values are the decisions, a loop
+  a `copy` whose expression text is matched by regex, symbolic resource names forced by
+  `bicepconfig.json`. `check_render_coverage.py` checks spec against tests per target,
+  so "everything is tested" is a gate, not an intention.
+- **The interview is the customer's, alone.** Decided 2026-10-18: the person answering
+  sits in front of the plugin without an engineer, so every question carries an
+  `audience`, the customer answers about six requirement questions in their own words,
+  technical decisions are derived from those (`source: requirement`), platform facts come
+  from a `platform.yaml` (`source: platform`), and an engineer question nobody can answer
+  becomes an `open:` entry instead of a question. Customer mode is the default; the
+  engineer mode is entered on request or when the repository shows it. The plugin is
+  public and has to hold for any use case. Beside the diagram, a decision document in the
+  customer's language (Markdown first, Word offered once) is a deliverable. Plan:
+  `ROADMAP.md`, phases A–E. B1 and B3 landed the same day: every one of the 82
+  questions carries an `audience` (customer 13, engineer 49, platform 20) and
+  `check_question_set.py` fails without one; `platform.yaml` is the engineer's profile
+  (`references/platform.md`, a commented template beside it, `--platform` to check one),
+  read at precedence 3 as `source: platform`, never written by an interview.
+- **Requirements live in the deployment set, the map on the resource.** B2 and B4,
+  2026-10-18. The three customer questions (`outage_impact`, `data_loss_tolerance`,
+  `data_access_pattern`) are a `requirements` group in `deployment.yaml` rather than
+  the separate `requirements.yaml` the roadmap named: one resolution mechanism, no
+  second scope. A resource question derives through its own `derived_from: { question,
+  map }`, so a new resource maps an existing requirement without touching the
+  deployment set; the spec records `source: requirement` + `derived_from`, and the
+  default answer derives the guardrail default so an unanswered requirement changes
+  nothing. Both checks verify the map covers every answer. Customer questions in a
+  run: environment, exposure, mandates, the three requirements, and log retention when
+  the deployment owns the workspace - six, the budget. `iac-authoring` now has the two
+  modes: customer (default; only `customer` questions asked, the rest resolved or
+  opened) and engineer.
+- **The decision document is rendered, not written.** B5, 2026-10-18. Every question
+  carries `plain` (`en` and `de`, `{value}` where the value goes) and, where a raw value
+  means nothing to a customer, `plain_values`; `export_decisions.py` turns a spec into
+  `infra-decisions.md` in the customer's language - what follows from their answers with
+  the derived decisions under each, what the rules set, departures, open items, an
+  appendix with every key. Both examples carry theirs. Word is a `pandoc` conversion
+  offered once in Phase 5, never a second source.
+- **The stack is the default, and per-stage values are never literals.** Owner's call,
+  2026-10-18: one code base goes through `development`, `test`, `production` unless the
+  customer says otherwise ("nur prod", "Sandbox"); a request naming one stage names that
+  stage of the stack. `context.environments` replaces `context.environment`; every value
+  is one for all stages or a map keyed by stage, a stage nobody could answer for is an
+  `open:` entry naming it, and a stage with open values gets no parameter file. A
+  question with `per_environment: true` (ranges, prefixes, subscription, group,
+  referenced platform parts) renders as a parameter with its value in
+  `environments/<stage>.tfvars` / `main.<stage>.bicepparam`, one state per stage by
+  backend key, never a workspace. Stages are separated by subscription by default
+  (`stage_isolation`), resource groups being the lesser form. Parity between stages is
+  the rule; `non_production_savings` (default enabled) lets `non_production_default`
+  relax cost knobs - replication LRS, retention 30 - outside production, and the check
+  refuses the field on anything security-shaped. Both examples re-rendered: the first
+  with `environments/production.tfvars` and a development-stage test run, the second
+  with `main.staging.bicepparam` and per-stage ARM assertions; the other stages are open.
+- **`naming.yaml` is copied for Terraform only.** Owner's call, 2026-10-18: the provider
+  reads it at plan time, nothing in a Bicep deployment does. A Bicep root gets its name
+  vars generated from the plugin's convention and a `naming.yaml` only for a stated
+  `custom` departure, holding the departures alone.
 - **No registry alias, no registry modules — for the owner's own registry.** `br/public:`
   needs no alias and is the default; `br/modules:` is only rendered when
   `bicepconfig.json` already has it (`implementation: reuse`).
 
 ## Open
 
-- **The example is still the authored render.** `private-storage-on-platform` predates
-  AVM-first and now documents `implementation: authored`. Re-rendering it on
-  `avm-res-storage-storageaccount` / `avm/res/storage/storage-account` is the next step,
-  and it needs a machine with registry access (`registry.terraform.io`, `mcr.microsoft.com`,
-  GitHub releases for the `naming` provider) — the session that wrote the AVM references
-  had none, so the module calls in the references are written from the module READMEs and
-  sources, not from a plan.
-- **Which decisions a plan can observe through an AVM module's `resource` output** is
-  undecided until that render: `avm.md` describes the intended test contract (assert on
-  `resource.body` with `azapi` mocked, mark the rest `not-testable` with the module as the
-  reason) and `check_render_coverage.py` accepts either per decision.
-- `check_question_set.py` is referenced by the authoring docs and not written.
 - **Todo: an AVM version drift check.** The versions in `avm.md` and the six resource
   references are dated snapshots. A scheduled check that compares them against the MCR
   tag lists and the module repos' git tags and reports only what moved - never edits -
@@ -82,19 +135,42 @@ Verified Modules first, authored resources second.
   skill wraps rather than re-implements.
 - No render has been applied: neither `terraform plan` nor `what-if` has run against a
   subscription, so the renders are validated, not proven.
-- The eval suite has no committed baseline yet; the first full run writes it. No eval
-  grader checks `implementation` or `module_source` yet.
-- Bicep renders have no tests. `bicep test` is experimental; the candidate is asserting on
-  the compiled ARM JSON per decision, mirroring the tftest markers.
-- Remaining families: `compute`, `data`, `security`. Key Vault's Terraform AVM module is
+- **The eval baseline exists** (`evals/baseline.json`, full run of 2026-10-18, $5.44):
+  `greenfield-telemetry` and `private-storage-on-platform` 3/3 on every grader,
+  `vague-public-dev` 78% - two runs split the exposure by stage and none opened the
+  empty role assignments. Both are plugin gaps and both rules were written after that
+  run (posture is one per system, `check_spec.py` now refuses a stage split on a
+  non-stage question; an empty role list with shared keys off is an `open:` entry).
+  The next full run should lift the vague case; accept it with `--update-baseline`
+  after reading it. Four plugin rules came out of the three eval rounds in total: a
+  default is not an assumption, a referenced hub forces the landing zone, a parameter
+  is never open, a stated value holds in every stage. No grader checks
+  `implementation` or `module_source` yet; B6's customer-question graders are not
+  written.
+- Remaining families, in the order `ROADMAP.md` C1 sets: `security` (Key Vault,
+  user-assigned identity), `compute` (App Service, Container Apps), `data` (Azure SQL,
+  PostgreSQL Flexible), `integration` (Service Bus). Key Vault's Terraform AVM module is
   `Orphaned` in the index — usable, flagged in the handover.
+- **A sandbox subscription for real plans, applies and the deploy agent** (`ROADMAP.md`
+  A5, E): the owner sets it up — subscription, federated credential for OIDC, a fenced
+  resource group. Not available yet (2026-10-18).
+- The customer interview (`ROADMAP.md` B), still open: the evals graders (B6) - a
+  grader that counts the questions put to the customer and one that fails on Azure
+  vocabulary in them. The decision document's `open:` lines stay English, because the
+  spec's `open:` questions are English; a run translates them in the conversation.
+- The stack's stage files are written only for resolved stages; nothing yet generates
+  the other stages' files once their `open:` entries are answered - that is an extension
+  run, and the first one has not been exercised.
+- A cloud session needs `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
+  release downloads and `mcr.microsoft.com` allowed, and installs `terraform` and `bicep`
+  into `~/.local/bin` itself (neither is in the image). Done once on 2026-10-18.
 
 ## Next
 
-Re-render `private-storage-on-platform` on the AVM modules, both targets, from the
-unchanged spec: `terraform init` with `azapi`/`modtm`/`random` added, `terraform test`
-with the mocked providers, `check_render_coverage.py`, `bicep build` against `br/public`.
-That run settles the test contract in `avm.md`, re-measures the cross-backend diff (the
-role GUID table and the two diagnostic settings should disappear from it), and is the
-template for `greenfield-telemetry` — three resources, created network and workspace,
-Bicep — which exercises the `create` branches the first example never reached.
+Re-run the eval suite (full, ~$5) against the two rules written after the baseline and
+accept the run if `vague-public-dev` rises without the other two dropping. Then
+`ROADMAP.md` C1: the `security` family (Key Vault, user-assigned identity) and `compute`
+(App Service, Container Apps), each with `audience`, `plain`, `per_environment` where it
+applies, both rendering references and a diagram icon. B6's two graders and the
+extension run that writes a further stage's file once its open entries are answered stay
+on the list; A5 waits on the owner's sandbox.

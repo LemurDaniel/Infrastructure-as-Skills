@@ -1,5 +1,8 @@
 // Rendered from ../infra-spec.yaml (target: bicep). composition.granularity: single,
-// so one root and no modules - the same decisions the Terraform render beside it carries.
+// so one root and no modules of its own - the same decisions the Terraform render
+// beside it carries. deployment.module_source: avm, so the account is one call to
+// br/public:avm/res/storage/storage-account, every decision an explicit parameter.
+// Version resolved 2026-10-18 from the MCR tag list: 0.33.1.
 targetScope = 'resourceGroup'
 
 // ---------------------------------------------------------------- context
@@ -56,7 +59,7 @@ param workspaceResourceGroupName string
 @allowed(['blob', 'file', 'queue', 'table', 'dfs', 'web'])
 param privateEndpointSubresources string[] = ['blob']
 
-@description('Data-plane role assignments on the account. Empty means a working account nobody can read - open in the spec until the consumer is named.')
+@description('Data-plane role assignments on the account, role by name. Empty means a working account nobody can read - open in the spec until the consumer is named.')
 param roleAssignments roleAssignment[] = []
 
 type roleAssignment = {
@@ -96,13 +99,6 @@ var storageAccountName = toLower('st${loc}${env}${workload}${idx}')
 // patterns.Azure.default: <TYPE>-<LOCATION>-<ENVIRONMENT>-<NAME><?SUBNAME;-%s>-<INDEX>
 var privateEndpointNames = [for sub in privateEndpointSubresources: 'pep-${loc}-${env}-${workload}-${sub}-${idx}']
 
-// Built-in data-plane roles. The GUIDs are Azure's, identical in every tenant.
-var roleDefinitionIds = {
-  'Storage Blob Data Reader': '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'
-  'Storage Blob Data Contributor': 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-  'Storage Blob Data Owner': 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
-}
-
 // ---------------------------------------------------------------- platform
 // existing: compiled to references, never managed (network_ownership: reference,
 // observability_ownership: reference). By name and scope, never by a hardcoded id.
@@ -124,160 +120,101 @@ resource platformWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01'
 
 // ----------------------------------------------------------------- storage
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: storageAccountName
-  location: location
-  tags: tags
-  kind: 'StorageV2'
-
-  // Replication is encoded into the SKU name together with the tier.
-  sku: {
-    name: 'Standard_ZRS'
-  }
-
-  identity: {
-    type: 'SystemAssigned'
-  }
-
-  properties: {
+module storageAccount 'br/public:avm/res/storage/storage-account:0.33.1' = {
+  name: 'storage'
+  params: {
+    name: storageAccountName
+    location: location
+    tags: tags
+    kind: 'StorageV2'
+    // decision: storage-account.data_protection.replication - the module default is Standard_GRS
+    skuName: 'Standard_ZRS'
+    // decision: storage-account.data_protection.access_tier
     accessTier: 'Hot'
 
-    // Explicit although several match the API default: a reviewer can see a
-    // decision that was made, and an API version cannot move it.
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
-    allowBlobPublicAccess: false
+    // decision: storage-account.networking.public_network_access
     publicNetworkAccess: 'Disabled'
-
-    // Access is via Entra ID and RBAC. A key would bypass both and is not
-    // attributable in the audit log.
-    allowSharedKeyAccess: false
-    isSftpEnabled: false
-
-    encryption: {
-      keySource: 'Microsoft.Storage'
-      // Settable only at creation - changing it later replaces the account.
-      requireInfrastructureEncryption: true
-      services: {
-        blob: { enabled: true, keyType: 'Account' }
-        file: { enabled: true, keyType: 'Account' }
-      }
-    }
-
-    // Present although public access is off: it documents the posture should
-    // public access ever be re-enabled, and the trusted-services bypass is a
-    // recorded decision (allow_azure_services_bypass: true).
+    // Present although public access is off: documents the posture, and the bypass is a
+    // recorded decision (storage-account.networking.allow_azure_services_bypass).
     networkAcls: {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
     }
-  }
-}
 
-// Soft delete, versioning and the change feed live on the blob service, not the account.
-resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
-  parent: storageAccount
-  name: 'default'
+    // Explicit although several match the module default: a reviewer reads the call,
+    // not the module, and a module version can move a default.
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+    allowBlobPublicAccess: false
+    // Access is via Entra ID and RBAC. A key would bypass both and is not
+    // attributable in the audit log.
+    allowSharedKeyAccess: false
+    enableSftp: false
+    // Settable only at creation - changing it later replaces the account.
+    requireInfrastructureEncryption: true
 
-  properties: {
-    isVersioningEnabled: true
-    changeFeed: { enabled: false }
-
-    deleteRetentionPolicy: {
-      enabled: true
-      days: 7
+    managedIdentities: {
+      systemAssigned: true
     }
 
-    containerDeleteRetentionPolicy: {
-      enabled: true
-      days: 7
-    }
-  }
-}
-
-// ----------------------------------------------------------------- network
-// One endpoint per sub-resource, into the platform's private-endpoint subnet.
-// deployment.private_dns_records: policy - the landing zone's DeployIfNotExists
-// policy attaches the privatelink zone and writes the record. No zone group
-// here, or two writers own one record.
-
-resource privateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = [
-  for (sub, i) in privateEndpointSubresources: {
-    name: privateEndpointNames[i]
-    location: location
-    tags: tags
-
-    properties: {
-      subnet: { id: privateEndpointSubnet.id }
-      privateLinkServiceConnections: [
+    // Soft delete, versioning and the change feed live on the blob service - the module
+    // nests them, and the blob data-plane logs go with them. The account itself emits
+    // no log categories, so its own diagnosticSettings below carry metrics only.
+    blobServices: {
+      isVersioningEnabled: true
+      changeFeedEnabled: false
+      deleteRetentionPolicyEnabled: true
+      deleteRetentionPolicyDays: 7
+      containerDeleteRetentionPolicyEnabled: true
+      containerDeleteRetentionPolicyDays: 7
+      diagnosticSettings: [
         {
-          name: 'psc-${sub}'
-          properties: {
-            privateLinkServiceId: storageAccount.id
-            groupIds: [sub]
-          }
+          name: 'diag'
+          workspaceResourceId: platformWorkspace.id
+          logCategoriesAndGroups: [{ categoryGroup: 'audit' }]
+          metricCategories: [{ category: 'AllMetrics' }]
         }
       ]
     }
-  }
-]
 
-// ----------------------------------------------------------- observability
-// Two settings, because the account and its blob service are two diagnostic
-// targets: the account itself emits no log categories.
-
-resource storageDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: 'diag'
-  scope: storageAccount
-
-  properties: {
-    workspaceId: platformWorkspace.id
-    metrics: [
-      { category: 'AllMetrics', enabled: true }
+    // One endpoint per sub-resource, into the platform's private-endpoint subnet.
+    // deployment.private_dns_records: policy - no privateDnsZoneGroup; the landing
+    // zone's DeployIfNotExists policy attaches the zone and writes the record.
+    privateEndpoints: [
+      for (sub, i) in privateEndpointSubresources: {
+        name: privateEndpointNames[i]
+        service: sub
+        subnetResourceId: privateEndpointSubnet.id
+      }
     ]
+
+    diagnosticSettings: [
+      {
+        name: 'diag'
+        workspaceResourceId: platformWorkspace.id
+        metricCategories: [{ category: 'AllMetrics' }]
+      }
+    ]
+
+    // Data-plane roles on the account, by name. Empty until the consumer is named (spec: open).
+    roleAssignments: [
+      for ra in roleAssignments: {
+        principalId: ra.principalId
+        roleDefinitionIdOrName: ra.role
+      }
+    ]
+
+    enableTelemetry: true // deployment.module_telemetry: enabled
   }
 }
-
-// Blob data-plane logs attach to blobServices/default. A setting on the account
-// alone collects no StorageRead/Write/Delete while looking configured.
-resource blobDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: 'diag'
-  scope: blobService
-
-  properties: {
-    workspaceId: platformWorkspace.id
-    logs: [
-      { categoryGroup: 'audit', enabled: true }
-    ]
-    metrics: [
-      { category: 'AllMetrics', enabled: true }
-    ]
-  }
-}
-
-// ------------------------------------------------------------------ access
-// Data-plane roles on the account. Empty until the consumer is named (spec: open).
-
-resource dataRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for ra in roleAssignments: {
-    name: guid(storageAccount.id, ra.principalId, ra.role)
-    scope: storageAccount
-    properties: {
-      principalId: ra.principalId
-      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionIds[ra.role])
-    }
-  }
-]
 
 // ----------------------------------------------------------------- outputs
 
-output id string = storageAccount.id
-output name string = storageAccount.name
+output id string = storageAccount.outputs.resourceId
+output name string = storageAccount.outputs.name
 
 @description('System-assigned identity of the account, for grants it needs outward.')
-output principalId string = storageAccount.identity.principalId
+output principalId string = storageAccount.outputs.?systemAssignedMIPrincipalId ?? ''
 
-@description('Private endpoint id per sub-resource. An array, not an object: Bicep cannot index a resource loop from inside a lambda (BCP247).')
-output privateEndpoints array = [
-  for (sub, i) in privateEndpointSubresources: { subresource: sub, id: privateEndpoint[i].id }
-]
+@description('Private endpoints as the module reports them, one per sub-resource.')
+output privateEndpoints array = storageAccount.outputs.privateEndpoints

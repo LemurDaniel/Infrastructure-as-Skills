@@ -37,8 +37,9 @@ run, costs nothing, and its failure says exactly which decision went wrong. Each
 - **What must not appear** — a created vnet that was only referenced, an invented address
   range, subscription id or resource group. These are the failures that look plausible and
   surface at apply time, which is why they are weighted up.
-- **The process** — `Skill` fired (an indicator, not scored against the no-plugin arm),
-  `naming.yaml` written, no `.tf`/`.bicep` written before confirmation.
+- **The process** — a plugin `Skill` fired, `azure-resources` or `iac-authoring` (an indicator, not scored against the no-plugin arm),
+  `naming.yaml` written for a Terraform target and not for a Bicep one, no `.tf`/`.bicep`
+  written before confirmation.
 
 `check_spec.py` — the contract check covering sources, enums, backend attribute spellings
 and composition — runs on the produced specs after the suite, not inside it.

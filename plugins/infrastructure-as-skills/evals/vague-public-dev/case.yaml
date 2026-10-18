@@ -5,7 +5,7 @@ graders:
   - name: skill-fired
     type: tool_used
     tool: Skill
-    input_match: iac-authoring
+    input_match: infrastructure-as-skills
 
   - name: exposure-public
     type: regex
@@ -19,38 +19,42 @@ graders:
     target: { source: file, path: infra/infra-spec.yaml }
     pattern: 'network_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?none\b'
 
-  - name: environment-development
+  # "dev" names the development stage of the default stack, not a single environment.
+  - name: stages-default-stack
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'environment:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?development\b'
+    pattern: 'environments:\s*\[(?=[^\]]*\bdevelopment\b)(?=[^\]]*\bproduction\b)[^\]]*\]'
 
-  # The four things nobody said. Each must be an open item, not a value.
-  - name: open-subscription
+  # Nothing names a platform, so the deployment is standalone and creates the workspace
+  # the logs go to - "Logs nach Log Analytics" is not a reference to an existing one.
+  - name: standalone-landing-zone
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'landing_zone:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?standalone\b'
+
+  - name: workspace-created
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: '^open:[\s\S]*subscription_id'
+    pattern: 'observability_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?create\b'
+
+  # Subscription, resource group and region are parameterized context: never asked, never
+  # open, never a value - the stage file supplies them. The two no-invented graders below
+  # catch a value; this one catches a spec that opened them as if they were questions.
+  - name: context-not-opened
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: '^open:[\s\S]*key:\s*context\.(subscription_id|resource_group_name|location)\b'
     flags: m
+    match: not_contains
 
-  - name: open-resource-group
+  # With shared keys off nobody can use the account until a role is assigned: open.
+  - name: open-role-assignments
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: '^open:[\s\S]*resource_group_name'
-    flags: m
-
-  - name: open-location
-    type: regex
-    weight: 2
-    target: { source: file, path: infra/infra-spec.yaml }
-    pattern: '^open:[\s\S]*location'
-    flags: m
-
-  - name: open-workspace
-    type: regex
-    weight: 2
-    target: { source: file, path: infra/infra-spec.yaml }
-    pattern: '^open:[\s\S]*(diagnostics_destination|diagnostic_workspace)'
+    pattern: '^open:[\s\S]*role_assignments'
     flags: m
 
   - name: no-invented-subscription
@@ -85,9 +89,10 @@ graders:
     focus: last_message
     criteria: |
       PASS if the final message tells the user that the spec cannot be deployed yet
-      (or "not applyable", "blockiert apply", or equivalent) AND names at least the
-      subscription and the resource group as missing information they have to supply.
-      FAIL if it presents the spec as ready to deploy, if it states a concrete
-      subscription id or resource group name as chosen, or if it names neither the
-      subscription nor the resource group as missing. Language and formatting do not
-      matter.
+      (or "not applyable", "blockiert apply", "offene Punkte", or equivalent) AND names
+      at least one thing still needed from them (who gets access / role assignments,
+      the tag set, or the allowed addresses). FAIL if it presents the spec as ready to
+      deploy, or if it states a concrete subscription id or resource group name as
+      chosen. Language and formatting do not matter; it is fine for the message to say
+      that the region, subscription and resource group are parameters supplied at
+      deploy time.

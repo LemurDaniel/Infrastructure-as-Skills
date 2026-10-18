@@ -5,17 +5,33 @@ graders:
   - name: skill-fired
     type: tool_used
     tool: Skill
-    input_match: iac-authoring
+    input_match: infrastructure-as-skills
 
   - name: target-bicep
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
     pattern: 'target:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?bicep\b'
 
-  - name: environment-staging
+  # The stack is the default; the request's "Staging" is one stage of it, beside
+  # development, test and production.
+  - name: stages-stack-with-staging
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'environments:\s*\[(?=[^\]]*\bdevelopment\b)(?=[^\]]*\btest\b)(?=[^\]]*\bstaging\b)(?=[^\]]*\bproduction\b)[^\]]*\]'
+
+  # The stated range is staging's value, not every stage's: a per-stage map, and the
+  # other stages named as open.
+  - name: address-space-per-stage
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'address_space:\s*(?:#[^\n]*\s*)*value:\s*(?:#[^\n]*\s*)*(?:\{\s*)?staging:\s*10\.20\.0\.0/16'
+
+  - name: other-stages-open
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'environment:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?staging\b'
+    pattern: 'open:[\s\S]*environments:\s*\[[^\]]*\bproduction\b'
 
   - name: location-gwc
     type: regex
@@ -70,27 +86,33 @@ graders:
     target: { source: file, path: infra/infra-spec.yaml }
     pattern: 'public_network_access:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?disabled\b'
 
-  # A created network is a spoke: "nothing exists yet" is the workload, not the
-  # platform. DNS zones stay in the hub; the platform's policy writes the records.
-  - name: dns-stays-with-platform
+  # Nothing in the request names a landing zone platform, so landing_zone takes its
+  # default, standalone - and with no platform to own them, the privatelink zones are
+  # the deployment's (forced), not referenced from a hub that does not exist.
+  - name: standalone-landing-zone
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'landing_zone:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?standalone\b'
+
+  - name: dns-owned-by-deployment
     type: regex
     weight: 2
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'private_dns_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?platform\b'
+    pattern: 'private_dns_ownership:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?deployment\b'
 
-  - name: dns-records-by-policy
+  # The requirements were not stated, so the derived storage values carry the default
+  # answers - and say which requirement they follow.
+  - name: replication-derived-from-outage-impact
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'private_dns_records:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?policy\b'
+    pattern: 'replication:[\s\S]{0,500}derived_from:\s*deployment\.outage_impact'
 
-  - name: corp-landing-zone
-    type: regex
-    target: { source: file, path: infra/infra-spec.yaml }
-    pattern: 'landing_zone:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?corp\b'
-
-  - name: naming-convention-written
+  # A Bicep target gets no naming.yaml copy - its name vars are generated from the
+  # convention, and the request stated no departure.
+  - name: no-naming-copy-for-bicep
     type: file_exists
     path: infra/naming.yaml
+    exists: false
 
   - name: no-code-before-confirmation
     type: file_exists

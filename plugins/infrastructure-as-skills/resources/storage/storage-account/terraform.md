@@ -18,7 +18,7 @@ terraform providers schema -json \
 `Azure/avm-res-storage-storageaccount/azurerm` — the primary rendering. Documented against
 **v0.10.0** (resolved 2026-10-17); resolve the current version and re-read its README
 inputs before rendering, as [avm.md](../../../core/iac-rendering/references/avm.md) says.
-Requires `azapi ~> 2.12`, `modtm ~> 0.3`, `random`, Terraform `>= 1.10`, and takes the
+Requires `azapi ~> 2.11`, `modtm ~> 0.3`, `random`, Terraform `>= 1.10`, and takes the
 resource group as `parent_id`. It does not use `azurerm` at all.
 
 ### Decision → module input
@@ -181,7 +181,9 @@ regardless.
 The contract and the markers are unchanged
 ([avm.md](../../../core/iac-rendering/references/avm.md#tests-with-a-module-in-the-middle)).
 `azapi` and `modtm` are mocked beside `azurerm`; the assert target is the module's
-`resource` output, whose `body` is what the call passed in:
+`resource` output, whose `body` is what the call passed in. The output is `sensitive`, so
+a failing assert shows `(sensitive value)` — the `error_message` names the expected value.
+Settled by `examples/private-storage-on-platform` on v0.10.0:
 
 ```hcl
 mock_provider "azapi" {}
@@ -195,13 +197,40 @@ run "networking" {
     condition     = module.storage.resource.body.properties.publicNetworkAccess == "Disabled"
     error_message = "Private: the module must send publicNetworkAccess Disabled."
   }
+
+  # decision: storage-account.networking.allow_azure_services_bypass
+  assert {
+    condition     = module.storage.resource.body.properties.networkAcls.defaultAction == "Deny" && module.storage.resource.body.properties.networkAcls.bypass == "AzureServices"
+    error_message = "The ACL documents the posture: default Deny, trusted Azure services bypass."
+  }
+
+  # decision: storage-account.networking.private_endpoint_subresources
+  assert {
+    condition     = length(module.storage.private_endpoints) == 1 && contains(keys(module.storage.private_endpoints), "blob")
+    error_message = "One endpoint per listed sub-resource, blob only."
+  }
+
+  # deployment.private_dns_records: policy
+  assert {
+    condition     = module.storage.private_endpoints["blob"].private_dns_zone_group_id == null
+    error_message = "private_dns_records: policy - the platform writes the record, not this code."
+  }
 }
 ```
 
-Decisions the module turns into sub-resources the output does not expose (blob
-properties, the diagnostic settings, the endpoints' DNS zone group) are marked
-`# not-testable: <key> - set through the module's <input>; the module's own tests cover
-the mapping` until the first AVM render settles which of them a plan can observe.
+Observable through `resource.body` and asserted the same way: `sku.name` (replication),
+`properties.accessTier`, `allowSharedKeyAccess`, `minimumTlsVersion`,
+`supportsHttpsTrafficOnly`, `allowBlobPublicAccess`,
+`encryption.requireInfrastructureEncryption`, `encryption.keySource` (`Microsoft.Storage`
+for platform-managed keys), `isSftpEnabled`, `immutableStorageWithVersioning` (`null` for
+none); `resource.identity[0].type` for the managed identity; `resource.name` and
+`private_endpoints["blob"].name` for the naming test; `resource.parent_id` for the group.
+
+Not observable, marked `# not-testable: <key> - set through the module's <input>; the
+module's own tests cover the mapping`: the five `blob_properties` decisions, the three
+diagnostic decisions, `role_assignments`, and `private_endpoint_subnet` — all land in
+child modules whose bodies no output exposes. Note that `allow_azure_services_bypass`
+became testable with the module, where the authored render could not observe it.
 
 ## Authored rendering
 

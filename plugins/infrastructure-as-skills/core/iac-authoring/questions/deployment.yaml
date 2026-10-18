@@ -23,25 +23,124 @@ groups:
   - id: context
     title: Context
     questions:
-      - id: environment
-        ask: Which environment is this for?
-        type: enum
+      - id: environments
+        ask: Which stages does the system go through? The usual set is development, test and production; a sandbox is one throwaway environment.
+        type: list
+        audience: customer
+        plain:
+          en: "The system is deployed in these stages: {value}."
+          de: "Das System wird in diesen Stufen ausgerollt: {value}."
+        plain_values:
+          development: { en: "development", de: "Entwicklung" }
+          test: { en: "test", de: "Test" }
+          qa: { en: "quality assurance", de: "Qualitätssicherung" }
+          uat: { en: "acceptance", de: "Abnahme" }
+          integration: { en: "integration", de: "Integration" }
+          staging: { en: "pre-production", de: "Vorproduktion" }
+          preproduction: { en: "pre-production", de: "Vorproduktion" }
+          production: { en: "live operation", de: "Echtbetrieb" }
+          sandbox: { en: "sandbox, one throwaway environment", de: "Sandbox, eine Wegwerf-Umgebung" }
+          demo: { en: "demo", de: "Demo" }
+          hotfix: { en: "hotfix", de: "Hotfix" }
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
-        required: true
+        default: [development, test, production]
         why: >
-          The first question of any run. It drives every rendered name, the
-          strictness of several defaults, and which questions are surfaced for
-          confirmation rather than applied silently.
-        renders: context.environment - read by every resource via from_context
+          The first decision of any run, and the one most often left unsaid: one
+          code base is deployed through a stack of stages, and nearly everyone
+          starts in development. So the stack development, test, production is
+          the default - a default, not an assumption: an instruction not to
+          assume anything unstated leaves every default in place, this one
+          included. A request that names one stage names that stage of the
+          stack: "Produktion" is the production stage, "Staging" joins the
+          stack as a fourth stage (development, test, staging, production);
+          a named stage never replaces the stack. Only the customer's own words
+          shrink it - "nur prod", "nur eine Umgebung", "eine Sandbox zum
+          Ausprobieren" - and `[sandbox]` is the other shape: one throwaway
+          environment, no stack. Every stage renders from the same code with its
+          own parameter file (environments/<stage>.tfvars, main.<stage>.bicepparam)
+          and its own state; a value that differs per stage (per_environment:
+          true on its question) is a parameter whose value lives in that file,
+          never a literal in the template. Decisions are the same in every stage
+          (parity), except what non_production_savings relaxes.
+        renders: >
+          context.environments; one parameter file and one state per stage; the
+          environment code in every name comes from the stage's file
+
+      - id: stage_isolation
+        ask: Are the stages separated by subscription, or do they share one subscription and differ by resource group?
+        type: enum
+        audience: platform
+        plain:
+          en: "Each stage lives in {value}."
+          de: "Jede Stufe liegt in {value}."
+        plain_values:
+          subscription: { en: "its own subscription, so the stages cannot touch each other's resources, budgets or permissions", de: "einer eigenen Subscription; die Stufen können sich gegenseitig weder Ressourcen noch Budgets noch Berechtigungen anfassen" }
+          resource_group: { en: "its own resource group within one shared subscription", de: "einer eigenen Ressourcengruppe in einer gemeinsamen Subscription" }
+        values: [subscription, resource_group]
+        default: subscription
+        depends_on: { question: environments, not_equals: [sandbox] }
+        why: >
+          The boundary between stages is the boundary between a test that goes
+          wrong and production. A subscription per stage is the landing-zone
+          answer and the default: quotas, budgets, policy assignments, RBAC and
+          the blast radius of a bad apply all stop at the subscription, and a
+          landing zone platform vends subscriptions for exactly this. One shared
+          subscription with a resource group per stage is the lesser form, for an
+          organisation that cannot get subscriptions vended - it keeps the
+          resources apart and little else, since budgets, quotas and most
+          policies are subscription-scoped. Either way the subscription and the
+          resource group are per-stage values that the stage's parameter file
+          carries; this decision says which of the two actually separates the
+          stages, so a reviewer knows what a wrong stage file can reach.
+        renders: >
+          terraform: subscription_id per environments/<stage>.tfvars and one state
+          per stage; bicep: the deployment scope per stage on the command line;
+          both: the resource group name per stage
+
+      - id: non_production_savings
+        ask: Should the non-production stages run cheaper than production?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Development and test stages {value}."
+          de: "Entwicklungs- und Teststufen {value}."
+        plain_values:
+          enabled: { en: "run cheaper than production: less redundancy, shorter log retention - never less security", de: "laufen günstiger als die Produktion: weniger Redundanz, kürzere Protokoll-Aufbewahrung, nie weniger Sicherheit" }
+          disabled: { en: "are built identically to production", de: "werden identisch zur Produktion gebaut" }
+        values: [enabled, disabled]
+        default: enabled
+        depends_on: { question: environments, not_equals: [sandbox] }
+        why: >
+          A development stage that keeps three copies of its data in three
+          datacenters and ninety days of logs pays production prices for
+          nothing. `enabled` lets a question with `non_production_default` take
+          that value in every stage but production - replication, log retention -
+          and nothing else: security, exposure, identity and data-protection
+          decisions carry no such default, and the check refuses one, because a
+          development stage that is less secure than production is where the
+          breach happens and where the parity the stack exists for breaks. A
+          customer who wants the stages identical says so, and that statement
+          wins here as everywhere; `disabled` is also the engineer's answer for a
+          stage used as a production-like rehearsal.
+        renders: >
+          per stage: the question's non_production_default in every stage but
+          production when enabled, for defaulted and derived values only - a
+          stated value holds in every stage; recorded per stage in the spec's
+          value map
 
       - id: location
         ask: Which Azure region?
         type: string
+        audience: engineer
+        plain:
+          en: "Everything runs in the Azure region {value}."
+          de: "Alles läuft in der Azure-Region {value}."
         parameterized: true
         why: >
-          Always an input variable of the template, never asked: every resource
-          in a deployment shares it, it is supplied at deploy time, and a region
-          demanded during design is a value the user may not have chosen yet.
+          Always an input variable of the template, never asked and never an
+          open item: a parameter without a value is complete, the stage file
+          supplies it at deploy time, and a region demanded during design is a
+          value the user may not have chosen yet.
           It is still a naming input, so the region abbreviation in every name
           is computed from the variable at plan time, not at render time.
         renders: variable location / param location - and the region abbreviation in every name
@@ -49,6 +148,10 @@ groups:
       - id: workload
         ask: Which workload is this for? (short name, goes into every resource name)
         type: string
+        audience: engineer
+        plain:
+          en: "\"{value}\" is the name every part of the system carries."
+          de: "„{value}“ ist der Name, den jeder Teil des Systems trägt."
         parameterized: true
         why: >
           Always an input variable of the template, never asked. It is the one
@@ -61,16 +164,23 @@ groups:
       - id: naming_convention
         ask: Should resource names follow the default convention, or does your organisation have its own?
         type: enum
+        audience: platform
+        plain:
+          en: "Resource names follow the {value} naming convention, so they are consistent to find and read."
+          de: "Die Namen folgen der Namenskonvention „{value}“, damit sie einheitlich zu finden und zu lesen sind."
         values: [default, custom]
         default: default
         why: >
           The plugin's convention (core/iac-rendering/references/naming.default.yaml:
           CAF abbreviations, AVM region codes, per-type patterns where Azure's
-          limits force them) is copied into the repository as naming.yaml beside
-          the spec. `custom` means the user stated a departure - a pattern, an
-          abbreviation, an environment code - and it is written into that file,
-          never into a template. An existing naming.yaml or naming provider
-          block in the repository is carried and never replaced. Not asked
+          limits force them) is the convention. A Terraform root gets a full copy
+          as naming.yaml beside the spec, because the provider reads it at plan
+          time; a Bicep root gets none, its name vars are generated from the
+          convention. `custom` means the user stated a departure - a pattern, an
+          abbreviation, an environment code - and it is written into naming.yaml
+          (for Bicep: a file holding the departures alone), never into a
+          template. An existing naming.yaml or naming provider block in the
+          repository is carried and never replaced. Not asked
           unless the user raises it: a convention is a deployment-wide decision,
           and most names cannot change after creation, so a run that offered it
           per resource would be offering a way to get two.
@@ -82,25 +192,125 @@ groups:
       - id: subscription_id
         ask: Which subscription does this deploy into?
         type: ref
+        audience: engineer
+        plain:
+          en: "The system is deployed into subscription {value}."
+          de: "Das System wird in die Subscription {value} ausgerollt."
         ref: subscription
         parameterized: true
+        per_environment: true
         why: >
-          Always an input variable of the template, never asked and never
-          guessed. The same rendered code deploys into any subscription without
-          editing it.
+          Always an input variable of the template, never asked, never guessed
+          and never an open item - the stage file supplies it. The same rendered
+          code deploys into any subscription without editing it.
         renders: variable subscription_id (provider subscription_id) / the deployment's target scope
 
       - id: resource_group_name
         ask: Which resource group?
         type: ref
+        audience: engineer
+        plain:
+          en: "All parts are placed into the existing resource group {value}."
+          de: "Alle Teile liegen in der bestehenden Ressourcengruppe {value}."
         ref: resource_group
         parameterized: true
+        per_environment: true
         why: >
-          Always an input variable of the template, never asked. Expected, not
-          created - every question set here declares that as a boundary. A
+          Always an input variable of the template, never asked and never an
+          open item - the stage file supplies it. Expected, not created - every
+          question set here declares that as a boundary. A
           network that belongs in a platform group is a separate, asked decision
           (network_ownership), not this value.
         renders: variable resource_group_name / param resourceGroupName / scope
+
+  # ---------------------------------------------------------------- requirements
+  # What the customer can say about the system without knowing Azure. Each answer
+  # derives technical decisions in the resource sets: a resource question carrying
+  # `derived_from: <id>` maps the answer through its own table and records the value
+  # with `source: requirement`. The default answer derives the guardrail default, so an
+  # unanswered requirement changes nothing - it only lets the customer change things.
+  - id: requirements
+    title: Requirements
+    questions:
+      - id: outage_impact
+        ask: How bad is it if the system is unavailable for a day?
+        type: enum
+        values: [tolerable, disruptive, critical]
+        default: disruptive
+        audience: customer
+        plain:
+          en: "A day's outage would be {value}."
+          de: "Ein Tag Ausfall wäre {value}."
+        plain_values:
+          tolerable: { en: "tolerable", de: "verkraftbar" }
+          disruptive: { en: "disruptive", de: "störend" }
+          critical: { en: "business-critical", de: "geschäftskritisch" }
+        confirm_in: [production]
+        why: >
+          The one question behind every redundancy decision, and the customer is the
+          only one who can answer it. `tolerable` is a system people can do without
+          for a day - a sandbox, an internal tool with a manual fallback - and buys
+          the cheapest replication. `disruptive` is the normal case: an outage costs
+          work and money but not the business, so the data survives the loss of a
+          datacenter (zone redundancy) at little extra cost. `critical` is a system
+          whose outage stops the business or breaks a legal duty: the data is also
+          copied to a second region, which costs roughly double and only pays off
+          with a failover plan - say so when it is chosen.
+        renders: >
+          derived by the resource sets: storage-account.replication (LRS / ZRS / GZRS);
+          later resources map it to their own zone-redundancy and SKU decisions
+
+      - id: data_loss_tolerance
+        ask: If data is deleted or overwritten by mistake, how far back must you be able to go?
+        type: enum
+        values: [reproducible, one_week, one_month, three_months]
+        default: one_week
+        audience: customer
+        plain:
+          en: "After a mistaken delete you must be able to go back {value}."
+          de: "Nach einem versehentlichen Löschen müsst ihr {value} zurückkommen."
+        plain_values:
+          reproducible: { en: "not at all - the data can be regenerated", de: "gar nicht, die Daten lassen sich neu erzeugen" }
+          one_week: { en: "a week", de: "eine Woche" }
+          one_month: { en: "a month", de: "einen Monat" }
+          three_months: { en: "three months", de: "drei Monate" }
+        why: >
+          The question behind soft delete, versioning and point-in-time restore,
+          asked once in the customer's terms. `reproducible` means the data can be
+          regenerated from somewhere else - a cache, an export, a build - so nothing
+          is kept after a delete and no storage is spent on it. `one_week` covers the
+          usual case: someone notices within days. `one_month` and `three_months` are
+          for data where the mistake surfaces at a month-end or quarter-end close,
+          and cost the retained versions for that long.
+        renders: >
+          derived by the resource sets: storage-account.blob_soft_delete_days,
+          container_soft_delete_days, versioning_enabled, point_in_time_restore_days
+
+      - id: data_access_pattern
+        ask: How is the data used - worked with all the time, read rarely once written, or kept only because something requires it?
+        type: enum
+        values: [active, occasional, archive]
+        default: active
+        audience: customer
+        plain:
+          en: "The data is {value}."
+          de: "Die Daten werden {value}."
+        plain_values:
+          active: { en: "worked with all the time", de: "laufend genutzt" }
+          occasional: { en: "read now and then once written", de: "nach dem Schreiben nur gelegentlich gelesen" }
+          archive: { en: "kept for a retention duty and almost never read", de: "nur aufbewahrt und fast nie gelesen" }
+        why: >
+          Storage prices trade storage cost against access cost, and only the
+          customer knows which side the data is on. `active` is data an application
+          reads and writes continuously. `occasional` is data written once and read
+          now and then - exports, backups, logs - where cheaper storage with a small
+          per-read charge wins. `archive` is data kept for a retention duty and read
+          almost never; it is the cheapest to keep and the most expensive to read
+          back, with an early-deletion charge. The default is `active` because
+          choosing a cold tier for data that turns out to be read often costs more
+          than the other way round.
+        renders: >
+          derived by the resource sets: storage-account.access_tier (Hot / Cool / Cold)
 
   - id: modules
     title: Modules
@@ -108,6 +318,13 @@ groups:
       - id: module_source
         ask: Should resources render as calls to Azure Verified Modules, or as authored resources?
         type: enum
+        audience: engineer
+        plain:
+          en: "The code is built from {value}."
+          de: "Der Code wird aus {value} gebaut."
+        plain_values:
+          avm: { en: "Microsoft's verified, tested building blocks (Azure Verified Modules)", de: "Microsofts geprüften, getesteten Bausteinen (Azure Verified Modules)" }
+          authored: { en: "resources written out individually", de: "einzeln ausgeschriebenen Ressourcen" }
         values: [avm, authored]
         default: avm
         why: >
@@ -135,6 +352,13 @@ groups:
       - id: module_telemetry
         ask: May the Azure Verified Modules send their deployment telemetry to Microsoft?
         type: enum
+        audience: platform
+        plain:
+          en: "Usage telemetry to Microsoft is {value}: a count per deployment, none of your data."
+          de: "Nutzungstelemetrie an Microsoft ist {value}: eine Zählung pro Ausrollen, keine eurer Daten."
+        plain_values:
+          enabled: { en: "on", de: "eingeschaltet" }
+          disabled: { en: "off", de: "ausgeschaltet" }
         values: [enabled, disabled]
         default: enabled
         depends_on: { question: module_source, equals: avm }
@@ -158,6 +382,15 @@ groups:
       - id: landing_zone
         ask: Is there a landing zone platform at all (standalone if not), and if so, which kind of landing zone does this workload go into - internal (corp), internet-facing (online) or a sandbox?
         type: enum
+        audience: platform
+        plain:
+          en: "The system lands in {value}."
+          de: "Das System landet in {value}."
+        plain_values:
+          standalone: { en: "its own environment: there is no shared platform, so it brings its own network, name resolution and logging", de: "einer eigenen Umgebung: es gibt keine gemeinsame Plattform, also bringt es Netz, Namensauflösung und Protokollierung selbst mit" }
+          corp: { en: "the internal part of the company platform, connected to the company network", de: "dem internen Teil der Firmenplattform, verbunden mit dem Firmennetz" }
+          online: { en: "the internet-facing part of the company platform", de: "dem internetseitigen Teil der Firmenplattform" }
+          sandbox: { en: "a sandbox for experiments, never for real operation", de: "einer Sandbox zum Ausprobieren, nie für den Echtbetrieb" }
         values: [standalone, corp, online, sandbox]
         default: standalone
         confirm_in: [production]
@@ -182,9 +415,15 @@ groups:
           aus dem Firmennetz", "öffentlich erreichbar" or "wir haben keine
           Landing Zone" has usually answered it already.
         forced_when: >
-          landing_zone: sandbox refuses environment: production - a production
-          workload in a sandbox is a contradiction to ask about, not a value to
-          record
+          A referenced platform part forces a platform archetype: a request that
+          names an existing hub network, a shared private-endpoint subnet or a
+          central workspace (network_ownership: reference, observability_ownership:
+          reference) says a landing zone platform exists, so standalone is ruled
+          out - corp when network_exposure is private, online when it is public,
+          recorded as forced with the referencing answer as forced_by. Never an
+          open item: the references are the answer. landing_zone: sandbox refuses
+          environments containing production - a production stage in a sandbox is
+          a contradiction to ask about, not a value to record
         renders: >
           pre-answers network_exposure and network_ownership, and under `standalone`
           also private_dns_ownership and
@@ -194,6 +433,14 @@ groups:
       - id: network_exposure
         ask: Should this infrastructure be reachable from the internet?
         type: enum
+        audience: customer
+        plain:
+          en: "Access is {value}."
+          de: "Der Zugang ist {value}."
+        plain_values:
+          private: { en: "private only - nothing is reachable from the internet", de: "nur privat, nichts ist aus dem Internet erreichbar" }
+          private_with_exceptions: { en: "private, with named exceptions reachable from the internet behind a firewall", de: "privat, mit benannten Ausnahmen hinter einer Firewall aus dem Internet erreichbar" }
+          public: { en: "public - reachable from the internet by design", de: "öffentlich, absichtlich aus dem Internet erreichbar" }
         values: [private, private_with_exceptions, public]
         default: private
         confirm_in: [production]
@@ -209,6 +456,12 @@ groups:
           `overridden`. `public` is a deliberate posture for a system whose
           consumers genuinely live off-network - it is not the absence of a
           decision, and the portal default being permissive is not a reason.
+          One posture for every stage: a system is as exposed in production as
+          the customer said it is, and "öffentlich ist okay" said while
+          describing the development stage is said about the system, not about
+          that stage. A stage departs only on the customer's explicit word for
+          that stage ("in prod aber nur intern"), recorded as overridden there -
+          never split by the run.
         renders: >
           pre-answers public_network_access in every resource question set, and
           decides whether private endpoints and DNS records are generated at all
@@ -216,6 +469,13 @@ groups:
       - id: local_auth
         ask: May resources keep key-based or connection-string auth?
         type: enum
+        audience: engineer
+        plain:
+          en: "Passwords and access keys are {value}; access goes through company accounts, so every action is attributable."
+          de: "Passwörter und Zugriffsschlüssel sind {value}; der Zugriff läuft über Firmenkonten, damit jede Aktion zuordenbar ist."
+        plain_values:
+          disabled: { en: "switched off", de: "abgeschaltet" }
+          allowed_where_unavoidable: { en: "allowed only where a consumer cannot do otherwise", de: "nur erlaubt, wo ein Nutzer nicht anders kann" }
         values: [disabled, allowed_where_unavoidable]
         default: disabled
         confirm_in: [production]
@@ -234,6 +494,10 @@ groups:
       - id: mandates
         ask: Are there compliance or internal mandates this deployment has to satisfy?
         type: list
+        audience: customer
+        plain:
+          en: "Rules to comply with: {value}."
+          de: "Einzuhaltende Vorgaben: {value}."
         default: []
         why: >
           Named here once so the decisions below can cite them, and so a reviewer
@@ -248,6 +512,13 @@ groups:
       - id: key_protection
         ask: Do keys have to be HSM-protected?
         type: enum
+        audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          software: { en: "protected in software - the standard, sufficient unless a mandate names hardware", de: "in Software geschützt, der Standard, ausreichend ohne Vorgabe für Hardware" }
+          hsm: { en: "protected by hardware security modules, as a mandate requires; that costs the premium vault", de: "durch Hardware-Sicherheitsmodule geschützt, wie eine Vorgabe verlangt; das kostet den Premium-Tresor" }
         values: [software, hsm]
         default: software
         why: >
@@ -265,6 +536,13 @@ groups:
       - id: key_management
         ask: Platform-managed keys, or customer-managed?
         type: enum
+        audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          platform_managed: { en: "managed by Azure - encrypted, rotated, no effort on your side", de: "von Azure verwaltet: verschlüsselt, rotiert, kein Aufwand bei euch" }
+          customer_managed: { en: "your own, held in your key vault, so you can revoke them", de: "eure eigenen in eurem Schlüsseltresor, damit ihr sie zurückziehen könnt" }
         values: [platform_managed, customer_managed]
         default: platform_managed
         confirm_in: [production]
@@ -285,6 +563,14 @@ groups:
       - id: network_ownership
         ask: Should this deployment build its own virtual network, reference an existing one, or does it need none?
         type: enum
+        audience: platform
+        plain:
+          en: "The network is {value}."
+          de: "Das Netz wird {value}."
+        plain_values:
+          create: { en: "built by this deployment", de: "von diesem Ausrollen selbst gebaut" }
+          reference: { en: "the existing one, used and never changed here", de: "das bestehende, hier genutzt und nie verändert" }
+          none: { en: "not needed - everything is reached over public endpoints", de: "nicht gebraucht, alles wird über öffentliche Endpunkte erreicht" }
         values: [create, reference, none]
         default: create
         why: >
@@ -316,9 +602,14 @@ groups:
       - id: existing_vnet
         ask: Which existing virtual network should the deployment reference?
         type: ref
+        audience: platform
+        plain:
+          en: "The existing network {value} is used."
+          de: "Das bestehende Netz {value} wird genutzt."
         ref: virtual_network
         required: true
         depends_on: { question: network_ownership, equals: reference }
+        per_environment: true
         why: >
           Read by name and resource group, never by a hardcoded resource id - an id
           pins a subscription into the template. A pattern skill normally supplies
@@ -328,8 +619,13 @@ groups:
       - id: address_space
         ask: Which address space should the new virtual network use?
         type: string
+        audience: platform
+        plain:
+          en: "The new network uses the address range {value}, assigned by whoever manages addresses."
+          de: "Das neue Netz nutzt den Adressbereich {value}, zugewiesen von der Adressverwaltung."
         required: true
         depends_on: { question: network_ownership, equals: create }
+        per_environment: true
         why: >
           Cannot be defaulted: an overlapping CIDR is invisible until the first
           peering and expensive to change afterwards, because every subnet in it has
@@ -339,9 +635,14 @@ groups:
       - id: private_endpoint_subnet
         ask: Which existing subnet should private endpoints live in?
         type: ref
+        audience: platform
+        plain:
+          en: "Private connections land in the existing subnet {value}."
+          de: "Private Anbindungen landen im bestehenden Subnetz {value}."
         ref: subnet
         required: true
         depends_on: { question: network_ownership, equals: reference }
+        per_environment: true
         why: >
           One subnet carries the deployment's private endpoints, so no resource
           question set has to ask. Referenced, like the network around it.
@@ -350,8 +651,13 @@ groups:
       - id: private_endpoint_subnet_prefix
         ask: Which prefix should the private endpoint subnet get?
         type: string
+        audience: platform
+        plain:
+          en: "Private connections get their own subnet, {value}."
+          de: "Private Anbindungen bekommen ein eigenes Subnetz, {value}."
         required: true
         depends_on: { question: network_ownership, equals: create }
+        per_environment: true
         why: >
           With the deployment owning the network there is nothing to reference yet -
           the subnet is generated, so what is needed is its prefix out of the
@@ -366,6 +672,13 @@ groups:
       - id: private_dns_ownership
         ask: Who owns the private DNS zones?
         type: enum
+        audience: platform
+        plain:
+          en: "Name resolution for private connections is handled by {value}."
+          de: "Die Namensauflösung für private Anbindungen übernimmt {value}."
+        plain_values:
+          platform: { en: "the company platform", de: "die Firmenplattform" }
+          deployment: { en: "this deployment itself", de: "dieses Ausrollen selbst" }
         values: [platform, deployment]
         default: platform
         forced_when: >
@@ -389,6 +702,13 @@ groups:
       - id: private_dns_records
         ask: Does a platform policy create the DNS records for private endpoints, or does this deployment?
         type: enum
+        audience: platform
+        plain:
+          en: "The name entries for private connections are written by {value}."
+          de: "Die Namenseinträge für private Anbindungen schreibt {value}."
+        plain_values:
+          policy: { en: "a platform rule, automatically", de: "eine Plattformregel, automatisch" }
+          deployment: { en: "this deployment", de: "dieses Ausrollen" }
         values: [policy, deployment]
         default: policy
         depends_on: { question: private_dns_ownership, equals: platform }
@@ -409,9 +729,14 @@ groups:
       - id: private_dns_zone_scope
         ask: In which subscription and resource group does the platform keep the private DNS zones?
         type: ref
+        audience: platform
+        plain:
+          en: "The platform keeps the name zones in {value}."
+          de: "Die Plattform hält die Namenszonen in {value}."
         ref: resource_group
         required: true
         depends_on: { question: private_dns_records, equals: deployment }
+        per_environment: true
         why: >
           Referencing a zone needs its subscription and resource group, and in a
           hub-and-spoke platform that is the hub's, not the workload's - so it is
@@ -431,6 +756,13 @@ groups:
       - id: observability_ownership
         ask: Should this deployment build its own Log Analytics workspace, or reference an existing one?
         type: enum
+        audience: platform
+        plain:
+          en: "Logs go to {value}."
+          de: "Protokolle gehen in {value}."
+        plain_values:
+          create: { en: "a workspace this deployment creates and pays for", de: "einen Arbeitsbereich, den dieses Ausrollen anlegt und bezahlt" }
+          reference: { en: "the company's central log workspace", de: "den zentralen Protokoll-Arbeitsbereich der Firma" }
         values: [create, reference]
         default: reference
         forced_when: >
@@ -450,9 +782,14 @@ groups:
       - id: diagnostics_destination
         ask: Which existing Log Analytics workspace should receive diagnostics?
         type: ref
+        audience: platform
+        plain:
+          en: "Logs are collected in {value}."
+          de: "Protokolle werden in {value} gesammelt."
         ref: log_analytics_workspace
         required: true
         depends_on: { question: observability_ownership, equals: reference }
+        per_environment: true
         why: >
           Every resource routes diagnostics somewhere, and a resource with no
           setting is invisible exactly when someone needs to see it. Resolved here,
@@ -467,7 +804,12 @@ groups:
       - id: log_retention_days
         ask: How long should logs be retained?
         type: int
+        audience: customer
+        plain:
+          en: "Logs are kept for {value} days."
+          de: "Protokolle werden {value} Tage aufbewahrt."
         default: 30
+        non_production_default: 30
         depends_on: { question: observability_ownership, equals: create }
         why: >
           The cost guard, and therefore decided here rather than per workspace: a
@@ -476,12 +818,21 @@ groups:
           where the retention line item starts - the first 31 days are included in
           the ingestion price. Longer retention is an audit or regulatory
           requirement rather than an operational one, and it is charged per
-          gigabyte per month for as long as it is set.
+          gigabyte per month for as long as it is set. A retention the customer
+          states holds in every stage - the savings relax defaults and derived
+          values, never a stated one - unless they say which stage they mean;
+          unstated, the non-production stages keep 30 days while
+          non_production_savings is enabled, since nobody audits a test stage's
+          logs.
         renders: azurerm_log_analytics_workspace.retention_in_days / properties.retentionInDays
 
       - id: daily_quota_gb
         ask: Should ingestion be capped per day?
         type: int
+        audience: engineer
+        plain:
+          en: "Daily log intake cap: {value} GB (-1: no cap)."
+          de: "Tägliche Obergrenze für Protokolle: {value} GB (-1: keine)."
         default: -1
         confirm_in: [production]
         depends_on: { question: observability_ownership, equals: create }

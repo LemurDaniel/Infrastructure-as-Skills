@@ -148,7 +148,9 @@ the **union** of them. Read each module's README *Requirements* before writing
 `providers.tf`; today that means:
 
 - **AzAPI-based modules** (storage account, virtual network, more every quarter) require
-  `Azure/azapi ~> 2.12`, `Azure/modtm ~> 0.3`, `hashicorp/random`, and Terraform `>= 1.10`.
+  `Azure/azapi ~> 2.11`, `Azure/modtm ~> 0.3`, `hashicorp/random`, and Terraform `>= 1.10`
+  (the storage module at v0.10.0; `hashicorp/time` arrives transitively through
+  `avm-utl-interfaces` and needs no root declaration).
   They take the resource group as `parent_id` — a resource **id**, not a name — and no
   longer need `azurerm` at all. They authenticate with Entra ID always, so
   `shared_access_key_enabled = false` costs nothing on the module side.
@@ -209,34 +211,50 @@ document; a newer version is re-walked, not assumed.
 
 The contract from [terraform-idiom.md](terraform-idiom.md#tests) holds — one assert per
 spec decision, named by its key path, or a `# not-testable:` marker with a reason — but
-the root no longer owns the resource, so the assert target moves:
+the root no longer owns the resource, so the assert target moves. Settled by the first
+AVM render (`examples/private-storage-on-platform`, storage module v0.10.0, 2026-10-18):
 
-- **Mock `azapi` as the platform is mocked.** An AzAPI-based module plans against a mocked
-  `azapi` provider the way the authored render plans against mocked `azurerm`; the naming
-  provider stays real. `modtm` is mocked too, or `enable_telemetry = false` in the test
-  `variables` block if the render parameterises it.
-- **Assert through the module's outputs.** Every AVM module outputs `resource_id`, `name`
-  and `resource` (the full resource object). For an AzAPI module `resource.body` is what
-  the root passed in and is known at plan time; `resource.body.properties.publicNetworkAccess`
-  is the assert target for `public_network_access`. For an azurerm module `resource.<attribute>`
-  plays the same role.
-- **What the root cannot observe is marked, not skipped.** A decision the module turns
-  into a sub-resource the output does not expose — a blob service's soft-delete days behind
-  a `blob_properties` input — is `# not-testable: <key> - set through the module's
-  blob_properties input; the module's own tests cover the mapping`. That sentence is the
-  honest state: the module's test suite is part of the verification story now, and the
-  marker says which decisions lean on it.
+- **Mock `azapi` and `modtm` as the platform is mocked.** `mock_provider "azapi" {}` and
+  `mock_provider "modtm" {}` beside the `azurerm` mock; the naming provider stays real.
+  The root's `data "azurerm_resource_group"` (the module's `parent_id`) needs a mocked
+  id that parses, like the other platform data sources.
+- **Assert through the module's `resource` output.** It is the `azapi_resource` the
+  module creates, and its `body` is what the root passed in, so it is known at plan
+  time. What a plan observes there: `body.sku.name`, every `body.properties.*` the
+  account carries (`publicNetworkAccess`, `networkAcls.defaultAction` and `.bypass`,
+  `allowSharedKeyAccess`, `minimumTlsVersion`, `supportsHttpsTrafficOnly`,
+  `allowBlobPublicAccess`, `encryption.requireInfrastructureEncryption` and
+  `.keySource`, `isSftpEnabled`, `accessTier`, `immutableStorageWithVersioning`),
+  `identity[0].type`, `name`, `parent_id`, and `create_headers` (non-null only with
+  telemetry on). The `private_endpoints` output carries each endpoint's `name` and a
+  `private_dns_zone_group_id` that is `null` — known, not unknown — when the module
+  does not manage the zone group.
+- **The `resource` output is `sensitive`.** A condition on it evaluates normally, but a
+  failing assert prints `(sensitive value)` instead of the actual value, and an
+  `error_message` cannot interpolate it. So the error message states the expected
+  value in words, and a failure is diagnosed by reading the call, not the diff.
+- **What the root cannot observe is marked, not skipped.** The module creates the blob
+  service, the diagnostic settings, the role assignments and the private endpoint's
+  body in child modules, and nothing of their bodies reaches an output. Those decisions
+  carry `# not-testable: <key> - set through the module's <input>; the module's own
+  tests cover the mapping`. For the storage account that is nine of twenty-four
+  decisions: the five blob-service ones, the three diagnostic ones, and
+  `role_assignments`; plus `private_endpoint_subnet`, whose id goes into the endpoint
+  child module. That sentence is the honest state: the module's test suite is part of
+  the verification story, and the marker says which decisions lean on it.
 - **The module's own tests are not re-run here.** They ran before the version was
   published. What the render tests prove is that *this* root passes *these* decisions —
   which is the part a module cannot test for you.
 
-The first AVM render will settle which decisions a plan can observe through `resource`;
-until then this section describes the intended contract, and `check_render_coverage.py`
-accepts both an assert and a marker per decision.
+`check_render_coverage.py` accepts either an assert or a marker per decision, never both.
 
-Bicep has no test runner in this repo yet (see `PROGRESS.md`); `bicep build` against the
-`br/public` reference is the check, and it resolves the module from the registry, so it
-needs network access to `mcr.microsoft.com`.
+Bicep asserts on the compiled ARM ([bicep-idiom.md](bicep-idiom.md#tests)): a module call
+compiles to a nested deployment whose `properties.parameters.<param>.value` is the
+decision, a loop to a `copy` whose expression text names the literal. `bicep build`
+resolves the module from `mcr.microsoft.com`, so the tests need that network access and
+nothing else. Settled by `greenfield-telemetry`: 41 of 43 decisions across three modules
+are observable in the compiled template; the two that are not are a deletion-time
+parameter and a spec-only record.
 
 ## When not to use a module
 

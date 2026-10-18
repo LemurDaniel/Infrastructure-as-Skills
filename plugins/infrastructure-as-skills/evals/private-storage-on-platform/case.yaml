@@ -7,7 +7,7 @@ graders:
   - name: skill-fired
     type: tool_used
     tool: Skill
-    input_match: iac-authoring
+    input_match: infrastructure-as-skills
 
   - name: target-terraform
     type: regex
@@ -80,6 +80,19 @@ graders:
     type: regex
     target: { source: file, path: infra/infra-spec.yaml }
     pattern: 'private_dns_records:\s*(?:#[^\n]*\s*)*(?:\{\s*)?(?:value:\s*)?\W?policy\b'
+
+  # "Produktion" is the production stage of the default stack; the stated hub and
+  # workspace are production's values, the other stages' are open.
+  - name: stages-default-stack
+    type: regex
+    weight: 2
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'environments:\s*\[(?=[^\]]*\bdevelopment\b)(?=[^\]]*\btest\b)(?=[^\]]*\bproduction\b)[^\]]*\]'
+
+  - name: hub-is-production-value
+    type: regex
+    target: { source: file, path: infra/infra-spec.yaml }
+    pattern: 'existing_vnet:[\s\S]{0,120}production:[\s\S]{0,60}vnet-hub-prod-we'
 
   - name: naming-convention-written
     type: file_exists

@@ -41,6 +41,35 @@ writes goes into the repository's IaC root, or `infra/` when there is none, and 
 committed with the code — it is what the next run extends. The rules for both, and for
 several roots, are in [references/spec.md](references/spec.md#where-it-lives).
 
+Look for `platform.yaml` beside it in the same search. It is the platform engineer's
+profile — landing zone, hub network and subnet, DNS, workspace, telemetry — and every
+value in it answers a deployment-set question with `audience: platform` before anyone is
+asked. Say in the first message whether one was found. Never write it from an interview:
+[references/platform.md](references/platform.md).
+
+## Who is in the interview — customer mode and engineer mode
+
+The person answering is, by default, **the customer**: someone who can say what the
+system is for, who uses it and how bad an outage or a loss would be, and who did not
+come to answer questions about subnets. Every question carries an `audience`
+([question-set-format](references/question-set-format.md#who-answers-audience)), and
+the mode decides which audiences are put to the person:
+
+| Mode | Asked | Resolved without asking | Entered when |
+|---|---|---|---|
+| **customer** (default) | `customer` questions only — the deployment set's context, posture, mandates and `requirements` group | `platform` from `platform.yaml` or its default, `engineer` from its default; a `required` one nobody present can answer is an `open:` entry naming its owner | Nothing says otherwise |
+| **engineer** | `customer` and `engineer` questions; `platform` too when no profile answers them | — | The user says they are the engineer or asks in engineer terms (names a subnet, a SKU, a provider argument), or the repository already holds IaC code or a spec and the user is extending it |
+
+Say which mode the run is in, in the first message, so the person can redirect:
+"Ich frage dich nur, was das System braucht; die technischen Entscheidungen setze ich
+nach den Vorgaben und zeige sie dir am Ende" versus "Ich frage dich auch die technischen
+Entscheidungen". A customer who starts answering engineer questions has switched mode;
+an engineer who says "frag mich nur das Fachliche" has switched back.
+
+In customer mode no question with Azure vocabulary reaches the person, whatever it
+would cost to default it. The cost of a wrong default is a line in Phase 4 that the
+person can object to; the cost of a subnet question is a person who stops answering.
+
 ## Phase 0 — Ask what is being built, in the user's own words
 
 The interview opens with one open question, not with the question set. Let the user
@@ -60,13 +89,22 @@ description; it names the resource and nothing about the system around it.
 
 Ask in plain text, not through `AskUserQuestion`: the point is free prose, and options
 would turn it back into the structured interview it precedes. Give the user a short list
-of what is worth mentioning, so the description lands on the questions that matter:
+of what is worth mentioning, so the description lands on the questions that matter. In
+customer mode the list is the `requirements` group in prose and nothing technical:
 
 ```
-Beschreib kurz, was du aufbauen willst. Hilfreich ist alles davon, nichts davon ist Pflicht:
-  - Wofür ist es da, und für welche Umgebung (dev / test / prod)?
-  - Wer oder was greift zu, und von wo (Internet, Firmennetz, nur andere Azure-Dienste)?
-  - Gibt es Vorgaben (BSI C5, ISO 27001, interne Richtlinien)?
+Beschreib kurz, was ihr braucht. Hilfreich ist alles davon, nichts davon ist Pflicht:
+  - Wofür ist es da? Es gibt eine Entwicklungs-, eine Test- und eine Produktionsstufe,
+    außer ihr sagt etwas anderes (nur eine Sandbox zum Ausprobieren, eine Stufe mehr)
+  - Wer arbeitet damit, und von wo (nur Mitarbeiter im Firmennetz, Partner, das Internet)?
+  - Wie schlimm wäre es, wenn es einen Tag nicht erreichbar ist?
+  - Wie weit zurück müsst ihr kommen, wenn jemand versehentlich etwas löscht?
+  - Gibt es Vorgaben, die ihr nachweisen müsst (BSI C5, ISO 27001, DSGVO, interne Richtlinien)?
+```
+
+In engineer mode add the platform line, which is the one a customer cannot answer:
+
+```
   - Was existiert schon (VNet, Log Analytics Workspace, DNS) und soll genutzt werden?
 ```
 
@@ -82,6 +120,26 @@ mapping:
 - **The description may add resources.** "…mit Logs nach Log Analytics" routes a second
   question set through [azure-resources](../azure-resources/SKILL.md) — the same request,
   one interview, one spec.
+- **A default is not an assumption.** "Nimm nichts an, was nicht dasteht" removes guesses,
+  never defaults: the stack `[development, test, production]` stays, with a named stage
+  joining it rather than replacing it, and so does every other default in the sets. What
+  the instruction forbids is inventing a value no default exists for — a range, a
+  subscription, a name.
+- **A referenced platform part answers the landing zone.** A named hub network, shared
+  subnet or central workspace means a platform exists, so `landing_zone` is `corp` (private)
+  or `online` (public), recorded as `forced` by that reference — never `standalone`, and
+  never an open item, because the references are the answer.
+- **A stated value holds in every stage, and posture is one per system.** "Öffentlich
+  erreichbar ist okay" said about the development stage is said about the system: the
+  exposure is `public` in every stage, the network `none` in every stage. A run never
+  splits a posture decision (exposure, local auth, keys, DNS, landing zone) by stage; only
+  the customer's explicit word for a named stage does, recorded as `overridden` there.
+- **An empty list is not always an answer.** Storage role assignments with shared keys
+  off: an empty default renders an account nobody can use, so it is an `open:` entry with
+  its owner rather than a decided value - read the question's `why` before recording `[]`.
+- **Context values are bare.** `context:` holds values (`environments: [...]`,
+  `workload: payments`, a per-stage map), not `value:`/`source:` records; the provenance
+  of a context value is the deployment set's, under `deployment:`.
 
 What remains open goes into Phase 3's batches. The description does not replace them; it
 shrinks them, and usually to the `required` questions nobody mentions unprompted.
@@ -98,6 +156,16 @@ The same reading settles how the code is split, which the spec records under
 `composition.granularity`:
 
 - An existing `modules/` directory → match what is there, per module and per file
+- **Stages are part of the layout.** `context.environments` — `[development, test,
+  production]` unless the user said otherwise — renders as one root and one parameter
+  file per stage (`environments/<stage>.tfvars`, `main.<stage>.bicepparam`) with one
+  state per stage (a backend key, never a workspace). A value marked `per_environment`
+  in its question is a parameter whose value lives in the stage's file, never a literal
+  in the template; a stage whose values nobody could give gets no file and an `open:`
+  entry naming it. Only what `non_production_savings` relaxes differs between the
+  stages; everything else is identical, which is what the stack is for. A value the
+  customer stated holds in every stage unless they said which stage; the savings relax
+  defaults and derived values only.
 - An existing `infra-spec.yaml` → its `composition` is `carried`; do not re-decide it
 - A flat repository, or a single resource → `single`
 - Otherwise → `per-concern`
@@ -124,6 +192,9 @@ resource, in two halves:
   `parameterized`: never asked, rendered as input variables, supplied at deploy time —
   a user who is only designing has no deployment target yet. Use them from the
   description if stated (as the variable's documentation/example, not a baked-in value).
+  **A parameterized value is never an `open:` entry**: a parameter without a value is
+  complete, and `open:` is for decisions nobody could make, not for inputs the stage file
+  supplies. A stage whose parameters are unknown simply has no stage file yet.
   The environment is `required`, because nothing can be guessed and everything downstream reads them. A
   resource question marked `from_context: true` points here; without this group that field
   pointed at nothing, and a run could reach the renderer with no region and therefore no
@@ -143,9 +214,10 @@ For each question, the answer then comes from the first source that has one:
 |---|---|---|
 | 1 | What the user said — the request and the Phase 0 description | `stated`, or `overridden` where it changes a carried value |
 | 2 | The existing `infra-spec.yaml` | `carried` |
-| 3 | A pattern skill's pre-answers | `pattern` |
-| 4 | The deployment set's answer, for a `from_deployment` question | `deployment` |
-| 5 | The question's `default` | `default` |
+| 3 | The repository's `platform.yaml` | `platform` |
+| 4 | A pattern skill's pre-answers | `pattern` |
+| 5 | The deployment set's answer: copied for a `from_deployment` question, mapped through the question's table for a `derived_from` one | `deployment`, or `requirement` with `derived_from: deployment.<id>` |
+| 6 | The question's `default` | `default` |
 
 A carried value outranks a pattern and a default on purpose: it was decided, and quite
 possibly deployed. A re-run that let a pattern or a changed guardrail flip it would turn
@@ -154,7 +226,11 @@ carried value. Consequences are the exception — `deployment` and `forced` valu
 re-derived from what they follow, not carried.
 
 A question with `required: true` has no default and no safe guess. It is the only kind you
-must ask.
+must ask — of the audience that can answer it. Every question carries an `audience`
+([question-set-format](references/question-set-format.md#who-answers-audience)): a
+`customer` question is put to the person in the interview; an `engineer` or `platform`
+question is never put to a customer — it resolves from the profile or the default, and a
+`required` one nobody present can answer becomes an `open:` entry naming its owner.
 
 **A forced value is pre-answered, not asked.** `key_protection: hsm` requires a Premium Key
 Vault; `network_exposure: private` requires the private-endpoint subnet. Apply the
@@ -167,8 +243,22 @@ lives. Read it before choosing any default or justifying one.
 
 ## Phase 3 — Ask, in at most two batches
 
-Only what Phase 0's description left open reaches this phase. A question the user already
-answered in prose and is asked again tells them the description was not read.
+Only what Phase 0's description left open reaches this phase, and only the audiences the
+mode allows. A question the user already answered in prose and is asked again tells them
+the description was not read.
+
+**In customer mode there is one batch**: the surviving `customer` questions — the
+environment, who reaches it and from where, the mandates, and the three requirements
+(outage impact, data-loss tolerance, access pattern), fewer when the description settled
+some. Nothing else is asked. An `engineer` question takes its default; a `platform`
+question takes the profile's value or its default; a `required` question of either
+audience that nothing answers becomes an `open:` entry with its owner named, and Phase 4
+says so. Put the batch in the customer's words — the `ask` texts of the `requirements`
+group are written for that — and never a decision's vocabulary (`ZRS`, `TLS1_2`, a
+subnet) in a question to a customer.
+
+**In engineer mode** the two batches below apply, with the customer questions in the
+first.
 
 **Fold Phase 1's question into the first batch** when the repository did not answer it.
 Target and layout are two more questions, not a separate exchange — a round trip per
@@ -227,7 +317,25 @@ the values whose blast radius makes a silent default inappropriate.
 
 ## Phase 4 — Report what was defaulted, before generating
 
-Show a compact account. Not forty rows — group it:
+Show a compact account. Not forty rows — group it. In customer mode the account opens
+with what the person's answers decided, in their words and their language, and keeps the
+technical rows for the engineer section below it:
+
+```
+Was aus euren Antworten folgt:
+  Ausfall wäre störend        -> Daten liegen in drei Rechenzentren der Region (ZRS)
+  Eine Woche zurück           -> gelöschte Dateien und Ordner 7 Tage wiederherstellbar, alte Versionen bleiben
+  Daten in laufender Nutzung  -> Standard-Speicherklasse, kein Aufpreis beim Lesen
+  Nur aus dem Firmennetz      -> kein öffentlicher Zugang, Anbindung über private Endpunkte
+
+Nach den Vorgaben gesetzt (ohne Rückfrage):
+  Zugriff nur mit Firmenkonten, verschlüsselt, Protokolle in den zentralen Workspace
+
+Offen (braucht jemanden vom Plattform-Team):
+  Welche Anwendung greift zu und braucht welche Rechte?
+```
+
+The engineer's view follows, as before:
 
 ```
 Deployment-wide:
@@ -241,10 +349,14 @@ Defaulted (guardrail baseline):
   Data protection blob soft-delete 7d, container soft-delete 7d, versioning on
   Observability   diagnostics -> Log Analytics, categories: audit + allLogs
 
+Per stage (one file each; development and test open until the platform team answers):
+  production      sub 1111…, rg-invoicing-prod-we, hub vnet-hub-prod-we, ZRS
+  development     sub ?, rg ?, hub ? - LRS (non_production_savings)
+  test            sub ?, rg ?, hub ? - LRS
+
 Asked:
-  environment     production
+  stages          development, test, production (default; "Produktion" named the production stage)
   location        westeurope
-  replication     ZRS
 ```
 
 The deployment block comes first because it is what the rest hangs off, and a forced value
@@ -259,32 +371,56 @@ to see it to disagree with it, and the ones they never look at cost one glance.
 Write `infra-spec.yaml` into the user's repository first — the IaC root, or `infra/` —
 and validate it with `check_spec.py`.
 
-**Write `naming.yaml` beside it in the same step**, when the directory has none: a full
-copy of [naming.default.yaml](../iac-rendering/references/naming.default.yaml), with any
-departure the user stated applied to it. It belongs to the spec, not to the code — the
-names in the diagram and every later render come from it, and a run that stops after the
-spec (the user says "noch nicht") must still leave the convention in the repository.
-An existing `naming.yaml` is left untouched. Doing that before any code is not bookkeeping: it
-forces the decisions to be expressible in the backend-neutral vocabulary, and a decision
-that will not fit is usually one that absorbed a backend's spelling.
+**For a Terraform target, write `naming.yaml` beside it in the same step**, when the
+directory has none: a full copy of
+[naming.default.yaml](../iac-rendering/references/naming.default.yaml), with any departure
+the user stated applied to it. The provider reads it at plan time, so it belongs to the
+spec, not to the code — the names in the diagram and every later render come from it, and
+a run that stops after the spec (the user says "noch nicht") must still leave the
+convention in the repository. An existing `naming.yaml` is left untouched.
 
-Then stop and ask. The spec is a finished artefact on its own, and the two steps after it
-are the user's to start — each one produces files in their repository.
+**For a Bicep target, write none** — nothing in a Bicep deployment reads it; the names are
+`var`s generated into the template from the plugin's convention. Only a stated departure
+(`naming_convention: custom`) is written, as a `naming.yaml` holding the departures alone.
+The rules are in [naming.md](../iac-rendering/references/naming.md#namingyaml-in-the-users-repository--terraform-only).
+
+**Write the decision document in the same step**, in the user's language:
+
+```sh
+python3 <plugin>/core/iac-authoring/scripts/export_decisions.py ./infra-spec.yaml --language de
+```
+
+It renders every decision in the spec as one line in the customer's words
+(`infra-decisions.md` beside the spec): what follows from their answers, with the
+decisions derived from each; what the rules set; what they decided differently; what is
+still open and from whom. It is the Phase 4 account as a file someone can send, and it is
+regenerated from the spec on every later run like the diagram. In customer mode it is the
+artefact the person signs off on; the spec is for the engineer. The script reads the
+question sets' `plain` lines and falls back to English where a line lacks the language,
+and says how many did — translate those in the conversation rather than editing the file.
+
+Then stop and ask. The spec and the document are finished artefacts on their own, and the
+steps after them are the user's to start — each one produces files in their repository.
 
 **First: a diagram?** Ask whether to draw the spec with
 [iac-diagram](../iac-diagram/SKILL.md). Recommend it when someone other than the person in
 the conversation has to sign off, or when the spec holds more than one resource; skip the
-recommendation for a single resource the user clearly understands.
+recommendation for a single resource the user clearly understands. Offer the document as
+Word in the same question, once: the Markdown is already written, the `.docx` is a
+conversion (`pandoc infra-decisions.md -o infra-decisions.docx` where pandoc is on PATH;
+say so and leave the Markdown where it is not).
 
 ```
-Die Spec liegt in infra/infra-spec.yaml. Soll ich daraus ein Diagramm erstellen?
-  - Ja (empfohlen)  -> infra-diagram.drawio.png, zum Prüfen oder Weitergeben
-  - Nein            -> weiter zur Prüfung der Spec
+Die Spec liegt in infra/infra-spec.yaml, die Entscheidungen lesbar in infra/infra-decisions.md.
+Soll ich daraus ein Diagramm erstellen, und das Dokument auch als Word-Datei?
+  - Diagramm, ja (empfohlen)  -> infra-diagram.drawio.png, zum Prüfen oder Weitergeben
+  - Word-Datei, ja            -> infra-decisions.docx neben der Markdown-Datei
+  - Nein                      -> weiter zur Prüfung
 ```
 
 **Second: does it match, and should the code be generated?** Show what the user is
-confirming — the diagram if there is one, otherwise the Phase 4 summary — and ask whether
-it meets the requirements:
+confirming — the diagram if there is one, otherwise the decision document's first two
+sections — and ask whether it meets the requirements:
 
 ```
 Passt das so zu euren Anforderungen?
@@ -392,10 +528,9 @@ family:
 8. If people would ask for it with a term the
    [azure-resources](../azure-resources/SKILL.md) description does not carry, add the term
    there — that description is the only trigger the resource has.
-9. Validate with the repo's `check_repo_consistency.py` (naming forms, unique ids,
-   `required`/`default`, `why`/`renders`, routing reachability). A dedicated
-   `check_question_set.py` that also checks enum defaults and `depends_on` targets is
-   planned and **not written yet** — do not call it.
+9. Validate with `scripts/check_question_set.py <resource-directory>` — enum defaults,
+   `depends_on` and `from_deployment` targets, the resolution fields, unknown fields —
+   and with the repo's `check_repo_consistency.py` for routing reachability.
 
 A genuinely new family gets a directory under `resources/` with a `routing.md`, and a row in
 the azure-resources table. **Not** a skill directory and **not** a `plugin.json` entry:
@@ -412,5 +547,6 @@ Read as needed, not up front:
 | [references/spec.md](references/spec.md) | Writing or reading `infra-spec.yaml` |
 | [references/question-set-format.md](references/question-set-format.md) | Authoring or extending a `questions.yaml` |
 | [references/guardrails.md](references/guardrails.md) | Choosing or justifying any default, or weighing an exception |
+| `scripts/export_decisions.py` | Rendering the spec as `infra-decisions.md`, the customer's decision document |
 | [iac-diagram](../iac-diagram/SKILL.md) | Drawing the spec as `infra-diagram.drawio.png` for the customer |
 | [iac-rendering](../iac-rendering/SKILL.md) | Turning the spec into Terraform or Bicep — naming, layout, idiom |

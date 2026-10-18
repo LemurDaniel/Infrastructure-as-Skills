@@ -38,12 +38,23 @@ python3 .claude/skills/git-commit-conventions/scripts/check_repo_consistency.py
 # open items. Needs PyYAML (pip install pyyaml).
 python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_spec.py <spec>
 
+# Validates every question set (or the paths given) against the format: enum defaults,
+# depends_on / from_deployment targets, resolution fields, audience, unknown fields.
+# --platform <platform.yaml> checks a platform profile against the deployment set instead.
+python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/check_question_set.py
+
+# Renders a spec as the customer's decision document (infra-decisions.md beside it).
+python3 plugins/infrastructure-as-skills/core/iac-authoring/scripts/export_decisions.py <spec> --language de
+
 # A rendered example: fmt, validate, plan-only tests with a mocked platform - and the
 # Bicep render of the same spec compiled and linted.
 terraform -chdir=examples/private-storage-on-platform init && terraform -chdir=examples/private-storage-on-platform test
 # Every decision in the spec asserted by those tests, or marked not-testable with a reason.
 python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py examples/private-storage-on-platform/infra-spec.yaml
 bicep build --stdout examples/private-storage-on-platform/bicep/main.bicep > $null && bicep lint examples/private-storage-on-platform/bicep/main.bicep
+# The Bicep example: its tests run against the compiled ARM, then the same coverage check.
+python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/run_arm_tests.py examples/greenfield-telemetry/infra-spec.yaml
+python3 plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py examples/greenfield-telemetry/infra-spec.yaml
 ```
 
 There is no build. The artefacts are Markdown and YAML; the scripts and the examples'
@@ -64,7 +75,7 @@ The full tree is in [README.md](README.md#layout). What is not obvious from it:
 | `.../core/` | The skills, declared in `plugin.json` as `"skills": ["./core/"]` — it sits beside `skills/`, not inside it |
 | `.../core/azure-resources/` | The single trigger for every resource. Its description is the keyword surface for all families |
 | `.../core/iac-authoring/questions/deployment.yaml` | The deployment-wide set, resolved before any resource |
-| `.../core/iac-authoring/references/{spec,question-set-format,guardrails}.md` | The spec schema; how to author a `questions.yaml`; where every default comes from |
+| `.../core/iac-authoring/references/{spec,question-set-format,guardrails,platform}.md` | The spec schema; how to author a `questions.yaml`; where every default comes from; the platform profile |
 | `.../core/iac-rendering/references/avm.md` | AVM first: which module, status, live version lookup, interfaces, provider requirements, gaps, the test contract |
 | `.../core/iac-rendering/references/{naming,terraform-idiom,bicep-idiom}.md` | Naming interfaces; layout, modules, tests per target |
 | `.../resources/<family>/routing.md` | Routing table: request → question set. **Not** a `SKILL.md` — see below |
@@ -129,11 +140,22 @@ are in [README.md](README.md#why-one-trigger-and-families-that-are-not-skills).
 - **A decision that holds for more than one resource belongs in the deployment set.** A
   resource question that re-asks one carries `from_deployment` instead of a `default`.
 - **A missing question set is said out loud, never improvised.**
-- **A Terraform render ships with its tests.** One `assert` per spec decision, named
-  `# decision: <resource>.<group>.<question>`; what a plan cannot observe is
-  `# not-testable:` with a reason. `check_render_coverage.py` fails on anything else.
-- **`check_question_set.py` does not exist yet** although the authoring docs name it.
-  `check_repo_consistency.py` covers part of what it would.
+- **The stack is the default.** `context.environments` is `[development, test, production]`
+  unless the customer says otherwise; one root, one parameter file and one state (backend
+  key, never a workspace) per stage. A `per_environment` value is a parameter from the
+  stage file, never a literal in the template; `non_production_default` relaxes cost
+  knobs outside production and is refused on anything security-shaped.
+- **Every question carries an `audience`** (`customer`, `engineer`, `platform`), and only
+  `customer` questions reach the person in the interview. Platform facts come from
+  `platform.yaml`, which the interview reads and never writes.
+- **A render ships with its tests, both targets.** Terraform: one `assert` per spec
+  decision, named `# decision: <resource>.<group>.<question>`, what a plan cannot observe
+  `# not-testable:` with a reason. Bicep: one entry per decision in `tests/*.armtest.yaml`
+  against the compiled ARM (`run_arm_tests.py`; symbolic names via `bicepconfig.json`).
+  `check_render_coverage.py` fails on anything else, per target.
+- **`check_question_set.py` parses; `check_repo_consistency.py` greps.** Run both before
+  a commit that touches a question set: the first finds a default outside `values` or a
+  `depends_on` pointing nowhere, the second finds a routing row pointing nowhere.
 
 ## Repository Conventions
 

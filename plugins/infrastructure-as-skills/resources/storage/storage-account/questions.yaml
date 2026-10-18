@@ -21,9 +21,13 @@ groups:
   - id: placement
     title: Placement
     questions:
-      - id: environment
-        ask: Which environment is this for?
-        type: enum
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
+        audience: engineer
+        plain:
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         from_context: true
@@ -35,6 +39,10 @@ groups:
       - id: location
         ask: Which Azure region?
         type: string
+        audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
         required: true
         from_context: true
         why: >
@@ -46,9 +54,14 @@ groups:
       - id: resource_group_name
         ask: Which resource group?
         type: ref
+        audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
         ref: resource_group
         required: true
         from_context: true
+        per_environment: true
         why: >
           The account is placed into an existing group. Creating one here would
           make this skill own a lifecycle wider than the resource it describes.
@@ -61,6 +74,14 @@ groups:
       - id: public_network_access
         ask: Should this account depart from the deployment's exposure posture?
         type: enum
+        audience: engineer
+        plain:
+          en: "The storage is {value}."
+          de: "Der Speicher ist {value}."
+        plain_values:
+          disabled: { en: "not reachable from the internet at all", de: "aus dem Internet überhaupt nicht erreichbar" }
+          enabled_with_firewall: { en: "reachable from the internet only from listed addresses", de: "aus dem Internet nur von gelisteten Adressen erreichbar" }
+          enabled: { en: "reachable from the internet", de: "aus dem Internet erreichbar" }
         values: [disabled, enabled_with_firewall, enabled]
         from_deployment: network_exposure
         confirm_in: [production]
@@ -78,8 +99,13 @@ groups:
       - id: private_endpoint_subnet
         ask: Which subnet should this account's private endpoint live in?
         type: ref
+        audience: platform
+        plain:
+          en: "Its private connection lands in subnet {value}."
+          de: "Seine private Anbindung landet im Subnetz {value}."
         ref: subnet
         from_deployment: private_endpoint_subnet
+        per_environment: true
         why: >
           One subnet carries the deployment's private endpoints, so this is
           inherited rather than asked. Overridden only where an account genuinely
@@ -90,6 +116,17 @@ groups:
       - id: private_endpoint_subresources
         ask: Which storage services need an endpoint?
         type: list
+        audience: engineer
+        plain:
+          en: "Private connections exist for: {value}."
+          de: "Private Anbindungen gibt es für: {value}."
+        plain_values:
+          blob: { en: "files (blob)", de: "Dateien (Blob)" }
+          file: { en: "file shares", de: "Dateifreigaben" }
+          queue: { en: "queues", de: "Warteschlangen" }
+          table: { en: "tables", de: "Tabellen" }
+          dfs: { en: "the data lake", de: "den Data Lake" }
+          web: { en: "the static website", de: "die statische Website" }
         values: [blob, file, queue, table, dfs, web]
         default: [blob]
         why: >
@@ -100,8 +137,13 @@ groups:
       - id: firewall_ip_rules
         ask: Which public IP ranges may reach the account?
         type: list
+        audience: engineer
+        plain:
+          en: "Public addresses allowed through the firewall: {value}."
+          de: "Durch die Firewall erlaubte öffentliche Adressen: {value}."
         default: []
         depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        per_environment: true
         why: >
           An enumerated allowlist. An empty list with the firewall enabled denies
           everything public, which is a valid and deliberate state. `0.0.0.0/0`
@@ -111,9 +153,14 @@ groups:
       - id: firewall_subnet_rules
         ask: Which subnets may reach the account via service endpoint?
         type: list
+        audience: engineer
+        plain:
+          en: "Networks allowed through the firewall: {value}."
+          de: "Durch die Firewall erlaubte Netze: {value}."
         ref: subnet
         default: []
         depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        per_environment: true
         why: >
           Service endpoints are cheaper than private endpoints but leave the
           account publicly addressable — the ACL does the refusing. Prefer a
@@ -123,6 +170,13 @@ groups:
       - id: allow_azure_services_bypass
         ask: Should trusted Azure services bypass the firewall?
         type: bool
+        audience: engineer
+        plain:
+          en: "Azure's own services (backup, monitoring) {value} reach the storage past the firewall."
+          de: "Azures eigene Dienste (Backup, Überwachung) {value} am Firewall vorbei auf den Speicher zugreifen."
+        plain_values:
+          true: { en: "may", de: "dürfen" }
+          false: { en: "may not", de: "dürfen nicht" }
         default: true
         why: >
           Without the bypass, platform features that reach the account on your
@@ -138,6 +192,14 @@ groups:
       - id: managed_identity
         ask: Which managed identity should the account carry?
         type: enum
+        audience: engineer
+        plain:
+          en: "The storage has {value} for reaching other services."
+          de: "Der Speicher hat {value}, um andere Dienste zu erreichen."
+        plain_values:
+          system_assigned: { en: "its own identity", de: "eine eigene Identität" }
+          user_assigned: { en: "a shared, separately managed identity", de: "eine gemeinsame, separat verwaltete Identität" }
+          none: { en: "no identity of its own", de: "keine eigene Identität" }
         values: [system_assigned, user_assigned, none]
         default: system_assigned
         why: >
@@ -150,19 +212,32 @@ groups:
       - id: user_assigned_identity_ids
         ask: Which user-assigned identities?
         type: list
+        audience: engineer
+        plain:
+          en: "It uses the identities {value}."
+          de: "Er nutzt die Identitäten {value}."
         ref: user_assigned_identity
         required: true
         depends_on: { question: managed_identity, equals: user_assigned }
+        per_environment: true
         why: The identities must already exist; this skill does not create them.
         renders: identity.identity_ids / identity.userAssignedIdentities
 
       - id: role_assignments
         ask: Who needs which data-plane role on this account?
         type: list
+        audience: engineer
+        plain:
+          en: "Access rights granted to: {value}."
+          de: "Zugriffsrechte vergeben an: {value}."
         default: []
+        per_environment: true
         why: >
           With shared-key auth disabled, nothing can read the account until a role
-          is assigned — so an empty list means a working account nobody can use.
+          is assigned — so an empty list means a working account nobody can use,
+          and it is not an answer: when no consumer is named and shared keys are
+          off, the list stays empty and the decision is an `open:` entry owned by
+          the workload owner, blocking apply.
           Scope each assignment to the container it needs, not to the account, and
           never to the subscription. A pattern skill normally fills this from the
           consumers it knows about.
@@ -175,6 +250,13 @@ groups:
       - id: shared_access_key_enabled
         ask: Should shared key (account key) authentication stay enabled?
         type: bool
+        audience: engineer
+        plain:
+          en: "Access with a shared key is {value}; access goes through company accounts."
+          de: "Zugriff mit einem geteilten Schlüssel ist {value}; der Zugriff läuft über Firmenkonten."
+        plain_values:
+          true: { en: "possible", de: "möglich" }
+          false: { en: "not possible", de: "nicht möglich" }
         from_deployment: local_auth
         confirm_in: [production]
         why: >
@@ -190,6 +272,13 @@ groups:
       - id: min_tls_version
         ask: What is the minimum TLS version?
         type: enum
+        audience: engineer
+        plain:
+          en: "Connections must use at least {value} encryption."
+          de: "Verbindungen müssen mindestens {value}-Verschlüsselung nutzen."
+        plain_values:
+          TLS1_2: { en: "TLS 1.2", de: "TLS 1.2" }
+          TLS1_3: { en: "TLS 1.3", de: "TLS 1.3" }
         values: [TLS1_2, TLS1_3]
         default: TLS1_2
         why: >
@@ -201,6 +290,13 @@ groups:
       - id: https_traffic_only
         ask: Should the account refuse plain HTTP?
         type: bool
+        audience: engineer
+        plain:
+          en: "Unencrypted connections are {value}."
+          de: "Unverschlüsselte Verbindungen werden {value}."
+        plain_values:
+          true: { en: "refused", de: "abgewiesen" }
+          false: { en: "accepted", de: "akzeptiert" }
         default: true
         why: >
           No current reason to allow HTTP to a storage account. Kept as a question
@@ -211,6 +307,13 @@ groups:
       - id: allow_blob_public_access
         ask: May individual containers be made publicly readable?
         type: bool
+        audience: engineer
+        plain:
+          en: "Making individual folders publicly readable is {value}."
+          de: "Einzelne Ordner öffentlich lesbar zu machen ist {value}."
+        plain_values:
+          false: { en: "not possible", de: "nicht möglich" }
+          true: { en: "possible", de: "möglich" }
         default: false
         why: >
           This is the account-level switch that makes anonymous container access
@@ -223,6 +326,13 @@ groups:
       - id: infrastructure_encryption_enabled
         ask: Should infrastructure (double) encryption be enabled?
         type: bool
+        audience: engineer
+        plain:
+          en: "A second encryption layer below the service is {value}."
+          de: "Eine zweite Verschlüsselungsschicht unterhalb des Dienstes ist {value}."
+        plain_values:
+          true: { en: "on", de: "eingeschaltet" }
+          false: { en: "off", de: "ausgeschaltet" }
         default: true
         why: >
           A second encryption layer below the service layer, at no measurable cost.
@@ -234,6 +344,13 @@ groups:
       - id: key_management
         ask: Platform-managed or customer-managed encryption keys?
         type: enum
+        audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          platform_managed: { en: "managed by Azure - encrypted, rotated, no effort on your side", de: "von Azure verwaltet: verschlüsselt, rotiert, kein Aufwand bei euch" }
+          customer_managed: { en: "your own, held in your key vault, so you can revoke them", de: "eure eigenen in eurem Schlüsseltresor, damit ihr sie zurückziehen könnt" }
         values: [platform_managed, customer_managed]
         from_deployment: key_management
         why: >
@@ -247,9 +364,14 @@ groups:
       - id: cmk_key_vault_key_id
         ask: Which Key Vault key should encrypt the account?
         type: ref
+        audience: engineer
+        plain:
+          en: "Encrypted with your key {value}."
+          de: "Verschlüsselt mit eurem Schlüssel {value}."
         ref: key_vault_key
         required: true
         depends_on: { question: key_management, equals: customer_managed }
+        per_environment: true
         why: >
           The key must exist and the account's identity must hold wrap/unwrap on
           it before the account can be created — an ordering that bites every
@@ -259,6 +381,13 @@ groups:
       - id: sftp_enabled
         ask: Should the SFTP endpoint be enabled?
         type: bool
+        audience: engineer
+        plain:
+          en: "File transfer via SFTP is {value}."
+          de: "Dateiübertragung per SFTP ist {value}."
+        plain_values:
+          true: { en: "on", de: "eingeschaltet" }
+          false: { en: "off", de: "ausgeschaltet" }
         default: false
         why: >
           SFTP requires hierarchical namespace and introduces local users, which
@@ -274,55 +403,107 @@ groups:
       - id: replication
         ask: Which replication does the data need?
         type: enum
+        audience: engineer
+        plain:
+          en: "The data is kept {value}."
+          de: "Die Daten liegen {value}."
+        plain_values:
+          LRS: { en: "three times in one datacenter", de: "dreifach in einem Rechenzentrum" }
+          ZRS: { en: "in three datacenters of the region, so one can fail", de: "in drei Rechenzentren der Region, eines darf ausfallen" }
+          GRS: { en: "in one datacenter plus a copy in a second region", de: "in einem Rechenzentrum plus einer Kopie in einer zweiten Region" }
+          GZRS: { en: "in three datacenters of the region plus a copy in a second region", de: "in drei Rechenzentren der Region plus einer Kopie in einer zweiten Region" }
         values: [LRS, ZRS, GRS, GZRS]
-        default: ZRS
+        derived_from:
+          question: outage_impact
+          map: { tolerable: LRS, disruptive: ZRS, critical: GZRS }
         confirm_in: [production]
+        non_production_default: LRS
         why: >
-          ZRS survives the loss of an availability zone at roughly LRS cost and is
-          the right floor for anything that is not scratch data. GRS adds a
-          secondary region and only pays off with a documented failover plan —
-          without one it is cost for a capability nobody will exercise. Replication
-          cannot be changed between local and geo tiers in place, so this choice
-          forces a replacement later.
+          Derived from how bad an outage is, which the customer answered once for
+          the whole system. ZRS survives the loss of an availability zone at roughly
+          LRS cost and is the right floor for anything that is not scratch data.
+          GZRS adds a secondary region and only pays off with a documented failover
+          plan — without one it is cost for a capability nobody will exercise. GRS
+          is reachable only as an engineer's departure, for a region without zones.
+          The derivation is production's; the non-production stages take LRS
+          while non_production_savings is enabled - a development stage that
+          survives a zone loss protects nothing anyone would miss.
+          Replication cannot be changed between local and geo tiers in place, so
+          this choice forces a replacement later.
         renders: account_replication_type / sku.name
 
       - id: access_tier
         ask: Which default access tier?
         type: enum
+        audience: engineer
+        plain:
+          en: "Stored in the {value} class."
+          de: "Gespeichert in der Klasse {value}."
+        plain_values:
+          Hot: { en: "standard - cheap to read, for data in use", de: "Standard: günstig beim Lesen, für Daten in Nutzung" }
+          Cool: { en: "cool - cheaper to keep, a small charge per read", de: "Cool: günstiger im Aufbewahren, kleiner Aufpreis beim Lesen" }
+          Cold: { en: "cold - cheapest to keep, expensive to read back", de: "Cold: am günstigsten im Aufbewahren, teuer beim Zurücklesen" }
         values: [Hot, Cool, Cold]
-        default: Hot
+        derived_from:
+          question: data_access_pattern
+          map: { active: Hot, occasional: Cool, archive: Cold }
         why: >
-          Hot costs more to store and less to read. Cool and Cold invert that and
-          add an early-deletion charge, so they only win for data genuinely read
-          rarely — a lifecycle policy moving data between tiers usually beats
-          picking a cold default.
+          Derived from how the customer said the data is used. Hot costs more to
+          store and less to read. Cool and Cold invert that and add an
+          early-deletion charge, so they only win for data genuinely read rarely —
+          a lifecycle policy moving data between tiers usually beats picking a cold
+          default.
         renders: access_tier / properties.accessTier
 
       - id: blob_soft_delete_days
         ask: How many days should deleted blobs stay restorable?
         type: int
-        default: 7
+        audience: engineer
+        plain:
+          en: "Deleted files can be restored for {value} days (0: not at all)."
+          de: "Gelöschte Dateien sind {value} Tage wiederherstellbar (0: gar nicht)."
+        derived_from:
+          question: data_loss_tolerance
+          map: { reproducible: 0, one_week: 7, one_month: 30, three_months: 90 }
         why: >
-          The cheapest recovery there is for the most common failure mode, which
-          is someone deleting the wrong thing. 0 disables it and should be a
-          deliberate choice for genuinely reproducible data.
+          Derived from how far back the customer must be able to go. The cheapest
+          recovery there is for the most common failure mode, which is someone
+          deleting the wrong thing. 0 disables it, which is what `reproducible`
+          means: the data can be regenerated and nothing is kept.
         renders: blob_properties.delete_retention_policy.days / properties.deleteRetentionPolicy
 
       - id: container_soft_delete_days
         ask: How many days should deleted containers stay restorable?
         type: int
-        default: 7
+        audience: engineer
+        plain:
+          en: "Deleted folders can be restored for {value} days (0: not at all)."
+          de: "Gelöschte Ordner sind {value} Tage wiederherstellbar (0: gar nicht)."
+        derived_from:
+          question: data_loss_tolerance
+          map: { reproducible: 0, one_week: 7, one_month: 30, three_months: 90 }
         why: >
-          Separate from blob soft delete and frequently forgotten — blob retention
-          does not help when the container itself is gone.
+          The same window as blob soft delete, from the same answer. Separate
+          because it is frequently forgotten — blob retention does not help when
+          the container itself is gone.
         renders: blob_properties.container_delete_retention_policy.days / properties.containerDeleteRetentionPolicy
 
       - id: versioning_enabled
         ask: Should blob versioning be enabled?
         type: bool
-        default: true
+        audience: engineer
+        plain:
+          en: "Earlier versions of overwritten files are {value}."
+          de: "Frühere Versionen überschriebener Dateien werden {value}."
+        plain_values:
+          true: { en: "kept", de: "aufgehoben" }
+          false: { en: "not kept", de: "nicht aufgehoben" }
+        derived_from:
+          question: data_loss_tolerance
+          map: { reproducible: false, one_week: true, one_month: true, three_months: true }
         why: >
-          Protects against overwrite, which soft delete does not. The cost is
+          Protects against overwrite, which soft delete does not - so it follows
+          the same answer, and is off only for reproducible data. The cost is
           storage for retained versions, so pair it with a lifecycle rule that
           expires old ones rather than leaving it unbounded.
         renders: blob_properties.versioning_enabled / properties.isVersioningEnabled
@@ -330,6 +511,13 @@ groups:
       - id: change_feed_enabled
         ask: Should the change feed be enabled?
         type: bool
+        audience: engineer
+        plain:
+          en: "A log of every change is {value}."
+          de: "Ein Protokoll jeder Änderung wird {value}."
+        plain_values:
+          true: { en: "kept", de: "geführt" }
+          false: { en: "not kept", de: "nicht geführt" }
         default: false
         why: >
           An append-only log of blob changes. Useful for downstream processing and
@@ -340,24 +528,39 @@ groups:
       - id: point_in_time_restore_days
         ask: How many days of point-in-time restore?
         type: int
+        audience: engineer
+        plain:
+          en: "The whole storage can be rewound {value} days (0: not at all)."
+          de: "Der ganze Speicher lässt sich {value} Tage zurückdrehen (0: gar nicht)."
         default: 0
         why: >
-          Requires versioning and the change feed, and must be shorter than the
-          soft-delete window. 0 disables it. Worth enabling for data where a
-          logical corruption needs rewinding rather than a single object
-          restoring.
+          Not derived: it requires versioning and the change feed, must be shorter
+          than the soft-delete window, and rewinds a whole account rather than
+          restoring an object - an engineer's choice for data where a logical
+          corruption needs rewinding, offered when data_loss_tolerance is a month
+          or more. 0 disables it.
         renders: blob_properties.restore_policy.days / properties.restorePolicy
 
       - id: immutability
         ask: Does the data need immutability (WORM)?
         type: enum
+        audience: engineer
+        plain:
+          en: "Deletion protection by law or policy: {value}."
+          de: "Löschschutz per Gesetz oder Richtlinie: {value}."
+        plain_values:
+          none: { en: "none", de: "keiner" }
+          account_level: { en: "the whole storage, locked", de: "der ganze Speicher, gesperrt" }
+          container_level: { en: "per folder", de: "pro Ordner" }
         values: [none, account_level, container_level]
         default: none
         why: >
           A legal-hold or time-based retention regime that even an account owner
           cannot delete through. That is the point and also the risk: an
           account-level locked policy cannot be undone, so it is a compliance
-          decision rather than a hardening default.
+          decision rather than a hardening default. Not derived mechanically: a
+          mandate (deployment.mandates) that names record retention is the trigger,
+          and the engineer names it in Phase 4 as a consequence of that mandate.
         renders: immutability_policy / properties.immutableStorageWithVersioning
 
   # ------------------------------------------------------------ observability
@@ -367,8 +570,13 @@ groups:
       - id: diagnostic_workspace
         ask: Which Log Analytics workspace should receive diagnostics?
         type: ref
+        audience: platform
+        plain:
+          en: "Its logs go to {value}."
+          de: "Seine Protokolle gehen in {value}."
         ref: log_analytics_workspace
         from_deployment: diagnostics_destination
+        per_environment: true
         why: >
           Inherited: one deployment, one destination, or correlating an incident
           across its resources means querying two workspaces. A storage account
@@ -380,6 +588,16 @@ groups:
       - id: diagnostic_categories
         ask: Which log categories should be collected?
         type: list
+        audience: engineer
+        plain:
+          en: "Logged: {value}."
+          de: "Protokolliert wird: {value}."
+        plain_values:
+          audit: { en: "who accessed what", de: "wer worauf zugegriffen hat" }
+          allLogs: { en: "everything, including every read and write", de: "alles, inklusive jedem Lesen und Schreiben" }
+          StorageRead: { en: "reads", de: "Lesezugriffe" }
+          StorageWrite: { en: "writes", de: "Schreibzugriffe" }
+          StorageDelete: { en: "deletes", de: "Löschungen" }
         values: [audit, allLogs, StorageRead, StorageWrite, StorageDelete]
         default: [audit]
         why: >
@@ -392,6 +610,13 @@ groups:
       - id: metrics_enabled
         ask: Should all metrics be collected?
         type: bool
+        audience: engineer
+        plain:
+          en: "Usage and performance figures are {value}."
+          de: "Nutzungs- und Leistungswerte werden {value}."
+        plain_values:
+          true: { en: "collected", de: "erfasst" }
+          false: { en: "not collected", de: "nicht erfasst" }
         default: true
         why: Metric ingestion is cheap and the baseline for any capacity question.
         renders: metric.category = "AllMetrics" / metrics.category

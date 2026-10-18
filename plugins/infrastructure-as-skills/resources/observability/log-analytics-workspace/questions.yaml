@@ -20,9 +20,13 @@ groups:
   - id: placement
     title: Placement
     questions:
-      - id: environment
-        ask: Which environment is this for?
-        type: enum
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
+        audience: engineer
+        plain:
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         from_context: true
@@ -33,6 +37,10 @@ groups:
       - id: location
         ask: Which Azure region?
         type: string
+        audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
         required: true
         from_context: true
         why: >
@@ -44,9 +52,14 @@ groups:
       - id: resource_group_name
         ask: Which resource group?
         type: ref
+        audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
         ref: resource_group
         required: true
         from_context: true
+        per_environment: true
         why: >
           A workspace normally outlives the workloads reporting into it, which
           argues for a platform resource group rather than the application's — and
@@ -60,9 +73,16 @@ groups:
       - id: retention_days
         ask: How long should logs be retained?
         type: int
+        audience: engineer
+        plain:
+          en: "Logs are kept for {value} days."
+          de: "Protokolle werden {value} Tage aufbewahrt."
         from_deployment: log_retention_days
+        non_production_default: 30
         why: >
-          Inherited from the deployment set. 30 days covers incident investigation,
+          Inherited from the deployment set, per stage: a stated retention holds in
+          every stage, an unstated one is 30 outside production while the savings
+          are on. 30 days covers incident investigation,
           which is what most logs are for; longer is an audit or regulatory
           requirement rather than an operational one. The first 31 days are
           included in the ingestion price, so 30 is also where the retention line
@@ -72,6 +92,10 @@ groups:
       - id: daily_quota_gb
         ask: Should ingestion be capped per day?
         type: int
+        audience: engineer
+        plain:
+          en: "Daily log intake cap: {value} GB (-1: no cap)."
+          de: "Tägliche Obergrenze für Protokolle: {value} GB (-1: keine)."
         from_deployment: daily_quota_gb
         confirm_in: [production]
         why: >
@@ -84,6 +108,13 @@ groups:
       - id: sku
         ask: Which pricing tier?
         type: enum
+        audience: engineer
+        plain:
+          en: "Billed {value}."
+          de: "Abgerechnet {value}."
+        plain_values:
+          PerGB2018: { en: "per gigabyte, pay as you go", de: "pro Gigabyte, nach Verbrauch" }
+          CapacityReservation: { en: "at a reserved daily volume, cheaper at high volume", de: "zu einem reservierten Tagesvolumen, günstiger bei hohem Volumen" }
         values: [PerGB2018, CapacityReservation]
         default: PerGB2018
         why: >
@@ -100,16 +131,30 @@ groups:
       - id: public_network_access
         ask: Should the workspace be reachable from the internet?
         type: enum
+        audience: engineer
+        plain:
+          en: "The log workspace is {value}."
+          de: "Der Protokoll-Arbeitsbereich ist {value}."
+        plain_values:
+          disabled: { en: "reachable only through the platform's private link scope", de: "nur über den privaten Zugang der Plattform erreichbar" }
+          enabled: { en: "reachable from the internet, with company accounts and encryption - there is no private link scope to go through", de: "aus dem Internet erreichbar, mit Firmenkonten und Verschlüsselung; einen privaten Zugang dafür gibt es nicht" }
         values: [disabled, enabled]
-        from_deployment: network_exposure
+        default: enabled
         confirm_in: [production]
         why: >
-          Inherited from the deployment posture, with one consequence worth saying
-          out loud: `disabled` needs an Azure Monitor Private Link Scope (AMPLS),
-          not just a private endpoint, and an AMPLS is tenant-wide infrastructure
-          with real blast radius — it changes resolution for every agent in the
-          networks linked to it. Query and ingestion are two separate switches,
-          which is why a half-configured workspace accepts logs nobody can read.
+          The one resource that does not simply inherit the private posture.
+          `disabled` needs an Azure Monitor Private Link Scope (AMPLS) - not a
+          private endpoint on the workspace - and an AMPLS is tenant-wide
+          infrastructure with real blast radius: it changes resolution for every
+          agent in the networks linked to it, which is why a landing zone platform
+          owns it and a deployment never creates one. This set is reached only
+          when the deployment creates its workspace (observability_ownership:
+          create), which is the standalone case where no AMPLS exists; `disabled`
+          there is a workspace that accepts logs nobody can read. So `enabled` is
+          the default: ingestion and query stay authenticated with Entra ID and
+          encrypted, and the first render's eval run flagged the inherited
+          `disabled` as unworkable. `disabled` is for a stated AMPLS the workspace
+          joins. Query and ingestion are two separate switches, rendered together.
         renders: >
           internet_ingestion_enabled and internet_query_enabled /
           properties.publicNetworkAccessForIngestion and ...ForQuery
@@ -117,6 +162,13 @@ groups:
       - id: local_auth
         ask: Should workspace keys be usable for ingestion?
         type: bool
+        audience: engineer
+        plain:
+          en: "Sending logs with the workspace key is {value}."
+          de: "Protokolle mit dem Arbeitsbereichs-Schlüssel zu senden ist {value}."
+        plain_values:
+          true: { en: "possible", de: "möglich" }
+          false: { en: "not possible - agents use company identities", de: "nicht möglich, Agenten nutzen Firmenidentitäten" }
         from_deployment: local_auth
         why: >
           The shared key is a bearer credential with ingestion rights and no
@@ -128,6 +180,13 @@ groups:
       - id: rbac_only_access
         ask: Should data access be governed only by Azure RBAC?
         type: bool
+        audience: engineer
+        plain:
+          en: "Who may read logs is decided {value}."
+          de: "Wer Protokolle lesen darf, entscheiden {value}."
+        plain_values:
+          true: { en: "by the workspace's own permissions", de: "die Berechtigungen des Arbeitsbereichs selbst" }
+          false: { en: "also by permissions on the resources that sent them", de: "auch die Berechtigungen auf den sendenden Ressourcen" }
         default: true
         why: >
           With this on, workspace permissions decide who reads which data instead
@@ -145,6 +204,13 @@ groups:
       - id: immediate_purge_protection
         ask: Should the workspace keep its 14-day soft delete?
         type: bool
+        audience: engineer
+        plain:
+          en: "A deleted workspace {value} be recovered for 14 days."
+          de: "Ein gelöschter Arbeitsbereich {value} 14 Tage lang wiederhergestellt werden."
+        plain_values:
+          true: { en: "can", de: "kann" }
+          false: { en: "cannot", de: "kann nicht" }
         default: true
         why: >
           A deleted workspace is recoverable for 14 days and its name stays
@@ -158,6 +224,13 @@ groups:
       - id: archive_to_storage
         ask: Should logs also be archived to a storage account?
         type: bool
+        audience: engineer
+        plain:
+          en: "Long-term archiving to cheap storage is {value}."
+          de: "Langzeitarchivierung in günstigen Speicher ist {value}."
+        plain_values:
+          true: { en: "on", de: "eingeschaltet" }
+          false: { en: "off", de: "ausgeschaltet" }
         default: false
         why: >
           Long retention in a workspace is expensive per gigabyte-month; archival

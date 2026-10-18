@@ -7,12 +7,9 @@ idiom, a reviewer sees what `source:` buys.
 
 | Example | Targets | Scenario | Why it is here |
 |---|---|---|---|
-| [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account, production, behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec, so the two can be diffed. **Authored render** — it predates the AVM-first rule and stands for `implementation: authored` until re-rendered |
+| [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account on the default stack (development, test, production - the request named production), behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec on the **Azure Verified Modules** (`avm-res-storage-storageaccount` v0.10.0, `avm/res/storage/storage-account` 0.33.1, resolved 2026-10-18), so the two can be diffed. The git history before that date holds the authored render of the same spec |
+| [`greenfield-telemetry/`](greenfield-telemetry/) | Bicep | Three resources on a four-stage stack (the request named staging), nothing referenced: own network with two subnets, own workspace, private storage, `landing_zone: standalone`; only staging's stage file is resolved | The `create` branches the first example never reaches, including the privatelink zone the deployment owns and links. Four AVM modules in one root, the wiring between them in the root. The first render with tests against the compiled ARM, and the first spec carrying `source: requirement` |
 
-Planned: the same spec re-rendered on the AVM modules (the primary path since the
-rendering references moved to it — each resource's `terraform.md` / `bicep.md` carries the
-call), and `greenfield-telemetry` — three resources, created network and workspace, the
-harder case.
 
 ## What each directory holds
 
@@ -20,53 +17,72 @@ harder case.
 <case>/
   request.md            # the user's words, verbatim
   infra-spec.yaml       # the interview's output - the artefact everything else follows from
-  naming.yaml           # the convention, a full copy of naming.default.yaml
+  infra-decisions.md    # the spec as the customer reads it, rendered by export_decisions.py
+  naming.yaml           # the convention, a full copy of naming.default.yaml - Terraform only
+  environments/*.tfvars # one file per resolved stage (Terraform); bicep/main.<stage>.bicepparam (Bicep)
+  platform.yaml         # the platform profile the platform team would have written
   *.tf, *.tfvars        # the Terraform render, one concern per file
   tests/*.tftest.hcl    # plan-only, platform mocked, naming provider real - one
                         # assert per spec decision, checked by check_render_coverage.py
+  tests/*.armtest.yaml  # the Bicep tests: one entry per decision against the compiled
+                        # ARM, run by run_arm_tests.py, counted by the same coverage check
   bicep/main.bicep      # the Bicep render of the same spec
   bicep/main.bicepparam # its parameters - the same values as terraform.tfvars
+  bicep/bicepconfig.json # symbolicNameCodegen on, so the tests can address resources by name
 ```
 
 ## Running one
 
 ```powershell
 cd examples/private-storage-on-platform
-terraform init
+terraform init          # a real root adds -backend-config="key=invoicing/production.tfstate"
 terraform fmt -check -recursive
-terraform validate
+terraform validate      # terraform plan -var-file=environments/production.tfvars needs credentials
 terraform test
 python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
+python3 ../../plugins/infrastructure-as-skills/core/iac-authoring/scripts/export_decisions.py ./infra-spec.yaml --language de
 
 bicep build --stdout bicep/main.bicep > $null
-bicep build-params bicep/main.bicepparam --stdout > $null
+bicep build-params bicep/main.staging.bicepparam --stdout > $null   # one per resolved stage
 bicep lint bicep/main.bicep
+
+cd ../greenfield-telemetry
+bicep build --stdout bicep/main.bicep > $null && bicep lint bicep/main.bicep
+python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/run_arm_tests.py ./infra-spec.yaml
+python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
 ```
 
-Needs the `hashicorp/azurerm` and `LemurDaniel/naming` providers from the registry, and
-the Bicep CLI. No credentials: the tests mock `azurerm`, and nothing plans or what-ifs
-against a subscription. The lock file is not committed, so `init` resolves the current
-`~> 5.0` / `~> 1.0` — if a render stops validating after a provider release, that is a
-finding for the rendering reference, not for the example.
+Needs the AVM module and the `azurerm`, `azapi`, `modtm`, `random` and
+`LemurDaniel/naming` providers from the registry, and the Bicep CLI, which resolves the
+module from `mcr.microsoft.com`. No credentials: the tests mock `azurerm`, `azapi` and
+`modtm`, and nothing plans or what-ifs against a subscription. The lock file is not
+committed, so `init` resolves the current `~> 0.10.0` / `~> 5.0` / `~> 2.11` / `~> 1.0` —
+if a render stops validating after a release, that is a finding for the rendering
+reference, not for the example.
 
 ## The cross-backend diff
 
 The spec design promises that one spec rendered twice differs only where the platforms
-genuinely differ. `private-storage-on-platform` is the first measurement. Every decision
-in the spec lands in both renders with the same value; what differs:
+genuinely differ. `private-storage-on-platform` is the measurement, taken twice: on the
+authored render (2026-10-17) and again on the AVM render (2026-10-18). Every decision in
+the spec lands in both renders with the same value; what differs:
 
 | | Terraform | Bicep | Verdict |
 |---|---|---|---|
-| Private endpoint name | `pep-we-prod-invoicing-blob-01` via the provider's `subname` parameter | same, assembled from vars | **Was a divergence**: the first Terraform render appended `-blob` after the index. Fixed in `terraform.md` |
-| `network_rules` / `networkAcls` with public access off | omitted — the ACL has nothing to filter and a second resource could fight it | present — documents the posture, nothing to conflict with | Genuine, and each reference says why |
-| Role assignments | `role_definition_name` string, optional container `scope` | union-typed `role`, GUID map, account scope | Genuine: Bicep has no name lookup without a registry module |
-| Diagnostics | two settings, account + `blobServices/default` | two settings, `scope:` on the nested resource | Same |
-| Soft delete, versioning | `blob_properties` on the account | nested `blobServices/default` resource | Same decision, different shape — documented in `bicep.md` |
-| Per-endpoint output | map keyed by sub-resource, private IP | array of `{subresource, id}` | Bicep cannot index a resource loop inside a lambda (BCP247) |
+| Private endpoint name | `pep-we-prod-invoicing-blob-01` via the provider's `subname` parameter | same, assembled from vars | **Was a divergence** in the authored render: Terraform appended `-blob` after the index. Fixed in `terraform.md` |
+| `network_rules` / `networkAcls` with public access off | present, `Deny` + `AzureServices` — the module renders it into the body either way | present | **Was a divergence** (omitted on the Terraform side); the module removed it, and the bypass became testable |
+| Role assignments | `role_definition_id_or_name` by name | `roleDefinitionIdOrName` by name, union-typed `role` param | **Was a divergence** (a GUID map on the Bicep side); the module's shared interface removed it |
+| Diagnostics | `diagnostic_settings_storage_account` + `diagnostic_settings_blob` inputs | `diagnosticSettings` + `blobServices.diagnosticSettings` params | Same: the module knows the account emits metrics only |
+| Soft delete, versioning | `blob_properties` input, nested objects | `blobServices` param, flat `…Enabled` / `…Days` pairs | Same decision, different shape — documented in each reference |
+| Per-endpoint output | map keyed by sub-resource from the module's `private_endpoints` output | the module's `privateEndpoints` array | Shape of each module's output |
 | Naming inputs | the provider reads `naming.yaml` at plan time | `locationCodes` holds only the regions the deployment uses | Inherent: a new region is a regenerated var block, see `naming.md` |
-| Provider-level | `storage_use_azuread = true` | — | Inherent: no provider in Bicep; `az` authenticates with Entra ID anyway |
-| Subscription | `var.subscription_id` on the provider | the deployment's scope on the command line | Inherent |
-| Soft delete of the workspace, deletion locks | `features {}` | — | Not applicable here |
+| Provider-level | `storage_use_azuread = true`; `azapi`, `modtm`, `random` declared for the module | — | Inherent: no provider in Bicep; `az` authenticates with Entra ID anyway |
+| Subscription, resource group | `var.subscription_id` on both providers; the group read by `data` and passed as `parent_id` | the deployment's scope on the command line | Inherent |
+| Telemetry | `enable_telemetry = true` | `enableTelemetry: true` | Same, written on both calls |
+
+Two of the three genuine divergences the authored render had were the module's doing:
+the modules implement the same interface on both sides, which is the argument for AVM
+first, measured.
 
 ## Rules
 

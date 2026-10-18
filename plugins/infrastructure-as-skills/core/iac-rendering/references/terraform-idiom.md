@@ -15,6 +15,10 @@ outputs.tf
 providers.tf            # required_providers + the naming provider block
 locals.tf               # tags, derived values
 infra-spec.yaml
+environments/
+  development.tfvars    # one file per stage in context.environments - the per-stage values
+  test.tfvars
+  production.tfvars
 tests/
   storage.tftest.hcl
 ```
@@ -250,14 +254,33 @@ resource "azurerm_storage_account" "this" {
 Comment the ones whose reason is not obvious from the name, and keep that comment to the
 *why* — the `how` is the line above it.
 
-## The context values
+## The context values and the stage files
 
-`context:` and the refs under `deployment:` are variables, and their stated values go into
-`terraform.tfvars` beside the code — the subscription, the resource group, the referenced
-network and workspace by name. Not into variable `default`s: a default makes the value
-look optional, and the next environment then inherits production's subscription by
-forgetting to set it. The tfvars file is committed; it holds names and ids, never a
-secret.
+`context:` and the refs under `deployment:` are variables, and so is every decision whose
+question is `per_environment` or whose spec value is a map keyed by stage. Their values go
+into **one file per stage**, `environments/<stage>.tfvars` — the subscription, the resource
+group, the referenced network and workspace by name, the address ranges, the cost knobs
+(`replication`, `log_retention_days`) that `non_production_savings` sets cheaper outside
+production. Not into variable `default`s: a default makes the value look optional, and the
+next stage then inherits production's subscription by forgetting to set it. Not as
+literals in the template: a literal range is the one that is wrong in every stage but
+one. The files are committed; they hold names and ids, never a secret. A stage whose
+values are still `open:` in the spec gets **no file** rather than a file with guessed
+values.
+
+One state per stage, chosen at init by the backend key and never by a workspace — a
+workspace is invisible in the file tree and the thing a pipeline forgets to select:
+
+```bash
+terraform init -backend-config="key=<workload>/<stage>.tfstate"
+terraform plan -var-file=environments/<stage>.tfvars
+```
+
+The backend block (its storage account and container) is the consuming repository's;
+the render adds the key convention as a comment in `providers.tf` and never a backend
+with values of its own. The test file plans a non-production stage once besides the
+decisions' runs: the name carries the stage's code, the savings knob lands where it
+renders.
 
 ## Tests
 

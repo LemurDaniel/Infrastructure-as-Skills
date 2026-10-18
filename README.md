@@ -175,7 +175,8 @@ reads by path. A declared path that does not exist fails to load the plugin, whi
 [`examples/`](examples/README.md) holds complete runs — request, spec, render, tests — as
 the reference for what a good output looks like. `private-storage-on-platform` is the
 first: one storage account on a referenced platform, rendered to Terraform and to Bicep
-from the one spec, with the diff between the two written down.
+from the one spec, with the diff between the two written down. `greenfield-telemetry` is
+the second: three resources, nothing referenced, the `create` branches, in Bicep.
 
 ## Install
 
@@ -199,9 +200,11 @@ matching skill triggers.
 
 Early, and the shape matters more than the coverage right now. One interview has been run
 end to end; it produced a spec, and the spec is honest about what it could not resolve.
-One spec (`private-storage-on-platform`) has been rendered to both targets — Terraform
-against `azurerm` 5.10 and `LemurDaniel/naming` 1.0 with plan-only tests, Bicep compiled
-and linted with CLI 0.48 — and the two renders diffed. Nothing has been applied.
+Two specs have been rendered on the Azure Verified Modules: `private-storage-on-platform`
+to both targets (Terraform with plan-only tests against mocked `azapi`, Bicep compiled and
+linted) and diffed between them; `greenfield-telemetry` — three resources, created
+network, private DNS zone and workspace — to Bicep, with tests against the compiled ARM.
+Nothing has been applied.
 
 - [x] Plugin skeleton, marketplace manifest, grouped layout
 - [x] Shared contract: spec format, question-set format, the interview protocol
@@ -210,16 +213,22 @@ and linted with CLI 0.48 — and the two renders diffed. Nothing has been applie
 - [x] Rendering: naming interfaces, module layout and idiom per target
 - [x] Azure Verified Modules as the primary rendering: the contract, the shared
       interfaces, decision → module input per resource for both targets
-- [ ] The example re-rendered on AVM, with its tests — the authored render is what is
-      committed today
+- [x] The example re-rendered on AVM, both targets, with its tests — which settled the
+      test contract with a module in the middle
 - [x] Guardrails: the rules every question set takes its defaults from, shared with
       `Infrastructure-by-Skill`
 - [x] Three resources: `storage-account`, `virtual-network`, `log-analytics-workspace`
 - [x] `check_spec.py` — validates a spec against the contract, and separately whether it
       is applyable at all
-- [x] `check_render_coverage.py` — every spec decision asserted by the rendered Terraform
-      tests, or marked not-testable with a reason. Bicep has no equivalent yet
-- [ ] **`check_question_set.py`** — still referenced by the docs and not written
+- [x] `check_render_coverage.py` — every spec decision asserted by the rendered tests, or
+      marked not-testable with a reason; Terraform (`terraform test`) and Bicep
+      (`run_arm_tests.py` against the compiled ARM) alike
+- [x] `check_question_set.py` — every question set parsed and checked against the format:
+      enum defaults, reference targets, resolution fields, `audience`
+- [x] The customer interview: every question names its audience, the customer answers six
+      requirement questions in their words, the technical decisions are derived from them,
+      platform facts come from `platform.yaml`, and the spec renders as a decision document
+      (`export_decisions.py`) in the customer's language
 - [ ] **Reference pattern skill** — `patterns/` is empty, so composition is specified but
       unproven
 - [x] A rendered spec: storage account on a referenced platform, Terraform, validated and

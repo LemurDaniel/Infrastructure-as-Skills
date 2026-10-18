@@ -7,8 +7,10 @@ Read-only. Checks what the contract in references/spec.md promises:
      spec.target.
   2. Every decision value carries a known `source`. A value without one is a
      settings dump entry, not a recorded decision.
-  3. `overridden` carries a reason, and `forced` carries `forced_by`. An
-     undocumented exception reads as an accident a year later.
+  3. `overridden` carries a reason, `forced` carries `forced_by`, and
+     `requirement` carries `derived_from: deployment.<id>`. An undocumented
+     exception reads as an accident a year later; a derived value without its
+     requirement cannot be explained to the customer.
   4. `assumed` values and `open:` entries are reported, with what they block.
      A spec holding either is valid - it is not applyable, which is the
      distinction the exit code makes.
@@ -18,6 +20,9 @@ Read-only. Checks what the contract in references/spec.md promises:
   6. composition: unique module ids, every resource contained exactly once,
      `needs` pointing at declared modules and acyclic, `implementation`
      being avm|authored|reuse rather than a module path.
+  7. Stages: context.environments is a non-empty list; a value that is a map
+     keyed by stage names uses only those stages, and a stage it leaves out
+     is named by an open entry (`environments:`) for that key.
 
 Needs PyYAML (pip install pyyaml). Without it the script says so and exits 2
 rather than pretending the file is fine.
@@ -33,7 +38,7 @@ import argparse
 import os
 import sys
 
-KNOWN_SOURCES = ['stated', 'asked', 'pattern', 'deployment', 'forced', 'assumed', 'default', 'carried', 'overridden']
+KNOWN_SOURCES = ['stated', 'asked', 'platform', 'pattern', 'requirement', 'deployment', 'forced', 'assumed', 'default', 'carried', 'overridden']
 KNOWN_BLOCKS = ['render', 'plan', 'apply']
 
 # Attribute spellings that belong to a backend, not to a decision. Matched
@@ -44,6 +49,36 @@ BACKEND_SPELLINGS = [
     'allowBlobPublicAccess', 'publicNetworkAccess', 'allowSharedKeyAccess',
     'supportsHttpsTrafficOnly', 'minimumTlsVersion', 'requireInfrastructureEncryption',
 ]
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PLUGIN = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
+
+
+def load_question_index(yaml):
+    """(resource or 'deployment', question id) -> question dict, from the plugin's sets."""
+    index = {}
+
+    def add(owner, doc):
+        for g in (doc.get('groups') or []) if isinstance(doc, dict) else []:
+            for q in (g.get('questions') or []):
+                if isinstance(q, dict) and q.get('id'):
+                    index[(owner, q['id'])] = q
+    dep = os.path.join(HERE, '..', 'questions', 'deployment.yaml')
+    if os.path.isfile(dep):
+        with open(dep, encoding='utf-8') as f:
+            add('deployment', yaml.safe_load(f))
+    res_root = os.path.join(PLUGIN, 'resources')
+    if os.path.isdir(res_root):
+        for fam in os.listdir(res_root):
+            fam_dir = os.path.join(res_root, fam)
+            if os.path.isdir(fam_dir):
+                for res in os.listdir(fam_dir):
+                    qs = os.path.join(fam_dir, res, 'questions.yaml')
+                    if os.path.isfile(qs):
+                        with open(qs, encoding='utf-8') as f:
+                            add(res, yaml.safe_load(f))
+    return index
+
 
 COLORS = {'cyan': '36', 'green': '32', 'red': '31', 'yellow': '33', 'gray': '90'}
 USE_COLOR = sys.stdout.isatty() and not os.environ.get('NO_COLOR')
@@ -111,21 +146,56 @@ def main():
     target = get(head, 'target')
     if target and target not in ('terraform', 'bicep', 'api'):
         errors.append(f"spec.target '{target}' is not terraform, bicep or api")
+    environments = get(get(spec, 'context'), 'environments')
+    if not isinstance(environments, list) or not environments or not all(isinstance(e, str) for e in environments):
+        errors.append("context.environments is missing or not a list of stage names - the stack the code is deployed through, [development, test, production] by default")
+        environments = []
+    if 'environment' in (get(spec, 'context') or {}):
+        errors.append("context.environment is the old single-stage field; the stack is context.environments")
     if not errors:
-        ok(f"envelope - id '{get(head, 'id')}', target '{target}'")
+        ok(f"envelope - id '{get(head, 'id')}', target '{target}', stages {environments}")
+
+    # open entries naming stages, keyed by decision path
+    open_stages = {}
+    for o in (get(spec, 'open') or []):
+        if isinstance(o, dict) and o.get('key'):
+            for e in (o.get('environments') or []):
+                open_stages.setdefault(str(o['key']), set()).add(e)
+    stage_maps = 0
+    try:
+        questions = load_question_index(yaml)
+    except (yaml.YAMLError, OSError):
+        questions = {}
 
     # --- 2-5. walk every decision ------------------------------------------
     decisions = 0
     assumed = []
 
     def walk(node, path):
-        nonlocal decisions
+        nonlocal decisions, stage_maps
         # A decision is a map carrying a `value`. Anything else is a container.
         if not isinstance(node, dict):
             return
         if 'value' in node:
             decisions += 1
             src = node.get('source')
+            v = node['value']
+            if environments and isinstance(v, dict) and v and all(k in environments for k in v):
+                stage_maps += 1
+                missing = [e for e in environments if e not in v]
+                for e in missing:
+                    if e not in open_stages.get(path, set()):
+                        errors.append(f"{path} has no value for stage '{e}' and no open entry naming it")
+                np = node.get('non_production')
+                if np is not None and np not in ('default', 'stated'):
+                    errors.append(f"{path}.non_production '{np}' is not default or stated")
+                parts = path.split('.')
+                owner = 'deployment' if parts[0] == 'deployment' else (parts[1] if parts[0] == 'resources' and len(parts) > 1 else None)
+                q = questions.get((owner, parts[-1]))
+                if q is not None and not q.get('per_environment') and 'non_production_default' not in q and src != 'overridden':
+                    errors.append(f"{path} is split by stage, but its question is neither per_environment nor a cost knob - one value for every stage, or the user's departure recorded as overridden")
+            elif environments and isinstance(v, dict) and any(k in environments for k in v):
+                errors.append(f"{path} mixes stage names and other keys in its value")
             if not src:
                 errors.append(f"{path} has a value but no source. Strip provenance and the spec is a settings dump.")
             elif src not in KNOWN_SOURCES:
@@ -136,6 +206,9 @@ def main():
             elif src == 'forced':
                 if 'forced_by' not in node:
                     errors.append(f"{path} is forced with no forced_by. The chain is the point - what forced it?")
+            elif src == 'requirement':
+                if not str(node.get('derived_from', '')).startswith('deployment.'):
+                    errors.append(f"{path} is a requirement-derived value with no derived_from: deployment.<id>. The customer's answer is the point - which one?")
             elif src == 'assumed':
                 assumed.append(path)
             return
@@ -151,10 +224,18 @@ def main():
         if has(spec, section):
             walk(spec[section], section)
 
+    # context values that are per-stage maps follow the same rule
+    for key, v in (get(spec, 'context') or {}).items():
+        if key != 'environments' and environments and isinstance(v, dict) and v and all(k in environments for k in v):
+            stage_maps += 1
+            for e in environments:
+                if e not in v and e not in open_stages.get(f"context.{key}", set()):
+                    errors.append(f"context.{key} has no value for stage '{e}' and no open entry naming it")
+
     if decisions == 0:
         warnings.append('no decisions found - deployment:, resources: and wiring: are all empty or absent')
     else:
-        ok(f"{decisions} decision(s), each with a known source")
+        ok(f"{decisions} decision(s), each with a known source" + (f", {stage_maps} per-stage map(s)" if stage_maps else ''))
 
     # --- 6. composition ----------------------------------------------------
     if has(spec, 'composition'):
@@ -218,6 +299,9 @@ def main():
             b = get(o, 'blocks')
             if not k:
                 errors.append('open: an entry has no key')
+            for e in (get(o, 'environments') or []):
+                if environments and e not in environments:
+                    errors.append(f"open.{k} names stage '{e}', which context.environments does not have")
             if not b:
                 errors.append(f"open.{k} has no blocks: say what it stops - render, plan or apply")
             elif b not in KNOWN_BLOCKS:
