@@ -17,7 +17,8 @@ idiom, a reviewer sees what `source:` buys.
 <case>/
   request.md            # the user's words, verbatim
   infra-spec.yaml       # the interview's output - the artefact everything else follows from
-  naming.yaml           # the convention, a full copy of naming.default.yaml
+  infra-decisions.md    # the spec as the customer reads it, rendered by export_decisions.py
+  naming.yaml           # the convention, a full copy of naming.default.yaml - Terraform only
   platform.yaml         # the platform profile the platform team would have written
   *.tf, *.tfvars        # the Terraform render, one concern per file
   tests/*.tftest.hcl    # plan-only, platform mocked, naming provider real - one
@@ -38,6 +39,7 @@ terraform fmt -check -recursive
 terraform validate
 terraform test
 python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
+python3 ../../plugins/infrastructure-as-skills/core/iac-authoring/scripts/export_decisions.py ./infra-spec.yaml --language de
 
 bicep build --stdout bicep/main.bicep > $null
 bicep build-params bicep/main.bicepparam --stdout > $null

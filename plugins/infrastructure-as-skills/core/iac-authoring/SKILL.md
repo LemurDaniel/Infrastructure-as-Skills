@@ -333,32 +333,56 @@ to see it to disagree with it, and the ones they never look at cost one glance.
 Write `infra-spec.yaml` into the user's repository first — the IaC root, or `infra/` —
 and validate it with `check_spec.py`.
 
-**Write `naming.yaml` beside it in the same step**, when the directory has none: a full
-copy of [naming.default.yaml](../iac-rendering/references/naming.default.yaml), with any
-departure the user stated applied to it. It belongs to the spec, not to the code — the
-names in the diagram and every later render come from it, and a run that stops after the
-spec (the user says "noch nicht") must still leave the convention in the repository.
-An existing `naming.yaml` is left untouched. Doing that before any code is not bookkeeping: it
-forces the decisions to be expressible in the backend-neutral vocabulary, and a decision
-that will not fit is usually one that absorbed a backend's spelling.
+**For a Terraform target, write `naming.yaml` beside it in the same step**, when the
+directory has none: a full copy of
+[naming.default.yaml](../iac-rendering/references/naming.default.yaml), with any departure
+the user stated applied to it. The provider reads it at plan time, so it belongs to the
+spec, not to the code — the names in the diagram and every later render come from it, and
+a run that stops after the spec (the user says "noch nicht") must still leave the
+convention in the repository. An existing `naming.yaml` is left untouched.
 
-Then stop and ask. The spec is a finished artefact on its own, and the two steps after it
-are the user's to start — each one produces files in their repository.
+**For a Bicep target, write none** — nothing in a Bicep deployment reads it; the names are
+`var`s generated into the template from the plugin's convention. Only a stated departure
+(`naming_convention: custom`) is written, as a `naming.yaml` holding the departures alone.
+The rules are in [naming.md](../iac-rendering/references/naming.md#namingyaml-in-the-users-repository--terraform-only).
+
+**Write the decision document in the same step**, in the user's language:
+
+```sh
+python3 <plugin>/core/iac-authoring/scripts/export_decisions.py ./infra-spec.yaml --language de
+```
+
+It renders every decision in the spec as one line in the customer's words
+(`infra-decisions.md` beside the spec): what follows from their answers, with the
+decisions derived from each; what the rules set; what they decided differently; what is
+still open and from whom. It is the Phase 4 account as a file someone can send, and it is
+regenerated from the spec on every later run like the diagram. In customer mode it is the
+artefact the person signs off on; the spec is for the engineer. The script reads the
+question sets' `plain` lines and falls back to English where a line lacks the language,
+and says how many did — translate those in the conversation rather than editing the file.
+
+Then stop and ask. The spec and the document are finished artefacts on their own, and the
+steps after them are the user's to start — each one produces files in their repository.
 
 **First: a diagram?** Ask whether to draw the spec with
 [iac-diagram](../iac-diagram/SKILL.md). Recommend it when someone other than the person in
 the conversation has to sign off, or when the spec holds more than one resource; skip the
-recommendation for a single resource the user clearly understands.
+recommendation for a single resource the user clearly understands. Offer the document as
+Word in the same question, once: the Markdown is already written, the `.docx` is a
+conversion (`pandoc infra-decisions.md -o infra-decisions.docx` where pandoc is on PATH;
+say so and leave the Markdown where it is not).
 
 ```
-Die Spec liegt in infra/infra-spec.yaml. Soll ich daraus ein Diagramm erstellen?
-  - Ja (empfohlen)  -> infra-diagram.drawio.png, zum Prüfen oder Weitergeben
-  - Nein            -> weiter zur Prüfung der Spec
+Die Spec liegt in infra/infra-spec.yaml, die Entscheidungen lesbar in infra/infra-decisions.md.
+Soll ich daraus ein Diagramm erstellen, und das Dokument auch als Word-Datei?
+  - Diagramm, ja (empfohlen)  -> infra-diagram.drawio.png, zum Prüfen oder Weitergeben
+  - Word-Datei, ja            -> infra-decisions.docx neben der Markdown-Datei
+  - Nein                      -> weiter zur Prüfung
 ```
 
 **Second: does it match, and should the code be generated?** Show what the user is
-confirming — the diagram if there is one, otherwise the Phase 4 summary — and ask whether
-it meets the requirements:
+confirming — the diagram if there is one, otherwise the decision document's first two
+sections — and ask whether it meets the requirements:
 
 ```
 Passt das so zu euren Anforderungen?
@@ -485,5 +509,6 @@ Read as needed, not up front:
 | [references/spec.md](references/spec.md) | Writing or reading `infra-spec.yaml` |
 | [references/question-set-format.md](references/question-set-format.md) | Authoring or extending a `questions.yaml` |
 | [references/guardrails.md](references/guardrails.md) | Choosing or justifying any default, or weighing an exception |
+| `scripts/export_decisions.py` | Rendering the spec as `infra-decisions.md`, the customer's decision document |
 | [iac-diagram](../iac-diagram/SKILL.md) | Drawing the spec as `infra-diagram.drawio.png` for the customer |
 | [iac-rendering](../iac-rendering/SKILL.md) | Turning the spec into Terraform or Bicep — naming, layout, idiom |
