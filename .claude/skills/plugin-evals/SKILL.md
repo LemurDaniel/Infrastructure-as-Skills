@@ -143,7 +143,11 @@ that still passes. After reading a run and accepting it:
 python3 .claude/skills/plugin-evals/scripts/show_eval_result.py <scratch>/eval.json --update-baseline
 ```
 
-and commit `baseline.json` with the change it measures. Never update it from a run you
+and commit `baseline.json` with the change it measures.
+
+When a failure is fixed, add an entry to `evals/LEARNINGS.md` first — case, symptom, cause,
+fix, rate after — and commit it with the fix. The baseline says that a rate dropped;
+the entry says why, including a grader that was wrong rather than the output. Never update it from a run you
 have not read — a bad run written into the baseline hides the regression it carries. A run
 with a harness error is refused as a baseline.
 
