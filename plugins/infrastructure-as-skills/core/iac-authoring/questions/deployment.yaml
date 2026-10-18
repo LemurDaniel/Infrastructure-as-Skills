@@ -23,27 +23,104 @@ groups:
   - id: context
     title: Context
     questions:
-      - id: environment
-        ask: Which environment is this for?
-        type: enum
+      - id: environments
+        ask: Which stages does the system go through? The usual set is development, test and production; a sandbox is one throwaway environment.
+        type: list
         audience: customer
         plain:
-          en: "This is the {value} environment; names, defaults and how strictly they are confirmed follow from it."
-          de: "Das ist die Umgebung {value}; Namen, Vorgaben und wie streng sie bestätigt werden, folgen daraus."
+          en: "The system is deployed in these stages: {value}."
+          de: "Das System wird in diesen Stufen ausgerollt: {value}."
         plain_values:
           development: { en: "development", de: "Entwicklung" }
           test: { en: "test", de: "Test" }
+          qa: { en: "quality assurance", de: "Qualitätssicherung" }
+          uat: { en: "acceptance", de: "Abnahme" }
+          integration: { en: "integration", de: "Integration" }
           staging: { en: "pre-production", de: "Vorproduktion" }
+          preproduction: { en: "pre-production", de: "Vorproduktion" }
           production: { en: "live operation", de: "Echtbetrieb" }
-          sandbox: { en: "sandbox", de: "Sandbox" }
+          sandbox: { en: "sandbox, one throwaway environment", de: "Sandbox, eine Wegwerf-Umgebung" }
           demo: { en: "demo", de: "Demo" }
+          hotfix: { en: "hotfix", de: "Hotfix" }
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
-        required: true
+        default: [development, test, production]
         why: >
-          The first question of any run. It drives every rendered name, the
-          strictness of several defaults, and which questions are surfaced for
-          confirmation rather than applied silently.
-        renders: context.environment - read by every resource via from_context
+          The first decision of any run, and the one most often left unsaid: one
+          code base is deployed through a stack of stages, and nearly everyone
+          starts in development. So the stack development, test, production is
+          the default, and a request that names only "production" is read as the
+          production stage of that stack, not as a single environment - the
+          customer changes it only by saying so ("nur prod", "eine Sandbox zum
+          Ausprobieren"). `[sandbox]` is the other shape: one throwaway
+          environment, no stack. Every stage renders from the same code with its
+          own parameter file (environments/<stage>.tfvars, main.<stage>.bicepparam)
+          and its own state; a value that differs per stage (per_environment:
+          true on its question) is a parameter whose value lives in that file,
+          never a literal in the template. Decisions are the same in every stage
+          (parity), except what non_production_savings relaxes.
+        renders: >
+          context.environments; one parameter file and one state per stage; the
+          environment code in every name comes from the stage's file
+
+      - id: stage_isolation
+        ask: Are the stages separated by subscription, or do they share one subscription and differ by resource group?
+        type: enum
+        audience: platform
+        plain:
+          en: "Each stage lives in {value}."
+          de: "Jede Stufe liegt in {value}."
+        plain_values:
+          subscription: { en: "its own subscription, so the stages cannot touch each other's resources, budgets or permissions", de: "einer eigenen Subscription; die Stufen können sich gegenseitig weder Ressourcen noch Budgets noch Berechtigungen anfassen" }
+          resource_group: { en: "its own resource group within one shared subscription", de: "einer eigenen Ressourcengruppe in einer gemeinsamen Subscription" }
+        values: [subscription, resource_group]
+        default: subscription
+        depends_on: { question: environments, not_equals: [sandbox] }
+        why: >
+          The boundary between stages is the boundary between a test that goes
+          wrong and production. A subscription per stage is the landing-zone
+          answer and the default: quotas, budgets, policy assignments, RBAC and
+          the blast radius of a bad apply all stop at the subscription, and a
+          landing zone platform vends subscriptions for exactly this. One shared
+          subscription with a resource group per stage is the lesser form, for an
+          organisation that cannot get subscriptions vended - it keeps the
+          resources apart and little else, since budgets, quotas and most
+          policies are subscription-scoped. Either way the subscription and the
+          resource group are per-stage values that the stage's parameter file
+          carries; this decision says which of the two actually separates the
+          stages, so a reviewer knows what a wrong stage file can reach.
+        renders: >
+          terraform: subscription_id per environments/<stage>.tfvars and one state
+          per stage; bicep: the deployment scope per stage on the command line;
+          both: the resource group name per stage
+
+      - id: non_production_savings
+        ask: Should the non-production stages run cheaper than production?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Development and test stages {value}."
+          de: "Entwicklungs- und Teststufen {value}."
+        plain_values:
+          enabled: { en: "run cheaper than production: less redundancy, shorter log retention - never less security", de: "laufen günstiger als die Produktion: weniger Redundanz, kürzere Protokoll-Aufbewahrung, nie weniger Sicherheit" }
+          disabled: { en: "are built identically to production", de: "werden identisch zur Produktion gebaut" }
+        values: [enabled, disabled]
+        default: enabled
+        depends_on: { question: environments, not_equals: [sandbox] }
+        why: >
+          A development stage that keeps three copies of its data in three
+          datacenters and ninety days of logs pays production prices for
+          nothing. `enabled` lets a question with `non_production_default` take
+          that value in every stage but production - replication, log retention -
+          and nothing else: security, exposure, identity and data-protection
+          decisions carry no such default, and the check refuses one, because a
+          development stage that is less secure than production is where the
+          breach happens and where the parity the stack exists for breaks. A
+          customer who wants the stages identical says so, and that statement
+          wins here as everywhere; `disabled` is also the engineer's answer for a
+          stage used as a production-like rehearsal.
+        renders: >
+          per stage: the question's non_production_default in every stage but
+          production when enabled; recorded per stage in the spec's value map
 
       - id: location
         ask: Which Azure region?
@@ -114,6 +191,7 @@ groups:
           de: "Das System wird in die Subscription {value} ausgerollt."
         ref: subscription
         parameterized: true
+        per_environment: true
         why: >
           Always an input variable of the template, never asked and never
           guessed. The same rendered code deploys into any subscription without
@@ -129,6 +207,7 @@ groups:
           de: "Alle Teile liegen in der bestehenden Ressourcengruppe {value}."
         ref: resource_group
         parameterized: true
+        per_environment: true
         why: >
           Always an input variable of the template, never asked. Expected, not
           created - every question set here declares that as a boundary. A
@@ -510,6 +589,7 @@ groups:
         ref: virtual_network
         required: true
         depends_on: { question: network_ownership, equals: reference }
+        per_environment: true
         why: >
           Read by name and resource group, never by a hardcoded resource id - an id
           pins a subscription into the template. A pattern skill normally supplies
@@ -525,6 +605,7 @@ groups:
           de: "Das neue Netz nutzt den Adressbereich {value}, zugewiesen von der Adressverwaltung."
         required: true
         depends_on: { question: network_ownership, equals: create }
+        per_environment: true
         why: >
           Cannot be defaulted: an overlapping CIDR is invisible until the first
           peering and expensive to change afterwards, because every subnet in it has
@@ -541,6 +622,7 @@ groups:
         ref: subnet
         required: true
         depends_on: { question: network_ownership, equals: reference }
+        per_environment: true
         why: >
           One subnet carries the deployment's private endpoints, so no resource
           question set has to ask. Referenced, like the network around it.
@@ -555,6 +637,7 @@ groups:
           de: "Private Anbindungen bekommen ein eigenes Subnetz, {value}."
         required: true
         depends_on: { question: network_ownership, equals: create }
+        per_environment: true
         why: >
           With the deployment owning the network there is nothing to reference yet -
           the subnet is generated, so what is needed is its prefix out of the
@@ -633,6 +716,7 @@ groups:
         ref: resource_group
         required: true
         depends_on: { question: private_dns_records, equals: deployment }
+        per_environment: true
         why: >
           Referencing a zone needs its subscription and resource group, and in a
           hub-and-spoke platform that is the hub's, not the workload's - so it is
@@ -685,6 +769,7 @@ groups:
         ref: log_analytics_workspace
         required: true
         depends_on: { question: observability_ownership, equals: reference }
+        per_environment: true
         why: >
           Every resource routes diagnostics somewhere, and a resource with no
           setting is invisible exactly when someone needs to see it. Resolved here,
@@ -704,6 +789,7 @@ groups:
           en: "Logs are kept for {value} days."
           de: "Protokolle werden {value} Tage aufbewahrt."
         default: 30
+        non_production_default: 30
         depends_on: { question: observability_ownership, equals: create }
         why: >
           The cost guard, and therefore decided here rather than per workspace: a
@@ -712,7 +798,10 @@ groups:
           where the retention line item starts - the first 31 days are included in
           the ingestion price. Longer retention is an audit or regulatory
           requirement rather than an operational one, and it is charged per
-          gigabyte per month for as long as it is set.
+          gigabyte per month for as long as it is set. A longer retention the
+          customer states applies to production; the non-production stages keep
+          30 days while non_production_savings is enabled, since nobody audits a
+          test stage's logs.
         renders: azurerm_log_analytics_workspace.retention_in_days / properties.retentionInDays
 
       - id: daily_quota_gb

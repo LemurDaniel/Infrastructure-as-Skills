@@ -68,6 +68,25 @@ Where an organisation has no landing zone platform, that is `landing_zone: stand
 answer, not an exception, so its consequences are pre-answers rather than `overridden`
 values.
 
+### Stages
+
+One code base is deployed through a stack of stages — `development`, `test`, `production`
+by default — each from its own parameter file and its own state, and nearly every system
+starts in development; a request that names only production names the production stage
+of that stack. The stages are separated by **subscription** by default, which is what a
+landing zone platform vends and where quotas, budgets, policy and RBAC stop; a resource
+group per stage in one subscription is the lesser form for an organisation that cannot
+get subscriptions. What differs per stage by nature — address ranges, subnet prefixes,
+the subscription, the resource group, a referenced hub or workspace — is a parameter with
+its value in the stage's file, never a literal in the template.
+
+Decisions are the same in every stage: parity is what the stack exists for. The one
+relaxation is cost — replication and log retention take a cheaper value in every stage
+but production while `non_production_savings` is enabled — and it never touches
+security, exposure, identity, DNS or compliance, because a development stage that is less
+secure than production is where the breach happens. A customer who wants the stages
+identical says so.
+
 ## 1. Naming and tags
 
 Never hardcode a resource name, and never hand-write a tag per resource.

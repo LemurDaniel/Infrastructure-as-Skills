@@ -30,7 +30,12 @@ a regex cannot see - what references/question-set-format.md promises:
      line (`en` required, `{value}` optional), and `plain_values`, where
      present, maps every key to such a mapping and names only values the
      question can take - the decision document reads both.
-  8. Unknown fields are reported: a misspelt `default` is a question that is
+  8. Stages: `per_environment` is a bool, and a question inheriting a
+     per-stage deployment question through `from_deployment` is per-stage
+     too; `non_production_default` is of the question's kind, within its
+     values, and never in a security, networking, identity, access, DNS,
+     compliance or posture group - a cheaper stage is never a less secure one.
+  9. Unknown fields are reported: a misspelt `default` is a question that is
      silently asked every run.
   8. With --platform <file>: the platform profile's keys are deployment-set
      questions with audience platform, enum values are within `values`, and a
@@ -66,8 +71,10 @@ RESOLUTION_FIELDS = ['required', 'default', 'from_deployment', 'parameterized', 
 KNOWN_FIELDS = {
     'id', 'ask', 'type', 'values', 'default', 'required', 'parameterized', 'confirm_in',
     'why', 'renders', 'depends_on', 'ref', 'from_deployment', 'forced_when', 'from_context',
-    'audience', 'plain', 'plain_values', 'derived_from',
+    'audience', 'plain', 'plain_values', 'derived_from', 'per_environment', 'non_production_default',
 }
+# Groups whose decisions may never be relaxed for a non-production stage.
+NO_SAVINGS_GROUPS = {'security', 'networking', 'identity', 'access', 'dns', 'compliance', 'posture', 'modules', 'subnet_policy'}
 DERIVED_KEYS = {'question', 'map'}
 KNOWN_TOP = {'schema_version', 'scope', 'resource', 'title', 'naming', 'boundaries', 'groups'}
 
@@ -375,6 +382,26 @@ def check_set(path, doc, deployment, rel):
                 if off:
                     err(f"{where}: confirm_in names environment(s) the deployment set does not know: {off}")
 
+        # --- 8. stages
+        pe = q.get('per_environment')
+        if pe is not None and not isinstance(pe, bool):
+            err(f"{where}: per_environment must be true or false")
+        if fd is not None and deployment is not None and fd in dep_ids:
+            if dep_ids[fd].get('per_environment') and not pe:
+                err(f"{where}: inherits '{fd}', which is per_environment, so it is per-stage too - mark it")
+            if pe and not dep_ids[fd].get('per_environment'):
+                wrn(f"{where}: per_environment, but the inherited '{fd}' is not - one value for all stages there")
+        npd = q.get('non_production_default')
+        if npd is not None:
+            if gid in NO_SAVINGS_GROUPS:
+                err(f"{where}: non_production_default in group '{gid}' - a non-production stage is never less secure, exposed or differently governed than production")
+            if qtype and not kind_matches(qtype, npd):
+                err(f"{where}: non_production_default {npd!r} is not a {qtype}")
+            if qtype == 'enum' and isinstance(values, list) and npd not in values:
+                err(f"{where}: non_production_default '{npd}' is not in values {values}")
+            if pe:
+                err(f"{where}: non_production_default on a per_environment question - the stage file carries the value, not a default")
+
         # --- 7. plain
         pl = q.get('plain')
         if pl is None:
@@ -443,15 +470,25 @@ def check_platform(doc, deployment, rel):
             err(f"'{k}' has audience {q.get('audience')}, not platform - it is not the platform's to fix")
             continue
         t, values = q.get('type'), q.get('values')
-        if t == 'enum' and isinstance(values, list) and v not in values:
-            err(f"'{k}': '{v}' is not in {values}")
-        elif t == 'ref':
-            if isinstance(v, str) and v.startswith('/subscriptions/'):
-                err(f"'{k}' is a resource id; the deployment set takes a name and resource group, so no subscription is pinned")
-            elif isinstance(v, dict) and 'name' not in v and 'subscription_id' not in v:
-                err(f"'{k}' names neither a name nor a subscription_id")
-        elif t in ('string', 'int', 'bool', 'list') and not kind_matches(t, v):
-            err(f"'{k}': {v!r} is not a {t}")
+        stages = (dep.get('environments') or {}).get('values') or []
+        # A per-stage question may carry a map keyed by stage; check each stage's value.
+        if q.get('per_environment') and isinstance(v, dict) and v and all(s in stages for s in v):
+            items = list(v.values())
+        elif isinstance(v, dict) and any(s in stages for s in v):
+            err(f"'{k}' mixes stage names and other keys")
+            continue
+        else:
+            items = [v]
+        for item in items:
+            if t == 'enum' and isinstance(values, list) and item not in values:
+                err(f"'{k}': '{item}' is not in {values}")
+            elif t == 'ref':
+                if isinstance(item, str) and item.startswith('/subscriptions/'):
+                    err(f"'{k}' is a resource id; the deployment set takes a name and resource group, so no subscription is pinned")
+                elif isinstance(item, dict) and 'name' not in item and 'subscription_id' not in item:
+                    err(f"'{k}' names neither a name nor a subscription_id")
+            elif t in ('string', 'int', 'bool', 'list') and not kind_matches(t, item):
+                err(f"'{k}': {item!r} is not a {t}")
     return errors
 
 

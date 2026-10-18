@@ -91,6 +91,8 @@ groups:
 | `audience` | yes | Who answers it: `customer`, `engineer` or `platform`. See below. |
 | `plain` | yes | One line per language (`en` required, `de` and others optional) saying what the decision means to the customer, with `{value}` where the value goes. Read by the decision document. See below. |
 | `plain_values` | no | For an enum, list or bool: the customer's words for each value, per language — what `{value}` becomes. Keys are the question's values. |
+| `per_environment` | no | `true` means the value differs per stage: it renders as a parameter whose value lives in each stage's parameter file, never as a literal in the template, and the spec holds a map keyed by stage. See *Stages*. |
+| `non_production_default` | no | The value every stage but production takes while `deployment.non_production_savings` is enabled. Cost knobs only: refused in the security, networking, identity, access, DNS, compliance and posture groups. |
 | `derived_from` | no | `{ question: <deployment id>, map: { <answer>: <value> } }` — the value follows from a customer's answer in the deployment set's `requirements` group, mapped through this table. Mutually exclusive with `default`, `required` and `from_deployment`. See below. |
 
 ## Who answers: `audience`
@@ -138,6 +140,30 @@ required, because the document falls back to it and says so; the plugin's own se
 `de` as well. A line without `{value}` is fine where the value is implied (a `required`
 reference); a bool or enum without `plain_values` prints the raw value, which is rarely
 what a customer should read.
+
+## Stages: `per_environment` and `non_production_default`
+
+One code base is deployed through a stack of stages — `context.environments`, default
+`[development, test, production]`, a `[sandbox]` for the throwaway case — each from its
+own parameter file with its own state. Two fields say how a decision behaves across them:
+
+- **`per_environment: true`** marks a value that differs per stage by nature: an address
+  range, a subnet prefix, the subscription and resource group, a referenced hub, subnet or
+  workspace. It is never a literal in the template. The render makes it a parameter and
+  writes each stage's value into that stage's file; the spec holds the values as a map
+  keyed by stage, and a stage nobody could answer for is an `open:` entry naming the stage.
+  A question inheriting a per-stage deployment question through `from_deployment` is
+  per-stage too, and the check says so.
+- **`non_production_default`** is the value every stage but production takes while
+  `deployment.non_production_savings` is enabled (the default): `replication: LRS`,
+  `log_retention_days: 30`. It exists for cost and for nothing else — the check refuses
+  it in the security, networking, identity, access, DNS, compliance and posture groups,
+  because a development stage that is less secure than production is where the breach
+  happens. Everything else is identical in every stage: parity is what the stack is for.
+
+A value the customer states applies to every stage unless they say which; a derived value
+(`derived_from`) is production's, and the non-production stages take the savings default
+where one exists.
 
 ## Requirements, and `derived_from`
 
