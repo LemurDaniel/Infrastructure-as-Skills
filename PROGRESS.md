@@ -135,10 +135,18 @@ Verified Modules first, authored resources second.
   skill wraps rather than re-implements.
 - No render has been applied: neither `terraform plan` nor `what-if` has run against a
   subscription, so the renders are validated, not proven.
-- The eval suite has no committed baseline yet; the first full run writes it. No eval
-  grader checks `implementation` or `module_source` yet. The greenfield graders were
-  corrected on 2026-10-18 (they predated the `standalone` default and expected `corp`
-  with platform DNS); the suite has not run since.
+- **The eval baseline exists** (`evals/baseline.json`, full run of 2026-10-18, $5.44):
+  `greenfield-telemetry` and `private-storage-on-platform` 3/3 on every grader,
+  `vague-public-dev` 78% - two runs split the exposure by stage and none opened the
+  empty role assignments. Both are plugin gaps and both rules were written after that
+  run (posture is one per system, `check_spec.py` now refuses a stage split on a
+  non-stage question; an empty role list with shared keys off is an `open:` entry).
+  The next full run should lift the vague case; accept it with `--update-baseline`
+  after reading it. Four plugin rules came out of the three eval rounds in total: a
+  default is not an assumption, a referenced hub forces the landing zone, a parameter
+  is never open, a stated value holds in every stage. No grader checks
+  `implementation` or `module_source` yet; B6's customer-question graders are not
+  written.
 - Remaining families, in the order `ROADMAP.md` C1 sets: `security` (Key Vault,
   user-assigned identity), `compute` (App Service, Container Apps), `data` (Azure SQL,
   PostgreSQL Flexible), `integration` (Service Bus). Key Vault's Terraform AVM module is
@@ -159,10 +167,10 @@ Verified Modules first, authored resources second.
 
 ## Next
 
-A4, the eval baseline: the suite's three cases now expect the stack, per-stage maps and
-the derived values, and the plugin has never run against the current question sets; run
-it, read the failed runs' specs before touching a grader, commit `baseline.json`. B6's two
-graders (customer questions counted, no Azure vocabulary in them) go in with it. Then
+Re-run the eval suite (full, ~$5) against the two rules written after the baseline and
+accept the run if `vague-public-dev` rises without the other two dropping. Then
 `ROADMAP.md` C1: the `security` family (Key Vault, user-assigned identity) and `compute`
 (App Service, Container Apps), each with `audience`, `plain`, `per_environment` where it
-applies, both rendering references and a diagram icon. A5 waits on the owner's sandbox.
+applies, both rendering references and a diagram icon. B6's two graders and the
+extension run that writes a further stage's file once its open entries are answered stay
+on the list; A5 waits on the owner's sandbox.
