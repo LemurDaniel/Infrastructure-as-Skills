@@ -290,6 +290,50 @@ does not compile. Where Terraform renders `{ for k, pe in … : k => pe.id }`, r
 `[for (sub, i) in subs: { subresource: sub, id: pe[i].id }]` and say so in the
 description — it is one of the asymmetries a port has to carry rather than paper over.
 
+## Tests
+
+A Bicep render ships with its tests, under the same contract as Terraform's
+([terraform-idiom.md](terraform-idiom.md#tests)): one assertion per spec decision, named by
+its key path, or a marker with a reason for what the template cannot show. There is no
+plan without a subscription, but `bicep build` is deterministic and the compiled ARM
+carries every decision — as a module parameter value, or as an ARM expression whose text
+still names the literal. The tests read that JSON: `tests/<name>.armtest.yaml`, run by
+`scripts/run_arm_tests.py`, counted by `scripts/check_render_coverage.py`.
+
+```yaml
+- decision: storage-account.networking.public_network_access
+  path: resources.storageAccount.properties.parameters.publicNetworkAccess.value
+  equals: Disabled
+
+# A value the compiler turned into an expression: match its text.
+- decision: storage-account.observability.diagnostic_workspace
+  path: resources.storageAccount.properties.parameters.diagnosticSettings.value[0].workspaceResourceId
+  matches: "reference\\('workspace'\\)\\.outputs\\.resourceId"
+
+# An absent block is a decision too.
+- decision: storage-account.security.key_management
+  path: resources.storageAccount.properties.parameters.customerManagedKey
+  absent: true
+
+- not_testable: log-analytics-workspace.data_protection.immediate_purge_protection
+  reason: the forceDelete query parameter at deletion time, not a template property
+```
+
+`path` is dotted from the template root, `[n]` indexes a list; one operator per entry —
+`equals`, `contains`, `matches` (a regex over the JSON text of the value) or `absent`.
+`resources.<symbolicName>` needs the template compiled with symbolic names
+(languageVersion 2.0): a `bicepconfig.json` beside the root with
+`"experimentalFeaturesEnabled": { "symbolicNameCodegen": true }` forces it — the
+`greenfield-telemetry` example carries one. An AVM module call compiles to a nested
+deployment whose `properties.parameters.<param>.value` is the decision, which is why most
+paths look alike; a loop (`for`) compiles to a `copy` whose `input` is one expression, so
+the decisions inside it are matched, not equalled.
+
+What the compiled template cannot show: a deletion-time behaviour (`forceDelete`), a
+value only an output or a deployment resolves (an `existing` reference's id), a decision
+recorded in the spec and rendered nowhere (`subnets_expecting_nsg`). Those are
+`not_testable` with the reason, as in Terraform.
+
 ## Before handing over
 
 ```bash
@@ -297,6 +341,8 @@ bicep format main.bicep                       # or: az bicep format
 bicep build --stdout main.bicep > /dev/null   # fails loudly on unknown properties
 bicep build-params main.bicepparam --stdout   # the parameter file against the template
 bicep lint main.bicep
+python3 <plugin>/core/iac-rendering/scripts/run_arm_tests.py ./infra-spec.yaml           # tests/*.armtest.yaml against the compiled ARM
+python3 <plugin>/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml   # every decision asserted or marked
 ```
 
 The CLI is also published as the NuGet package `Azure.Bicep.CommandLine.<rid>` — the

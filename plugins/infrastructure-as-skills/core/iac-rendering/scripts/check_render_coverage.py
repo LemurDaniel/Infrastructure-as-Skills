@@ -9,11 +9,22 @@ makes that a check instead of a claim.
 
 It reads the spec's `resources:` block - every key path
 `<resource>.<group>.<question>` that carries a `value` is a decision - and
-scans the `.tftest.hcl` files beside the spec for the markers the idiom
-prescribes:
+scans the test files beside the spec for the markers each target's idiom
+prescribes. Terraform, in `.tftest.hcl`:
 
     # decision: storage-account.security.min_tls_version
     # not-testable: storage-account.networking.allow_azure_services_bypass - <why>
+
+Bicep, as entries of a `.armtest.yaml` list (run by run_arm_tests.py):
+
+    - decision: storage-account.security.min_tls_version
+      path: ...
+      equals: TLS1_2
+    - not_testable: storage-account.networking.allow_azure_services_bypass
+      reason: <why>
+
+Each kind of test file present is checked on its own: a directory holding
+both must cover every decision in both.
 
 Then:
   1. A decision with neither marker is unasserted. Error.
@@ -75,10 +86,12 @@ def main():
     if not os.path.isdir(tests_dir):
         bad(f"no tests directory at {tests_dir} - a render without tests is not finished")
         return 1
-    test_files = sorted(f for f in os.listdir(tests_dir)
-                        if f.endswith('.tftest.hcl') and os.path.isfile(os.path.join(tests_dir, f)))
-    if not test_files:
-        bad(f"no .tftest.hcl in {tests_dir} - a render without tests is not finished")
+    tf_files = sorted(f for f in os.listdir(tests_dir)
+                      if f.endswith('.tftest.hcl') and os.path.isfile(os.path.join(tests_dir, f)))
+    arm_files = sorted(f for f in os.listdir(tests_dir)
+                       if f.endswith('.armtest.yaml') and os.path.isfile(os.path.join(tests_dir, f)))
+    if not tf_files and not arm_files:
+        bad(f"no .tftest.hcl or .armtest.yaml in {tests_dir} - a render without tests is not finished")
         return 1
 
     # --- read the spec -----------------------------------------------------
@@ -119,66 +132,107 @@ def main():
         return 1
 
     # --- read the markers --------------------------------------------------
-    errors = []
-    asserted = {}   # decision -> file:line
-    marked = {}     # decision -> file:line
+    def read_tf(files):
+        errors, asserted, marked = [], {}, {}
+        for name in files:
+            with open(os.path.join(tests_dir, name), encoding='utf-8') as f:
+                lines = f.read().splitlines()
+            for i, line in enumerate(lines):
+                where = f"{name}:{i + 1}"
 
-    for name in test_files:
-        with open(os.path.join(tests_dir, name), encoding='utf-8') as f:
-            lines = f.read().splitlines()
-        for i, line in enumerate(lines):
-            where = f"{name}:{i + 1}"
+                m = DECISION_RE.match(line)
+                if m:
+                    did = m.group(1)
+                    if did in asserted:
+                        errors.append(f"{did} is asserted twice ({asserted[did]} and {where}); one assert per decision")
+                    asserted[did] = where
+                    # The next non-blank, non-comment line has to open an assert block.
+                    j = i + 1
+                    while j < len(lines) and COMMENT_OR_BLANK_RE.match(lines[j]):
+                        j += 1
+                    if j >= len(lines) or not ASSERT_RE.match(lines[j]):
+                        errors.append(f"{did} at {where} is not followed by an assert block")
+                    continue
 
-            m = DECISION_RE.match(line)
-            if m:
-                did = m.group(1)
-                if did in asserted:
-                    errors.append(f"{did} is asserted twice ({asserted[did]} and {where}); one assert per decision")
-                asserted[did] = where
-                # The next non-blank, non-comment line has to open an assert block.
-                j = i + 1
-                while j < len(lines) and COMMENT_OR_BLANK_RE.match(lines[j]):
-                    j += 1
-                if j >= len(lines) or not ASSERT_RE.match(lines[j]):
-                    errors.append(f"{did} at {where} is not followed by an assert block")
+                m = NOT_TESTABLE_RE.match(line)
+                if m:
+                    did = m.group(1)
+                    reason = (m.group(3) or '').strip()
+                    # The reason may continue on the next comment lines.
+                    j = i + 1
+                    while j < len(lines):
+                        t = COMMENT_TEXT_RE.match(lines[j])
+                        if not t or MARKER_RE.match(lines[j]):
+                            break
+                        reason += ' ' + t.group(1).strip()
+                        j += 1
+                    if not reason:
+                        errors.append(f"{did} at {where} is marked not-testable without a reason after the dash")
+                    if did in marked:
+                        errors.append(f"{did} is marked not-testable twice ({marked[did]} and {where})")
+                    marked[did] = where
+        return errors, asserted, marked
+
+    def read_arm(files):
+        errors, asserted, marked = [], {}, {}
+        for name in files:
+            with open(os.path.join(tests_dir, name), encoding='utf-8') as f:
+                try:
+                    entries = yaml.safe_load(f) or []
+                except yaml.YAMLError as e:
+                    errors.append(f"{name}: YAML does not parse: {e}")
+                    continue
+            if not isinstance(entries, list):
+                errors.append(f"{name}: the test file is a list of entries")
                 continue
+            for i, entry in enumerate(entries, 1):
+                where = f"{name}#{i}"
+                if not isinstance(entry, dict):
+                    errors.append(f"{where} is not a mapping")
+                    continue
+                if 'decision' in entry:
+                    did = str(entry['decision'])
+                    if did in asserted:
+                        errors.append(f"{did} is asserted twice ({asserted[did]} and {where}); one assert per decision")
+                    asserted[did] = where
+                    if not entry.get('path') or not any(k in entry for k in ('equals', 'contains', 'matches', 'absent')):
+                        errors.append(f"{did} at {where} has no path or no operator - a label on nothing")
+                elif 'not_testable' in entry:
+                    did = str(entry['not_testable'])
+                    if not str(entry.get('reason', '')).strip():
+                        errors.append(f"{did} at {where} is marked not_testable without a reason")
+                    if did in marked:
+                        errors.append(f"{did} is marked not_testable twice ({marked[did]} and {where})")
+                    marked[did] = where
+        return errors, asserted, marked
 
-            m = NOT_TESTABLE_RE.match(line)
-            if m:
-                did = m.group(1)
-                reason = (m.group(3) or '').strip()
-                # The reason may continue on the next comment lines.
-                j = i + 1
-                while j < len(lines):
-                    t = COMMENT_TEXT_RE.match(lines[j])
-                    if not t or MARKER_RE.match(lines[j]):
-                        break
-                    reason += ' ' + t.group(1).strip()
-                    j += 1
-                if not reason:
-                    errors.append(f"{did} at {where} is marked not-testable without a reason after the dash")
-                if did in marked:
-                    errors.append(f"{did} is marked not-testable twice ({marked[did]} and {where})")
-                marked[did] = where
+    # --- compare, per kind of test file ------------------------------------
+    errors = []
+    kinds = []
+    if tf_files:
+        kinds.append(('terraform', tf_files, read_tf(tf_files)))
+    if arm_files:
+        kinds.append(('bicep', arm_files, read_arm(arm_files)))
 
-    # --- compare -----------------------------------------------------------
-    covered = 0
-    for d in decisions:
-        a, n = d in asserted, d in marked
-        if a and n:
-            errors.append(f"{d} is both asserted ({asserted[d]}) and marked not-testable ({marked[d]}) - pick one")
-        elif not a and not n:
-            errors.append(f"{d} is neither asserted nor marked not-testable")
-        else:
-            covered += 1
-    for did in list(asserted) + list(marked):
-        if did not in decisions:
-            where = asserted.get(did, marked.get(did))
-            errors.append(f"{did} (marker at {where}) is not a decision in the spec - stale marker")
+    for kind, files, (kind_errors, asserted, marked) in kinds:
+        errors.extend(f"{kind}: {e}" for e in kind_errors)
+        covered = 0
+        for d in decisions:
+            a, n = d in asserted, d in marked
+            if a and n:
+                errors.append(f"{kind}: {d} is both asserted ({asserted[d]}) and marked not-testable ({marked[d]}) - pick one")
+            elif not a and not n:
+                errors.append(f"{kind}: {d} is neither asserted nor marked not-testable")
+            else:
+                covered += 1
+        for did in list(asserted) + list(marked):
+            if did not in decisions:
+                where = asserted.get(did, marked.get(did))
+                errors.append(f"{kind}: {did} (marker at {where}) is not a decision in the spec - stale marker")
 
-    ok(f"{len(decisions)} decision(s) in resources:, {len(asserted)} asserted, {len(marked)} marked not-testable, {len(test_files)} test file(s)")
-    for did in sorted(marked):
-        say(f"  not-testable: {did} ({marked[did]})", 'gray')
+        ok(f"{kind} - {len(decisions)} decision(s) in resources:, {len(asserted)} asserted, {len(marked)} marked not-testable, {len(files)} test file(s)")
+        for did in sorted(marked):
+            say(f"  not-testable: {did} ({marked[did]})", 'gray')
 
     print('-' * 70)
     if errors:
@@ -186,7 +240,7 @@ def main():
         for e in errors:
             say(f"         {e}", 'gray')
         return 1
-    say(f"Every decision covered ({covered}/{len(decisions)}).", 'green')
+    say(f"Every decision covered ({len(decisions)}/{len(decisions)}) in {', '.join(k for k, _, _ in kinds)}.", 'green')
     return 0
 
 

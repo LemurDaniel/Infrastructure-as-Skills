@@ -248,10 +248,13 @@ AVM render (`examples/private-storage-on-platform`, storage module v0.10.0, 2026
 
 `check_render_coverage.py` accepts either an assert or a marker per decision, never both.
 
-Bicep has no test runner in this repo yet (see `PROGRESS.md`); `bicep build` against the
-`br/public` reference is the check, and it resolves the module from the registry, so it
-needs network access to `mcr.microsoft.com`. The compiled ARM carries every decision as
-a parameter value of the nested deployment, which is where a Bicep test would assert.
+Bicep asserts on the compiled ARM ([bicep-idiom.md](bicep-idiom.md#tests)): a module call
+compiles to a nested deployment whose `properties.parameters.<param>.value` is the
+decision, a loop to a `copy` whose expression text names the literal. `bicep build`
+resolves the module from `mcr.microsoft.com`, so the tests need that network access and
+nothing else. Settled by `greenfield-telemetry`: 41 of 43 decisions across three modules
+are observable in the compiled template; the two that are not are a deletion-time
+parameter and a spec-only record.
 
 ## When not to use a module
 

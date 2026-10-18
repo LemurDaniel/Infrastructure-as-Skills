@@ -102,4 +102,5 @@ is spelled. A port that reads as a transliteration has usually lost one of them.
 | [references/bicep-idiom.md](references/bicep-idiom.md) | Target is Bicep |
 | [../iac-authoring/references/spec.md](../iac-authoring/references/spec.md) | Reading the spec you render from |
 | [../iac-authoring/references/guardrails.md](../iac-authoring/references/guardrails.md) | A value in the spec looks wrong and you need the rule behind it |
-| `scripts/check_render_coverage.py` | After rendering: every spec decision asserted or marked, nothing stale |
+| `scripts/run_arm_tests.py` | A Bicep render: its `tests/*.armtest.yaml` against the compiled ARM |
+| `scripts/check_render_coverage.py` | After rendering, either target: every spec decision asserted or marked, nothing stale |
