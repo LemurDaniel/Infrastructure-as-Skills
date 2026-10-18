@@ -24,6 +24,9 @@ groups:
         ask: Which environment is this for?
         type: enum
         audience: engineer
+        plain:
+          en: "Placed in the {value} environment."
+          de: "Liegt in der Umgebung {value}."
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         from_context: true
@@ -35,6 +38,9 @@ groups:
         ask: Which Azure region?
         type: string
         audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
         required: true
         from_context: true
         why: >
@@ -47,6 +53,9 @@ groups:
         ask: Which resource group?
         type: ref
         audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
         ref: resource_group
         required: true
         from_context: true
@@ -64,6 +73,9 @@ groups:
         ask: How long should logs be retained?
         type: int
         audience: engineer
+        plain:
+          en: "Logs are kept for {value} days."
+          de: "Protokolle werden {value} Tage aufbewahrt."
         from_deployment: log_retention_days
         why: >
           Inherited from the deployment set. 30 days covers incident investigation,
@@ -77,6 +89,9 @@ groups:
         ask: Should ingestion be capped per day?
         type: int
         audience: engineer
+        plain:
+          en: "Daily log intake cap: {value} GB (-1: no cap)."
+          de: "Tägliche Obergrenze für Protokolle: {value} GB (-1: keine)."
         from_deployment: daily_quota_gb
         confirm_in: [production]
         why: >
@@ -90,6 +105,12 @@ groups:
         ask: Which pricing tier?
         type: enum
         audience: engineer
+        plain:
+          en: "Billed {value}."
+          de: "Abgerechnet {value}."
+        plain_values:
+          PerGB2018: { en: "per gigabyte, pay as you go", de: "pro Gigabyte, nach Verbrauch" }
+          CapacityReservation: { en: "at a reserved daily volume, cheaper at high volume", de: "zu einem reservierten Tagesvolumen, günstiger bei hohem Volumen" }
         values: [PerGB2018, CapacityReservation]
         default: PerGB2018
         why: >
@@ -107,6 +128,12 @@ groups:
         ask: Should the workspace be reachable from the internet?
         type: enum
         audience: engineer
+        plain:
+          en: "The log workspace is {value}."
+          de: "Der Protokoll-Arbeitsbereich ist {value}."
+        plain_values:
+          disabled: { en: "not reachable from the internet; reading logs then needs a private link scope", de: "aus dem Internet nicht erreichbar; zum Lesen braucht es dann einen privaten Zugang" }
+          enabled: { en: "reachable from the internet", de: "aus dem Internet erreichbar" }
         values: [disabled, enabled]
         from_deployment: network_exposure
         confirm_in: [production]
@@ -125,6 +152,12 @@ groups:
         ask: Should workspace keys be usable for ingestion?
         type: bool
         audience: engineer
+        plain:
+          en: "Sending logs with the workspace key is {value}."
+          de: "Protokolle mit dem Arbeitsbereichs-Schlüssel zu senden ist {value}."
+        plain_values:
+          true: { en: "possible", de: "möglich" }
+          false: { en: "not possible - agents use company identities", de: "nicht möglich, Agenten nutzen Firmenidentitäten" }
         from_deployment: local_auth
         why: >
           The shared key is a bearer credential with ingestion rights and no
@@ -137,6 +170,12 @@ groups:
         ask: Should data access be governed only by Azure RBAC?
         type: bool
         audience: engineer
+        plain:
+          en: "Who may read logs is decided {value}."
+          de: "Wer Protokolle lesen darf, entscheiden {value}."
+        plain_values:
+          true: { en: "by the workspace's own permissions", de: "die Berechtigungen des Arbeitsbereichs selbst" }
+          false: { en: "also by permissions on the resources that sent them", de: "auch die Berechtigungen auf den sendenden Ressourcen" }
         default: true
         why: >
           With this on, workspace permissions decide who reads which data instead
@@ -155,6 +194,12 @@ groups:
         ask: Should the workspace keep its 14-day soft delete?
         type: bool
         audience: engineer
+        plain:
+          en: "A deleted workspace {value} be recovered for 14 days."
+          de: "Ein gelöschter Arbeitsbereich {value} 14 Tage lang wiederhergestellt werden."
+        plain_values:
+          true: { en: "can", de: "kann" }
+          false: { en: "cannot", de: "kann nicht" }
         default: true
         why: >
           A deleted workspace is recoverable for 14 days and its name stays
@@ -169,6 +214,12 @@ groups:
         ask: Should logs also be archived to a storage account?
         type: bool
         audience: engineer
+        plain:
+          en: "Long-term archiving to cheap storage is {value}."
+          de: "Langzeitarchivierung in günstigen Speicher ist {value}."
+        plain_values:
+          true: { en: "on", de: "eingeschaltet" }
+          false: { en: "off", de: "ausgeschaltet" }
         default: false
         why: >
           Long retention in a workspace is expensive per gigabyte-month; archival

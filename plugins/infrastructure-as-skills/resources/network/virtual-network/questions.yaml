@@ -24,6 +24,9 @@ groups:
         ask: Which environment is this for?
         type: enum
         audience: engineer
+        plain:
+          en: "Placed in the {value} environment."
+          de: "Liegt in der Umgebung {value}."
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         from_context: true
@@ -35,6 +38,9 @@ groups:
         ask: Which Azure region?
         type: string
         audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
         required: true
         from_context: true
         why: >
@@ -47,6 +53,9 @@ groups:
         ask: Which resource group?
         type: ref
         audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
         ref: resource_group
         required: true
         from_context: true
@@ -64,6 +73,9 @@ groups:
         ask: Which address range does the network use?
         type: string
         audience: platform
+        plain:
+          en: "The network uses the address range {value}."
+          de: "Das Netz nutzt den Adressbereich {value}."
         from_deployment: address_space
         why: >
           Inherited, because it is a deployment-wide fact and the question that
@@ -77,6 +89,9 @@ groups:
         ask: Which subnets does the network need, and with which prefixes?
         type: list
         audience: engineer
+        plain:
+          en: "Subnets: {value}."
+          de: "Subnetze: {value}."
         required: true
         why: >
           No sensible default exists: the split depends on what is being deployed.
@@ -91,6 +106,9 @@ groups:
         ask: Which prefix carries the private endpoints?
         type: string
         audience: platform
+        plain:
+          en: "Private connections get the subnet {value}."
+          de: "Private Anbindungen bekommen das Subnetz {value}."
         from_deployment: private_endpoint_subnet_prefix
         why: >
           One subnet holds the deployment's private endpoints, decided before this
@@ -102,6 +120,9 @@ groups:
         ask: Which DNS servers should the network use?
         type: list
         audience: platform
+        plain:
+          en: "Custom name servers: {value} (none: Azure's own)."
+          de: "Eigene Namensserver: {value} (keine: Azures eigene)."
         default: []
         why: >
           Empty means Azure-provided DNS, which is what resolves privatelink zones
@@ -119,6 +140,14 @@ groups:
         ask: Should network policies apply to private endpoints in their subnet?
         type: enum
         audience: engineer
+        plain:
+          en: "Network rules {value} to private connections in their subnet."
+          de: "Netzwerkregeln {value} für private Anbindungen in ihrem Subnetz."
+        plain_values:
+          Enabled: { en: "apply", de: "gelten" }
+          Disabled: { en: "do not apply", de: "gelten nicht" }
+          NetworkSecurityGroupEnabled: { en: "apply for security groups only", de: "gelten nur für Sicherheitsgruppen" }
+          RouteTableEnabled: { en: "apply for routes only", de: "gelten nur für Routen" }
         values: [Disabled, Enabled, NetworkSecurityGroupEnabled, RouteTableEnabled]
         default: Enabled
         why: >
@@ -133,6 +162,9 @@ groups:
         ask: Which service endpoints should the subnets carry?
         type: list
         audience: engineer
+        plain:
+          en: "Shortcuts to Azure services from the subnets: {value}."
+          de: "Abkürzungen zu Azure-Diensten aus den Subnetzen: {value}."
         values: [Microsoft.Storage, Microsoft.KeyVault, Microsoft.Sql, Microsoft.ServiceBus, Microsoft.EventHub, Microsoft.Web]
         default: []
         why: >
@@ -146,6 +178,9 @@ groups:
         ask: Which subnets are delegated to a service?
         type: list
         audience: engineer
+        plain:
+          en: "Subnets handed to a service: {value}."
+          de: "An einen Dienst übergebene Subnetze: {value}."
         default: []
         why: >
           A delegated subnet is handed to a service — App Service integration,
@@ -163,6 +198,12 @@ groups:
         ask: Should the network use a DDoS protection plan?
         type: bool
         audience: platform
+        plain:
+          en: "A paid DDoS protection plan is {value}; Azure's basic protection applies either way."
+          de: "Ein kostenpflichtiger DDoS-Schutzplan wird {value}; Azures Basisschutz gilt ohnehin."
+        plain_values:
+          true: { en: "used", de: "genutzt" }
+          false: { en: "not used", de: "nicht genutzt" }
         default: false
         confirm_in: [production]
         why: >
@@ -176,6 +217,9 @@ groups:
         ask: Which subnets will have a network security group attached?
         type: list
         audience: engineer
+        plain:
+          en: "Subnets that will get a security group: {value}."
+          de: "Subnetze, die eine Sicherheitsgruppe bekommen: {value}."
         default: []
         why: >
           Recorded rather than created: the NSG is a separate resource this set
@@ -192,6 +236,9 @@ groups:
         ask: Which Log Analytics workspace should receive diagnostics?
         type: ref
         audience: platform
+        plain:
+          en: "Network logs go to {value}."
+          de: "Netzwerkprotokolle gehen in {value}."
         ref: log_analytics_workspace
         from_deployment: diagnostics_destination
         why: >
@@ -204,6 +251,12 @@ groups:
         ask: Should NSG flow logs be collected?
         type: bool
         audience: engineer
+        plain:
+          en: "A record of allowed and denied traffic is {value}."
+          de: "Eine Aufzeichnung erlaubten und abgewiesenen Verkehrs wird {value}."
+        plain_values:
+          true: { en: "kept", de: "geführt" }
+          false: { en: "not kept", de: "nicht geführt" }
         default: false
         confirm_in: [production]
         why: >

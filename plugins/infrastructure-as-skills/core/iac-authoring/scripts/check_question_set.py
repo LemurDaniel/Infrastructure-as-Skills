@@ -26,7 +26,11 @@ a regex cannot see - what references/question-set-format.md promises:
      question's kind (and, for an enum, one of its values).
   6. `audience` is present and is customer, engineer or platform - who answers
      the question; a question without one would reach the customer by accident.
-  7. Unknown fields are reported: a misspelt `default` is a question that is
+  7. `plain` is present: a mapping of language code to one customer-language
+     line (`en` required, `{value}` optional), and `plain_values`, where
+     present, maps every key to such a mapping and names only values the
+     question can take - the decision document reads both.
+  8. Unknown fields are reported: a misspelt `default` is a question that is
      silently asked every run.
   8. With --platform <file>: the platform profile's keys are deployment-set
      questions with audience platform, enum values are within `values`, and a
@@ -62,7 +66,7 @@ RESOLUTION_FIELDS = ['required', 'default', 'from_deployment', 'parameterized', 
 KNOWN_FIELDS = {
     'id', 'ask', 'type', 'values', 'default', 'required', 'parameterized', 'confirm_in',
     'why', 'renders', 'depends_on', 'ref', 'from_deployment', 'forced_when', 'from_context',
-    'audience', 'plain', 'derived_from',
+    'audience', 'plain', 'plain_values', 'derived_from',
 }
 DERIVED_KEYS = {'question', 'map'}
 KNOWN_TOP = {'schema_version', 'scope', 'resource', 'title', 'naming', 'boundaries', 'groups'}
@@ -370,6 +374,32 @@ def check_set(path, doc, deployment, rel):
                 off = [e for e in ci if e not in env_values]
                 if off:
                     err(f"{where}: confirm_in names environment(s) the deployment set does not know: {off}")
+
+        # --- 7. plain
+        pl = q.get('plain')
+        if pl is None:
+            err(f"{where}: plain is missing - the one customer-language line the decision document reads")
+        elif not isinstance(pl, dict) or not isinstance(pl.get('en'), str) or not pl['en'].strip():
+            err(f"{where}: plain must be a mapping with at least en: <one line>")
+        else:
+            for lang, text in pl.items():
+                if not re.match(r'^[a-z]{2}$', str(lang)):
+                    err(f"{where}: plain.{lang} is not a two-letter language code")
+                elif not isinstance(text, str) or '\n' in text.strip():
+                    err(f"{where}: plain.{lang} must be one line")
+        pv = q.get('plain_values')
+        if pv is not None:
+            if not isinstance(pv, dict) or not pv:
+                err(f"{where}: plain_values must be a non-empty mapping of value -> {{ en: ..., ... }}")
+            else:
+                allowed = values if isinstance(values, list) else ([True, False] if qtype == 'bool' else None)
+                for k, v in pv.items():
+                    if allowed is not None and k not in allowed:
+                        err(f"{where}: plain_values names '{k}', which the question cannot take")
+                    if not isinstance(v, dict) or not isinstance(v.get('en'), str):
+                        err(f"{where}: plain_values[{k!r}] must be a mapping with at least en")
+                if pl and '{value}' not in pl.get('en', ''):
+                    wrn(f"{where}: plain_values given but plain.en has no {{value}} placeholder")
 
         # --- 6. audience
         aud = q.get('audience')

@@ -27,6 +27,16 @@ groups:
         ask: Which environment is this for?
         type: enum
         audience: customer
+        plain:
+          en: "This is the {value} environment; names, defaults and how strictly they are confirmed follow from it."
+          de: "Das ist die Umgebung {value}; Namen, Vorgaben und wie streng sie bestätigt werden, folgen daraus."
+        plain_values:
+          development: { en: "development", de: "Entwicklung" }
+          test: { en: "test", de: "Test" }
+          staging: { en: "pre-production", de: "Vorproduktion" }
+          production: { en: "live operation", de: "Echtbetrieb" }
+          sandbox: { en: "sandbox", de: "Sandbox" }
+          demo: { en: "demo", de: "Demo" }
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         why: >
@@ -39,6 +49,9 @@ groups:
         ask: Which Azure region?
         type: string
         audience: engineer
+        plain:
+          en: "Everything runs in the Azure region {value}."
+          de: "Alles läuft in der Azure-Region {value}."
         parameterized: true
         why: >
           Always an input variable of the template, never asked: every resource
@@ -52,6 +65,9 @@ groups:
         ask: Which workload is this for? (short name, goes into every resource name)
         type: string
         audience: engineer
+        plain:
+          en: "\"{value}\" is the name every part of the system carries."
+          de: "„{value}“ ist der Name, den jeder Teil des Systems trägt."
         parameterized: true
         why: >
           Always an input variable of the template, never asked. It is the one
@@ -65,16 +81,22 @@ groups:
         ask: Should resource names follow the default convention, or does your organisation have its own?
         type: enum
         audience: platform
+        plain:
+          en: "Resource names follow the {value} naming convention, so they are consistent to find and read."
+          de: "Die Namen folgen der Namenskonvention „{value}“, damit sie einheitlich zu finden und zu lesen sind."
         values: [default, custom]
         default: default
         why: >
           The plugin's convention (core/iac-rendering/references/naming.default.yaml:
           CAF abbreviations, AVM region codes, per-type patterns where Azure's
-          limits force them) is copied into the repository as naming.yaml beside
-          the spec. `custom` means the user stated a departure - a pattern, an
-          abbreviation, an environment code - and it is written into that file,
-          never into a template. An existing naming.yaml or naming provider
-          block in the repository is carried and never replaced. Not asked
+          limits force them) is the convention. A Terraform root gets a full copy
+          as naming.yaml beside the spec, because the provider reads it at plan
+          time; a Bicep root gets none, its name vars are generated from the
+          convention. `custom` means the user stated a departure - a pattern, an
+          abbreviation, an environment code - and it is written into naming.yaml
+          (for Bicep: a file holding the departures alone), never into a
+          template. An existing naming.yaml or naming provider block in the
+          repository is carried and never replaced. Not asked
           unless the user raises it: a convention is a deployment-wide decision,
           and most names cannot change after creation, so a run that offered it
           per resource would be offering a way to get two.
@@ -87,6 +109,9 @@ groups:
         ask: Which subscription does this deploy into?
         type: ref
         audience: engineer
+        plain:
+          en: "The system is deployed into subscription {value}."
+          de: "Das System wird in die Subscription {value} ausgerollt."
         ref: subscription
         parameterized: true
         why: >
@@ -99,6 +124,9 @@ groups:
         ask: Which resource group?
         type: ref
         audience: engineer
+        plain:
+          en: "All parts are placed into the existing resource group {value}."
+          de: "Alle Teile liegen in der bestehenden Ressourcengruppe {value}."
         ref: resource_group
         parameterized: true
         why: >
@@ -123,6 +151,13 @@ groups:
         values: [tolerable, disruptive, critical]
         default: disruptive
         audience: customer
+        plain:
+          en: "A day's outage would be {value}."
+          de: "Ein Tag Ausfall wäre {value}."
+        plain_values:
+          tolerable: { en: "tolerable", de: "verkraftbar" }
+          disruptive: { en: "disruptive", de: "störend" }
+          critical: { en: "business-critical", de: "geschäftskritisch" }
         confirm_in: [production]
         why: >
           The one question behind every redundancy decision, and the customer is the
@@ -144,6 +179,14 @@ groups:
         values: [reproducible, one_week, one_month, three_months]
         default: one_week
         audience: customer
+        plain:
+          en: "After a mistaken delete you must be able to go back {value}."
+          de: "Nach einem versehentlichen Löschen müsst ihr {value} zurückkommen."
+        plain_values:
+          reproducible: { en: "not at all - the data can be regenerated", de: "gar nicht, die Daten lassen sich neu erzeugen" }
+          one_week: { en: "a week", de: "eine Woche" }
+          one_month: { en: "a month", de: "einen Monat" }
+          three_months: { en: "three months", de: "drei Monate" }
         why: >
           The question behind soft delete, versioning and point-in-time restore,
           asked once in the customer's terms. `reproducible` means the data can be
@@ -162,6 +205,13 @@ groups:
         values: [active, occasional, archive]
         default: active
         audience: customer
+        plain:
+          en: "The data is {value}."
+          de: "Die Daten werden {value}."
+        plain_values:
+          active: { en: "worked with all the time", de: "laufend genutzt" }
+          occasional: { en: "read now and then once written", de: "nach dem Schreiben nur gelegentlich gelesen" }
+          archive: { en: "kept for a retention duty and almost never read", de: "nur aufbewahrt und fast nie gelesen" }
         why: >
           Storage prices trade storage cost against access cost, and only the
           customer knows which side the data is on. `active` is data an application
@@ -182,6 +232,12 @@ groups:
         ask: Should resources render as calls to Azure Verified Modules, or as authored resources?
         type: enum
         audience: engineer
+        plain:
+          en: "The code is built from {value}."
+          de: "Der Code wird aus {value} gebaut."
+        plain_values:
+          avm: { en: "Microsoft's verified, tested building blocks (Azure Verified Modules)", de: "Microsofts geprüften, getesteten Bausteinen (Azure Verified Modules)" }
+          authored: { en: "resources written out individually", de: "einzeln ausgeschriebenen Ressourcen" }
         values: [avm, authored]
         default: avm
         why: >
@@ -210,6 +266,12 @@ groups:
         ask: May the Azure Verified Modules send their deployment telemetry to Microsoft?
         type: enum
         audience: platform
+        plain:
+          en: "Usage telemetry to Microsoft is {value}: a count per deployment, none of your data."
+          de: "Nutzungstelemetrie an Microsoft ist {value}: eine Zählung pro Ausrollen, keine eurer Daten."
+        plain_values:
+          enabled: { en: "on", de: "eingeschaltet" }
+          disabled: { en: "off", de: "ausgeschaltet" }
         values: [enabled, disabled]
         default: enabled
         depends_on: { question: module_source, equals: avm }
@@ -234,6 +296,14 @@ groups:
         ask: Is there a landing zone platform at all (standalone if not), and if so, which kind of landing zone does this workload go into - internal (corp), internet-facing (online) or a sandbox?
         type: enum
         audience: platform
+        plain:
+          en: "The system lands in {value}."
+          de: "Das System landet in {value}."
+        plain_values:
+          standalone: { en: "its own environment: there is no shared platform, so it brings its own network, name resolution and logging", de: "einer eigenen Umgebung: es gibt keine gemeinsame Plattform, also bringt es Netz, Namensauflösung und Protokollierung selbst mit" }
+          corp: { en: "the internal part of the company platform, connected to the company network", de: "dem internen Teil der Firmenplattform, verbunden mit dem Firmennetz" }
+          online: { en: "the internet-facing part of the company platform", de: "dem internetseitigen Teil der Firmenplattform" }
+          sandbox: { en: "a sandbox for experiments, never for real operation", de: "einer Sandbox zum Ausprobieren, nie für den Echtbetrieb" }
         values: [standalone, corp, online, sandbox]
         default: standalone
         confirm_in: [production]
@@ -271,6 +341,13 @@ groups:
         ask: Should this infrastructure be reachable from the internet?
         type: enum
         audience: customer
+        plain:
+          en: "Access is {value}."
+          de: "Der Zugang ist {value}."
+        plain_values:
+          private: { en: "private only - nothing is reachable from the internet", de: "nur privat, nichts ist aus dem Internet erreichbar" }
+          private_with_exceptions: { en: "private, with named exceptions reachable from the internet behind a firewall", de: "privat, mit benannten Ausnahmen hinter einer Firewall aus dem Internet erreichbar" }
+          public: { en: "public - reachable from the internet by design", de: "öffentlich, absichtlich aus dem Internet erreichbar" }
         values: [private, private_with_exceptions, public]
         default: private
         confirm_in: [production]
@@ -294,6 +371,12 @@ groups:
         ask: May resources keep key-based or connection-string auth?
         type: enum
         audience: engineer
+        plain:
+          en: "Passwords and access keys are {value}; access goes through company accounts, so every action is attributable."
+          de: "Passwörter und Zugriffsschlüssel sind {value}; der Zugriff läuft über Firmenkonten, damit jede Aktion zuordenbar ist."
+        plain_values:
+          disabled: { en: "switched off", de: "abgeschaltet" }
+          allowed_where_unavoidable: { en: "allowed only where a consumer cannot do otherwise", de: "nur erlaubt, wo ein Nutzer nicht anders kann" }
         values: [disabled, allowed_where_unavoidable]
         default: disabled
         confirm_in: [production]
@@ -313,6 +396,9 @@ groups:
         ask: Are there compliance or internal mandates this deployment has to satisfy?
         type: list
         audience: customer
+        plain:
+          en: "Rules to comply with: {value}."
+          de: "Einzuhaltende Vorgaben: {value}."
         default: []
         why: >
           Named here once so the decisions below can cite them, and so a reviewer
@@ -328,6 +414,12 @@ groups:
         ask: Do keys have to be HSM-protected?
         type: enum
         audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          software: { en: "protected in software - the standard, sufficient unless a mandate names hardware", de: "in Software geschützt, der Standard, ausreichend ohne Vorgabe für Hardware" }
+          hsm: { en: "protected by hardware security modules, as a mandate requires; that costs the premium vault", de: "durch Hardware-Sicherheitsmodule geschützt, wie eine Vorgabe verlangt; das kostet den Premium-Tresor" }
         values: [software, hsm]
         default: software
         why: >
@@ -346,6 +438,12 @@ groups:
         ask: Platform-managed keys, or customer-managed?
         type: enum
         audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          platform_managed: { en: "managed by Azure - encrypted, rotated, no effort on your side", de: "von Azure verwaltet: verschlüsselt, rotiert, kein Aufwand bei euch" }
+          customer_managed: { en: "your own, held in your key vault, so you can revoke them", de: "eure eigenen in eurem Schlüsseltresor, damit ihr sie zurückziehen könnt" }
         values: [platform_managed, customer_managed]
         default: platform_managed
         confirm_in: [production]
@@ -367,6 +465,13 @@ groups:
         ask: Should this deployment build its own virtual network, reference an existing one, or does it need none?
         type: enum
         audience: platform
+        plain:
+          en: "The network is {value}."
+          de: "Das Netz wird {value}."
+        plain_values:
+          create: { en: "built by this deployment", de: "von diesem Ausrollen selbst gebaut" }
+          reference: { en: "the existing one, used and never changed here", de: "das bestehende, hier genutzt und nie verändert" }
+          none: { en: "not needed - everything is reached over public endpoints", de: "nicht gebraucht, alles wird über öffentliche Endpunkte erreicht" }
         values: [create, reference, none]
         default: create
         why: >
@@ -399,6 +504,9 @@ groups:
         ask: Which existing virtual network should the deployment reference?
         type: ref
         audience: platform
+        plain:
+          en: "The existing network {value} is used."
+          de: "Das bestehende Netz {value} wird genutzt."
         ref: virtual_network
         required: true
         depends_on: { question: network_ownership, equals: reference }
@@ -412,6 +520,9 @@ groups:
         ask: Which address space should the new virtual network use?
         type: string
         audience: platform
+        plain:
+          en: "The new network uses the address range {value}, assigned by whoever manages addresses."
+          de: "Das neue Netz nutzt den Adressbereich {value}, zugewiesen von der Adressverwaltung."
         required: true
         depends_on: { question: network_ownership, equals: create }
         why: >
@@ -424,6 +535,9 @@ groups:
         ask: Which existing subnet should private endpoints live in?
         type: ref
         audience: platform
+        plain:
+          en: "Private connections land in the existing subnet {value}."
+          de: "Private Anbindungen landen im bestehenden Subnetz {value}."
         ref: subnet
         required: true
         depends_on: { question: network_ownership, equals: reference }
@@ -436,6 +550,9 @@ groups:
         ask: Which prefix should the private endpoint subnet get?
         type: string
         audience: platform
+        plain:
+          en: "Private connections get their own subnet, {value}."
+          de: "Private Anbindungen bekommen ein eigenes Subnetz, {value}."
         required: true
         depends_on: { question: network_ownership, equals: create }
         why: >
@@ -453,6 +570,12 @@ groups:
         ask: Who owns the private DNS zones?
         type: enum
         audience: platform
+        plain:
+          en: "Name resolution for private connections is handled by {value}."
+          de: "Die Namensauflösung für private Anbindungen übernimmt {value}."
+        plain_values:
+          platform: { en: "the company platform", de: "die Firmenplattform" }
+          deployment: { en: "this deployment itself", de: "dieses Ausrollen selbst" }
         values: [platform, deployment]
         default: platform
         forced_when: >
@@ -477,6 +600,12 @@ groups:
         ask: Does a platform policy create the DNS records for private endpoints, or does this deployment?
         type: enum
         audience: platform
+        plain:
+          en: "The name entries for private connections are written by {value}."
+          de: "Die Namenseinträge für private Anbindungen schreibt {value}."
+        plain_values:
+          policy: { en: "a platform rule, automatically", de: "eine Plattformregel, automatisch" }
+          deployment: { en: "this deployment", de: "dieses Ausrollen" }
         values: [policy, deployment]
         default: policy
         depends_on: { question: private_dns_ownership, equals: platform }
@@ -498,6 +627,9 @@ groups:
         ask: In which subscription and resource group does the platform keep the private DNS zones?
         type: ref
         audience: platform
+        plain:
+          en: "The platform keeps the name zones in {value}."
+          de: "Die Plattform hält die Namenszonen in {value}."
         ref: resource_group
         required: true
         depends_on: { question: private_dns_records, equals: deployment }
@@ -521,6 +653,12 @@ groups:
         ask: Should this deployment build its own Log Analytics workspace, or reference an existing one?
         type: enum
         audience: platform
+        plain:
+          en: "Logs go to {value}."
+          de: "Protokolle gehen in {value}."
+        plain_values:
+          create: { en: "a workspace this deployment creates and pays for", de: "einen Arbeitsbereich, den dieses Ausrollen anlegt und bezahlt" }
+          reference: { en: "the company's central log workspace", de: "den zentralen Protokoll-Arbeitsbereich der Firma" }
         values: [create, reference]
         default: reference
         forced_when: >
@@ -541,6 +679,9 @@ groups:
         ask: Which existing Log Analytics workspace should receive diagnostics?
         type: ref
         audience: platform
+        plain:
+          en: "Logs are collected in {value}."
+          de: "Protokolle werden in {value} gesammelt."
         ref: log_analytics_workspace
         required: true
         depends_on: { question: observability_ownership, equals: reference }
@@ -559,6 +700,9 @@ groups:
         ask: How long should logs be retained?
         type: int
         audience: customer
+        plain:
+          en: "Logs are kept for {value} days."
+          de: "Protokolle werden {value} Tage aufbewahrt."
         default: 30
         depends_on: { question: observability_ownership, equals: create }
         why: >
@@ -575,6 +719,9 @@ groups:
         ask: Should ingestion be capped per day?
         type: int
         audience: engineer
+        plain:
+          en: "Daily log intake cap: {value} GB (-1: no cap)."
+          de: "Tägliche Obergrenze für Protokolle: {value} GB (-1: keine)."
         default: -1
         confirm_in: [production]
         depends_on: { question: observability_ownership, equals: create }

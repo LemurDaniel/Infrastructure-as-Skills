@@ -25,6 +25,9 @@ groups:
         ask: Which environment is this for?
         type: enum
         audience: engineer
+        plain:
+          en: "Placed in the {value} environment."
+          de: "Liegt in der Umgebung {value}."
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         from_context: true
@@ -37,6 +40,9 @@ groups:
         ask: Which Azure region?
         type: string
         audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
         required: true
         from_context: true
         why: >
@@ -49,6 +55,9 @@ groups:
         ask: Which resource group?
         type: ref
         audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
         ref: resource_group
         required: true
         from_context: true
@@ -65,6 +74,13 @@ groups:
         ask: Should this account depart from the deployment's exposure posture?
         type: enum
         audience: engineer
+        plain:
+          en: "The storage is {value}."
+          de: "Der Speicher ist {value}."
+        plain_values:
+          disabled: { en: "not reachable from the internet at all", de: "aus dem Internet überhaupt nicht erreichbar" }
+          enabled_with_firewall: { en: "reachable from the internet only from listed addresses", de: "aus dem Internet nur von gelisteten Adressen erreichbar" }
+          enabled: { en: "reachable from the internet", de: "aus dem Internet erreichbar" }
         values: [disabled, enabled_with_firewall, enabled]
         from_deployment: network_exposure
         confirm_in: [production]
@@ -83,6 +99,9 @@ groups:
         ask: Which subnet should this account's private endpoint live in?
         type: ref
         audience: platform
+        plain:
+          en: "Its private connection lands in subnet {value}."
+          de: "Seine private Anbindung landet im Subnetz {value}."
         ref: subnet
         from_deployment: private_endpoint_subnet
         why: >
@@ -96,6 +115,16 @@ groups:
         ask: Which storage services need an endpoint?
         type: list
         audience: engineer
+        plain:
+          en: "Private connections exist for: {value}."
+          de: "Private Anbindungen gibt es für: {value}."
+        plain_values:
+          blob: { en: "files (blob)", de: "Dateien (Blob)" }
+          file: { en: "file shares", de: "Dateifreigaben" }
+          queue: { en: "queues", de: "Warteschlangen" }
+          table: { en: "tables", de: "Tabellen" }
+          dfs: { en: "the data lake", de: "den Data Lake" }
+          web: { en: "the static website", de: "die statische Website" }
         values: [blob, file, queue, table, dfs, web]
         default: [blob]
         why: >
@@ -107,6 +136,9 @@ groups:
         ask: Which public IP ranges may reach the account?
         type: list
         audience: engineer
+        plain:
+          en: "Public addresses allowed through the firewall: {value}."
+          de: "Durch die Firewall erlaubte öffentliche Adressen: {value}."
         default: []
         depends_on: { question: public_network_access, equals: enabled_with_firewall }
         why: >
@@ -119,6 +151,9 @@ groups:
         ask: Which subnets may reach the account via service endpoint?
         type: list
         audience: engineer
+        plain:
+          en: "Networks allowed through the firewall: {value}."
+          de: "Durch die Firewall erlaubte Netze: {value}."
         ref: subnet
         default: []
         depends_on: { question: public_network_access, equals: enabled_with_firewall }
@@ -132,6 +167,12 @@ groups:
         ask: Should trusted Azure services bypass the firewall?
         type: bool
         audience: engineer
+        plain:
+          en: "Azure's own services (backup, monitoring) {value} reach the storage past the firewall."
+          de: "Azures eigene Dienste (Backup, Überwachung) {value} am Firewall vorbei auf den Speicher zugreifen."
+        plain_values:
+          true: { en: "may", de: "dürfen" }
+          false: { en: "may not", de: "dürfen nicht" }
         default: true
         why: >
           Without the bypass, platform features that reach the account on your
@@ -148,6 +189,13 @@ groups:
         ask: Which managed identity should the account carry?
         type: enum
         audience: engineer
+        plain:
+          en: "The storage has {value} for reaching other services."
+          de: "Der Speicher hat {value}, um andere Dienste zu erreichen."
+        plain_values:
+          system_assigned: { en: "its own identity", de: "eine eigene Identität" }
+          user_assigned: { en: "a shared, separately managed identity", de: "eine gemeinsame, separat verwaltete Identität" }
+          none: { en: "no identity of its own", de: "keine eigene Identität" }
         values: [system_assigned, user_assigned, none]
         default: system_assigned
         why: >
@@ -161,6 +209,9 @@ groups:
         ask: Which user-assigned identities?
         type: list
         audience: engineer
+        plain:
+          en: "It uses the identities {value}."
+          de: "Er nutzt die Identitäten {value}."
         ref: user_assigned_identity
         required: true
         depends_on: { question: managed_identity, equals: user_assigned }
@@ -171,6 +222,9 @@ groups:
         ask: Who needs which data-plane role on this account?
         type: list
         audience: engineer
+        plain:
+          en: "Access rights granted to: {value}."
+          de: "Zugriffsrechte vergeben an: {value}."
         default: []
         why: >
           With shared-key auth disabled, nothing can read the account until a role
@@ -188,6 +242,12 @@ groups:
         ask: Should shared key (account key) authentication stay enabled?
         type: bool
         audience: engineer
+        plain:
+          en: "Access with a shared key is {value}; access goes through company accounts."
+          de: "Zugriff mit einem geteilten Schlüssel ist {value}; der Zugriff läuft über Firmenkonten."
+        plain_values:
+          true: { en: "possible", de: "möglich" }
+          false: { en: "not possible", de: "nicht möglich" }
         from_deployment: local_auth
         confirm_in: [production]
         why: >
@@ -204,6 +264,12 @@ groups:
         ask: What is the minimum TLS version?
         type: enum
         audience: engineer
+        plain:
+          en: "Connections must use at least {value} encryption."
+          de: "Verbindungen müssen mindestens {value}-Verschlüsselung nutzen."
+        plain_values:
+          TLS1_2: { en: "TLS 1.2", de: "TLS 1.2" }
+          TLS1_3: { en: "TLS 1.3", de: "TLS 1.3" }
         values: [TLS1_2, TLS1_3]
         default: TLS1_2
         why: >
@@ -216,6 +282,12 @@ groups:
         ask: Should the account refuse plain HTTP?
         type: bool
         audience: engineer
+        plain:
+          en: "Unencrypted connections are {value}."
+          de: "Unverschlüsselte Verbindungen werden {value}."
+        plain_values:
+          true: { en: "refused", de: "abgewiesen" }
+          false: { en: "accepted", de: "akzeptiert" }
         default: true
         why: >
           No current reason to allow HTTP to a storage account. Kept as a question
@@ -227,6 +299,12 @@ groups:
         ask: May individual containers be made publicly readable?
         type: bool
         audience: engineer
+        plain:
+          en: "Making individual folders publicly readable is {value}."
+          de: "Einzelne Ordner öffentlich lesbar zu machen ist {value}."
+        plain_values:
+          false: { en: "not possible", de: "nicht möglich" }
+          true: { en: "possible", de: "möglich" }
         default: false
         why: >
           This is the account-level switch that makes anonymous container access
@@ -240,6 +318,12 @@ groups:
         ask: Should infrastructure (double) encryption be enabled?
         type: bool
         audience: engineer
+        plain:
+          en: "A second encryption layer below the service is {value}."
+          de: "Eine zweite Verschlüsselungsschicht unterhalb des Dienstes ist {value}."
+        plain_values:
+          true: { en: "on", de: "eingeschaltet" }
+          false: { en: "off", de: "ausgeschaltet" }
         default: true
         why: >
           A second encryption layer below the service layer, at no measurable cost.
@@ -252,6 +336,12 @@ groups:
         ask: Platform-managed or customer-managed encryption keys?
         type: enum
         audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          platform_managed: { en: "managed by Azure - encrypted, rotated, no effort on your side", de: "von Azure verwaltet: verschlüsselt, rotiert, kein Aufwand bei euch" }
+          customer_managed: { en: "your own, held in your key vault, so you can revoke them", de: "eure eigenen in eurem Schlüsseltresor, damit ihr sie zurückziehen könnt" }
         values: [platform_managed, customer_managed]
         from_deployment: key_management
         why: >
@@ -266,6 +356,9 @@ groups:
         ask: Which Key Vault key should encrypt the account?
         type: ref
         audience: engineer
+        plain:
+          en: "Encrypted with your key {value}."
+          de: "Verschlüsselt mit eurem Schlüssel {value}."
         ref: key_vault_key
         required: true
         depends_on: { question: key_management, equals: customer_managed }
@@ -279,6 +372,12 @@ groups:
         ask: Should the SFTP endpoint be enabled?
         type: bool
         audience: engineer
+        plain:
+          en: "File transfer via SFTP is {value}."
+          de: "Dateiübertragung per SFTP ist {value}."
+        plain_values:
+          true: { en: "on", de: "eingeschaltet" }
+          false: { en: "off", de: "ausgeschaltet" }
         default: false
         why: >
           SFTP requires hierarchical namespace and introduces local users, which
@@ -295,6 +394,14 @@ groups:
         ask: Which replication does the data need?
         type: enum
         audience: engineer
+        plain:
+          en: "The data is kept {value}."
+          de: "Die Daten liegen {value}."
+        plain_values:
+          LRS: { en: "three times in one datacenter", de: "dreifach in einem Rechenzentrum" }
+          ZRS: { en: "in three datacenters of the region, so one can fail", de: "in drei Rechenzentren der Region, eines darf ausfallen" }
+          GRS: { en: "in one datacenter plus a copy in a second region", de: "in einem Rechenzentrum plus einer Kopie in einer zweiten Region" }
+          GZRS: { en: "in three datacenters of the region plus a copy in a second region", de: "in drei Rechenzentren der Region plus einer Kopie in einer zweiten Region" }
         values: [LRS, ZRS, GRS, GZRS]
         derived_from:
           question: outage_impact
@@ -315,6 +422,13 @@ groups:
         ask: Which default access tier?
         type: enum
         audience: engineer
+        plain:
+          en: "Stored in the {value} class."
+          de: "Gespeichert in der Klasse {value}."
+        plain_values:
+          Hot: { en: "standard - cheap to read, for data in use", de: "Standard: günstig beim Lesen, für Daten in Nutzung" }
+          Cool: { en: "cool - cheaper to keep, a small charge per read", de: "Cool: günstiger im Aufbewahren, kleiner Aufpreis beim Lesen" }
+          Cold: { en: "cold - cheapest to keep, expensive to read back", de: "Cold: am günstigsten im Aufbewahren, teuer beim Zurücklesen" }
         values: [Hot, Cool, Cold]
         derived_from:
           question: data_access_pattern
@@ -331,6 +445,9 @@ groups:
         ask: How many days should deleted blobs stay restorable?
         type: int
         audience: engineer
+        plain:
+          en: "Deleted files can be restored for {value} days (0: not at all)."
+          de: "Gelöschte Dateien sind {value} Tage wiederherstellbar (0: gar nicht)."
         derived_from:
           question: data_loss_tolerance
           map: { reproducible: 0, one_week: 7, one_month: 30, three_months: 90 }
@@ -345,6 +462,9 @@ groups:
         ask: How many days should deleted containers stay restorable?
         type: int
         audience: engineer
+        plain:
+          en: "Deleted folders can be restored for {value} days (0: not at all)."
+          de: "Gelöschte Ordner sind {value} Tage wiederherstellbar (0: gar nicht)."
         derived_from:
           question: data_loss_tolerance
           map: { reproducible: 0, one_week: 7, one_month: 30, three_months: 90 }
@@ -358,6 +478,12 @@ groups:
         ask: Should blob versioning be enabled?
         type: bool
         audience: engineer
+        plain:
+          en: "Earlier versions of overwritten files are {value}."
+          de: "Frühere Versionen überschriebener Dateien werden {value}."
+        plain_values:
+          true: { en: "kept", de: "aufgehoben" }
+          false: { en: "not kept", de: "nicht aufgehoben" }
         derived_from:
           question: data_loss_tolerance
           map: { reproducible: false, one_week: true, one_month: true, three_months: true }
@@ -372,6 +498,12 @@ groups:
         ask: Should the change feed be enabled?
         type: bool
         audience: engineer
+        plain:
+          en: "A log of every change is {value}."
+          de: "Ein Protokoll jeder Änderung wird {value}."
+        plain_values:
+          true: { en: "kept", de: "geführt" }
+          false: { en: "not kept", de: "nicht geführt" }
         default: false
         why: >
           An append-only log of blob changes. Useful for downstream processing and
@@ -383,6 +515,9 @@ groups:
         ask: How many days of point-in-time restore?
         type: int
         audience: engineer
+        plain:
+          en: "The whole storage can be rewound {value} days (0: not at all)."
+          de: "Der ganze Speicher lässt sich {value} Tage zurückdrehen (0: gar nicht)."
         default: 0
         why: >
           Not derived: it requires versioning and the change feed, must be shorter
@@ -396,6 +531,13 @@ groups:
         ask: Does the data need immutability (WORM)?
         type: enum
         audience: engineer
+        plain:
+          en: "Deletion protection by law or policy: {value}."
+          de: "Löschschutz per Gesetz oder Richtlinie: {value}."
+        plain_values:
+          none: { en: "none", de: "keiner" }
+          account_level: { en: "the whole storage, locked", de: "der ganze Speicher, gesperrt" }
+          container_level: { en: "per folder", de: "pro Ordner" }
         values: [none, account_level, container_level]
         default: none
         why: >
@@ -415,6 +557,9 @@ groups:
         ask: Which Log Analytics workspace should receive diagnostics?
         type: ref
         audience: platform
+        plain:
+          en: "Its logs go to {value}."
+          de: "Seine Protokolle gehen in {value}."
         ref: log_analytics_workspace
         from_deployment: diagnostics_destination
         why: >
@@ -429,6 +574,15 @@ groups:
         ask: Which log categories should be collected?
         type: list
         audience: engineer
+        plain:
+          en: "Logged: {value}."
+          de: "Protokolliert wird: {value}."
+        plain_values:
+          audit: { en: "who accessed what", de: "wer worauf zugegriffen hat" }
+          allLogs: { en: "everything, including every read and write", de: "alles, inklusive jedem Lesen und Schreiben" }
+          StorageRead: { en: "reads", de: "Lesezugriffe" }
+          StorageWrite: { en: "writes", de: "Schreibzugriffe" }
+          StorageDelete: { en: "deletes", de: "Löschungen" }
         values: [audit, allLogs, StorageRead, StorageWrite, StorageDelete]
         default: [audit]
         why: >
@@ -442,6 +596,12 @@ groups:
         ask: Should all metrics be collected?
         type: bool
         audience: engineer
+        plain:
+          en: "Usage and performance figures are {value}."
+          de: "Nutzungs- und Leistungswerte werden {value}."
+        plain_values:
+          true: { en: "collected", de: "erfasst" }
+          false: { en: "not collected", de: "nicht erfasst" }
         default: true
         why: Metric ingestion is cheap and the baseline for any capacity question.
         renders: metric.category = "AllMetrics" / metrics.category

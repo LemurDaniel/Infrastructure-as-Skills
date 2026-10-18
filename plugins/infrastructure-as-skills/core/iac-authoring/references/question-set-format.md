@@ -89,7 +89,8 @@ groups:
 | `forced_when` | no | Which answer elsewhere removes a value from `values`, or determines this one. Prose, because the conditions are not uniform enough to encode. Recorded as `forced` with `forced_by` in the spec. |
 | `from_context` | no | The value comes from the spec's `context:` rather than being asked per resource. |
 | `audience` | yes | Who answers it: `customer`, `engineer` or `platform`. See below. |
-| `plain` | not yet | Reserved: a one-line, customer-language reason for the default, read by the decision document (`ROADMAP.md` B5). |
+| `plain` | yes | One line per language (`en` required, `de` and others optional) saying what the decision means to the customer, with `{value}` where the value goes. Read by the decision document. See below. |
+| `plain_values` | no | For an enum, list or bool: the customer's words for each value, per language — what `{value}` becomes. Keys are the question's values. |
 | `derived_from` | no | `{ question: <deployment id>, map: { <answer>: <value> } }` — the value follows from a customer's answer in the deployment set's `requirements` group, mapped through this table. Mutually exclusive with `default`, `required` and `from_deployment`. See below. |
 
 ## Who answers: `audience`
@@ -114,6 +115,29 @@ audience that may override it per resource, which is usually `engineer`.
 Keep `customer` scarce for the same reason as `required`: each one is a question put to
 someone who did not come to answer questions. Six per interview is the budget
 (`ROADMAP.md`); a seventh means a question set is missing a default.
+
+## The customer's line: `plain` and `plain_values`
+
+`why` is for the reviewer; `plain` is for the customer. One line per language, in the
+customer's words, with `{value}` where the decision's value goes — and, where a raw value
+would mean nothing to them, `plain_values` giving the words per value:
+
+```yaml
+        plain:
+          en: "The data is kept {value}."
+          de: "Die Daten liegen {value}."
+        plain_values:
+          LRS:  { en: "three times in one datacenter", de: "dreifach in einem Rechenzentrum" }
+          ZRS:  { en: "in three datacenters of the region, so one can fail", de: "in drei Rechenzentren der Region, eines darf ausfallen" }
+```
+
+The decision document (`scripts/export_decisions.py`) renders every decision in the spec
+through these: a `requirement` value becomes "because you said *disruptive* → the data is
+kept in three datacenters", a default becomes a line under "set by the rules". `en` is
+required, because the document falls back to it and says so; the plugin's own sets carry
+`de` as well. A line without `{value}` is fine where the value is implied (a `required`
+reference); a bool or enum without `plain_values` prints the raw value, which is rarely
+what a customer should read.
 
 ## Requirements, and `derived_from`
 
