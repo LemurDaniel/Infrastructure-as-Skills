@@ -2,7 +2,8 @@
 
 The handoff between sessions. Read it at the start of one, rewrite it at the end of one —
 the goal rarely changes, the rest does. Keep it tight: what is here is what the next
-session starts from, and what is not here it re-derives.
+session starts from, and what is not here it re-derives. The direction behind the next
+thing is `ROADMAP.md`.
 
 ## Goal
 
@@ -54,6 +55,16 @@ Verified Modules first, authored resources second.
   decision, named by its key path; a decision a plan cannot observe is marked with its
   reason. `check_render_coverage.py` checks spec against tests, so "everything is tested"
   is a gate, not an intention. Bicep has no equivalent yet (see Open).
+- **The interview is the customer's, alone.** Decided 2026-10-18: the person answering
+  sits in front of the plugin without an engineer, so every question carries an
+  `audience`, the customer answers about six requirement questions in their own words,
+  technical decisions are derived from those (`source: requirement`), platform facts come
+  from a `platform.yaml` (`source: platform`), and an engineer question nobody can answer
+  becomes an `open:` entry instead of a question. Customer mode is the default; the
+  engineer mode is entered on request or when the repository shows it. The plugin is
+  public and has to hold for any use case. Beside the diagram, a decision document in the
+  customer's language (Markdown first, Word offered once) is a deliverable. Plan:
+  `ROADMAP.md`, phases A–E.
 - **No registry alias, no registry modules — for the owner's own registry.** `br/public:`
   needs no alias and is the default; `br/modules:` is only rendered when
   `bicepconfig.json` already has it (`implementation: reuse`).
@@ -86,15 +97,23 @@ Verified Modules first, authored resources second.
   grader checks `implementation` or `module_source` yet.
 - Bicep renders have no tests. `bicep test` is experimental; the candidate is asserting on
   the compiled ARM JSON per decision, mirroring the tftest markers.
-- Remaining families: `compute`, `data`, `security`. Key Vault's Terraform AVM module is
+- Remaining families, in the order `ROADMAP.md` C1 sets: `security` (Key Vault,
+  user-assigned identity), `compute` (App Service, Container Apps), `data` (Azure SQL,
+  PostgreSQL Flexible), `integration` (Service Bus). Key Vault's Terraform AVM module is
   `Orphaned` in the index — usable, flagged in the handover.
+- **A sandbox subscription for real plans, applies and the deploy agent** (`ROADMAP.md`
+  A5, E): the owner sets it up — subscription, federated credential for OIDC, a fenced
+  resource group. Not available yet (2026-10-18).
+- The customer interview (`ROADMAP.md` B): `audience` and `plain` in the question-set
+  format, `requirements.yaml`, `platform.yaml`, the role filter in Phase 0 and 3,
+  `export_decisions.py`, the three evals graders. None started.
 
 ## Next
 
-Re-render `private-storage-on-platform` on the AVM modules, both targets, from the
-unchanged spec: `terraform init` with `azapi`/`modtm`/`random` added, `terraform test`
-with the mocked providers, `check_render_coverage.py`, `bicep build` against `br/public`.
-That run settles the test contract in `avm.md`, re-measures the cross-backend diff (the
-role GUID table and the two diagnostic settings should disappear from it), and is the
-template for `greenfield-telemetry` — three resources, created network and workspace,
-Bicep — which exercises the `create` branches the first example never reached.
+`ROADMAP.md` A1 and A2, in parallel: re-render `private-storage-on-platform` on the AVM
+modules, both targets, from the unchanged spec (`terraform init` with
+`azapi`/`modtm`/`random` added, `terraform test` with the mocked providers,
+`check_render_coverage.py`, `bicep build` against `br/public`), which settles the test
+contract in `avm.md` and re-measures the cross-backend diff; and write
+`check_question_set.py`, since the `audience` field B1 adds needs a check that fails on
+its absence. Then B3 and B1.
