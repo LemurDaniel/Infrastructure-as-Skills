@@ -161,8 +161,9 @@ The same reading settles how the code is split, which the spec records under
   file per stage (`environments/<stage>.tfvars`, `main.<stage>.bicepparam`) with one
   state per stage (a backend key, never a workspace). A value marked `per_environment`
   in its question is a parameter whose value lives in the stage's file, never a literal
-  in the template; a stage whose values nobody could give gets no file and an `open:`
-  entry naming it. Only what `non_production_savings` relaxes differs between the
+  in the template; a stage whose values nobody could give gets its file with placeholders
+  (the all-zero GUID, `OPEN-<what>`) and an `open:` entry naming it; the pipeline refuses to
+  deploy a file that still holds one. Only what `non_production_savings` relaxes differs between the
   stages; everything else is identical, which is what the stack is for. A value the
   customer stated holds in every stage unless they said which stage; the savings relax
   defaults and derived values only.
@@ -356,7 +357,7 @@ Defaulted (guardrail baseline):
   Data protection blob soft-delete 7d, container soft-delete 7d, versioning on
   Observability   diagnostics -> Log Analytics, categories: audit + allLogs
 
-Per stage (one file each; development and test open until the platform team answers):
+Per stage (one file each; development and test hold placeholders until the platform team answers):
   production      sub 1111…, rg-invoicing-prod-we, hub vnet-hub-prod-we, ZRS
   development     sub ?, rg ?, hub ? - LRS (non_production_savings)
   test            sub ?, rg ?, hub ? - LRS

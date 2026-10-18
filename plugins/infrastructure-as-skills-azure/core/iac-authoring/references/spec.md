@@ -59,6 +59,16 @@ context:
 
 # The deployment set's answers. Resolved once; every resource inherits them.
 deployment:
+  # How the code reaches Azure - see "Delivery: the pipeline" below.
+  deploy_mechanism:
+    value: github               # azure_devops | github | gitlab | local
+    source: stated
+  pipeline_auth:
+    value: workload_identity    # not written when deploy_mechanism is local
+    source: default
+  pipeline_approvals:
+    value: production           # production | every_stage | none
+    source: default
   network_exposure:
     value: private
     source: asked
@@ -201,6 +211,43 @@ differently carries `non_production: stated`. The renderer reads a map as a para
 and writes each stage's value into that stage's parameter file; a scalar is a literal in
 the template. A reference object (`{ name, resource_group_name }`) is told apart from a
 stage map by its keys, which are never stage names.
+
+**An open stage is still rendered, with placeholders.** A stage named in an `open:` entry
+gets its parameter file (`environments/<stage>.tfvars`, `main.<stage>.bicepparam`) and its
+pipeline block anyway, so the scaffold stands and answering the entry is an edit of values.
+An open per-stage value renders as the all-zero GUID `00000000-0000-0000-0000-000000000000`
+(an id) or `OPEN-<what>` (a name); what the spec does know stays real. The spec carries no
+placeholder - it carries the `open:` entry - and `check_pipeline.py` fails both ways: an open
+stage whose file holds no placeholder (the values were guessed) and a resolved stage whose
+file still holds one. A placeholder never deploys; the pipeline refuses it
+([pipelines.md](../../iac-rendering/references/pipelines.md), invariant 11), and the stage
+chain then holds every stage behind it.
+
+## Delivery: the pipeline
+
+Three deployment keys say how the rendered code is deployed. They are a render output beside
+the Terraform or Bicep, drawn from the same spec; the files per system, the flow and the
+invariants are in [pipelines.md](../../iac-rendering/references/pipelines.md).
+
+| Key | Values | Default | Source |
+|---|---|---|---|
+| `deploy_mechanism` | `azure_devops`, `github`, `gitlab`, `local` | none - asked | `stated`, `asked`, or `carried` when the repository already holds `.github/workflows`, `azure-pipelines.yml` or `.gitlab-ci.yml` |
+| `pipeline_auth` | `workload_identity`, `client_secret` | `workload_identity` | `default`; `client_secret` only `stated` by the platform team, with the rotation as an `open:` entry |
+| `pipeline_approvals` | `production`, `every_stage`, `none` | `production` | `default`; `none` only `stated` |
+
+- `deploy_mechanism` is a `required` customer question. A run nobody can answer records an
+  `open:` entry (`key: deployment.deploy_mechanism`, `owner: workload owner`,
+  `blocks: apply`) and **renders no pipeline** - the reply says so. It is never `assumed`: a
+  guessed pipeline is a file in the wrong directory for the wrong system.
+- `local` renders a script and no pipeline; `pipeline_auth` and `pipeline_approvals` are then
+  not written.
+- The pipeline reads `context.environments` (the stage blocks, in order),
+  `context.workload` (the state key), `deployment.stage_isolation` (one identity and one
+  subscription per stage, or one subscription with role scopes), and `target`
+  (Terraform plan/apply or Bicep what-if/create). Nothing about it is a resource decision, so
+  none of it sits under `resources:`.
+- The platform side - identities, federated credentials, environments, approval checks,
+  state account - is not in the spec. The render lists it in the pipeline's header comment.
 
 ## `source` is what makes it a spec rather than a settings dump
 
@@ -458,6 +505,7 @@ changed, not the whole spec again.
 | A decision changed | The new value with `source: overridden` and a comment naming the old value. Consequences re-derived |
 | A resource removed | Its key, its `contains` entry and every `wiring:` entry naming it are deleted. Say before rendering that the plan will **destroy** it — a removal in the spec is a deletion in Azure |
 | A stage added or removed | `context.environments` changes; every map gains or loses the key, a gained stage's per-stage values are asked or opened, and a removed stage's state is destroyed — say so before rendering |
+| The deploy mechanism added or changed | `deployment.deploy_mechanism` with its source (`stated` when the user said it in this run). The new system's pipeline files are rendered; a replaced system's are **removed**, not left beside them - two pipelines applying one state race for its lock. Say so before rendering |
 | `naming.yaml` | Carried, never regenerated. A naming change the user asks for is an edit to that file, and the plan will show it as a rename — most Azure resources cannot be renamed, so say that it destroys and recreates them |
 | A question added to the set since | Absent, resolves from its default, recorded as `default`. Name the additions |
 

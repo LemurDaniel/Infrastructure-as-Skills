@@ -223,6 +223,103 @@ groups:
           (network_ownership), not this value.
         renders: variable resource_group_name / param resourceGroupName / scope
 
+  # ---------------------------------------------------------------- delivery
+  # How the rendered code reaches Azure. Asked right after the stages because the
+  # pipeline is built from them: one deployment job per stage, one state and one
+  # parameter file per stage. The pipeline is a render output beside Terraform or
+  # Bicep, not an add-on - core/iac-rendering/references/pipelines.md.
+  - id: delivery
+    title: Delivery
+    questions:
+      - id: deploy_mechanism
+        ask: Where does the code live, and what should deploy it - Azure DevOps, GitHub, GitLab, or by hand from a workstation?
+        type: enum
+        audience: customer
+        plain:
+          en: "The system is deployed {value}."
+          de: "Das System wird {value} ausgerollt."
+        plain_values:
+          azure_devops: { en: "by an Azure DevOps pipeline", de: "durch eine Azure-DevOps-Pipeline" }
+          github: { en: "by GitHub Actions", de: "durch GitHub Actions" }
+          gitlab: { en: "by a GitLab CI pipeline", de: "durch eine GitLab-CI-Pipeline" }
+          local: { en: "by hand from a workstation, without a pipeline", de: "von Hand von einem Arbeitsplatz, ohne Pipeline" }
+        values: [azure_devops, github, gitlab, local]
+        required: true
+        why: >
+          No default exists: the answer is a fact about the customer's tooling,
+          and a guessed pipeline is a file in the wrong directory for the wrong
+          system. Often it is not asked at all - a repository that holds
+          .github/workflows, azure-pipelines.yml or .gitlab-ci.yml answers it
+          (source: carried), and a request that names the system answers it
+          (source: stated). `local` is a complete answer, not a gap: it renders
+          a script with the commands, no pipeline, and the rest of the delivery
+          group is skipped. One answer per deployment; a repository that wants
+          two systems states both and the render takes the first, since two
+          pipelines applying the same state is the failure this avoids.
+        renders: >
+          the pipeline files for the system (core/iac-rendering/references/pipelines.<system>.md):
+          .github/workflows, azure-pipelines.yml, .gitlab-ci.yml, or deploy.ps1 / deploy.sh
+
+      - id: pipeline_auth
+        ask: How does the pipeline sign in to Azure?
+        type: enum
+        audience: platform
+        plain:
+          en: "The pipeline signs in to Azure {value}."
+          de: "Die Pipeline meldet sich {value} bei Azure an."
+        plain_values:
+          workload_identity: { en: "with a short-lived token issued per run, no password stored anywhere", de: "mit einem kurzlebigen Token pro Lauf, ohne irgendwo gespeichertes Passwort" }
+          client_secret: { en: "with a stored password that has to be rotated", de: "mit einem gespeicherten Passwort, das rotiert werden muss" }
+        values: [workload_identity, client_secret]
+        default: workload_identity
+        depends_on: { question: deploy_mechanism, not_equals: local }
+        why: >
+          Workload identity federation: the pipeline's run presents a token its
+          platform signs, Entra ID trusts that issuer for one subject (repository
+          and stage), and nothing secret exists to leak, expire or rotate. A
+          client secret is the legacy shape - it works everywhere and is the
+          credential most often found in a repository's history. `client_secret`
+          is the platform team's statement that federation is not available to
+          them (a self-hosted GitLab without a reachable issuer, say), and it
+          carries the rotation as an open item. The identity itself, its
+          federated credentials and its roles are the platform's, created once;
+          the render names what it expects, it never creates it.
+        renders: >
+          github: id-token write permission and azure/login with client id,
+          tenant and subscription; azure_devops: a service connection of type
+          workload identity federation; gitlab: id_tokens and an OIDC login step;
+          terraform: ARM_USE_OIDC; never a secret in the template
+
+      - id: pipeline_approvals
+        ask: Which stages need a person to approve before anything is changed?
+        type: enum
+        audience: engineer
+        plain:
+          en: "A person approves the change before it is applied: {value}."
+          de: "Eine Person gibt die Änderung frei, bevor sie ausgerollt wird: {value}."
+        plain_values:
+          production: { en: "in live operation only", de: "nur im Echtbetrieb" }
+          every_stage: { en: "in every stage", de: "in jeder Stufe" }
+          none: { en: "in no stage - changes roll out unattended", de: "in keiner Stufe - Änderungen laufen unbeaufsichtigt durch" }
+        values: [production, every_stage, none]
+        default: production
+        depends_on: { question: deploy_mechanism, not_equals: local }
+        why: >
+          The plan is read by a person once, before production, because a plan
+          that succeeds can still replace a database. Earlier stages apply on
+          their own: they are where a wrong change is cheap, and a gate on every
+          stage trains approvers to click through. `every_stage` is for a team
+          that treats test as shared with others; `none` is for a sandbox or a
+          pipeline that only ever runs on a throwaway stage. This is a security
+          decision and carries no non_production_default - the gate is the same
+          rule in every stage that has one. The gate is enforced by the
+          platform (a GitHub environment's required reviewers, an Azure DevOps
+          environment check, a GitLab protected environment), so the render
+          names the configuration it expects and the stage's job points at it.
+        renders: >
+          the environment each apply job runs in, and the approval check the
+          platform must hold on it; no job applies a plan another run produced
+
   # ---------------------------------------------------------------- requirements
   # What the customer can say about the system without knowing Azure. Each answer
   # derives technical decisions in the resource sets: a resource question carrying
