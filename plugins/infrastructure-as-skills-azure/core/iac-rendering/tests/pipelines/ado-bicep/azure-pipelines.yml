@@ -1,0 +1,44 @@
+# Rendered from infra-spec.yaml. Platform prerequisites: see pipelines.ado.md.
+trigger:
+  branches: { include: [master] }
+  paths: { include: ["**/*.tf", "**/*.tfvars", "**/*.bicep", "**/*.bicepparam", "azure-pipelines.yml", ".azure-pipelines/**"] }
+pr:
+  branches: { include: [master] }
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: validate
+    displayName: Validate
+    jobs:
+      - job: validate
+        steps:
+          - checkout: self
+          - script: az bicep build --file main.bicep --stdout > /dev/null
+            displayName: Build
+          - script: az bicep lint --file main.bicep
+            displayName: Lint
+          - script: for f in main.*.bicepparam; do az bicep build-params --file "$f" --stdout > /dev/null; done
+            displayName: Parameter files compile against the template
+
+  - template: .azure-pipelines/stage.yml
+    parameters:
+      stage: development
+      dependsOn: validate
+      gated: false
+      serviceConnection: sc-payments-development
+
+  - template: .azure-pipelines/stage.yml
+    parameters:
+      stage: test
+      dependsOn: development
+      gated: false
+      serviceConnection: sc-payments-test
+
+  - template: .azure-pipelines/stage.yml
+    parameters:
+      stage: production
+      dependsOn: test
+      gated: true             # pipeline_approvals: production - the check lives on the environment
+      serviceConnection: sc-payments-production

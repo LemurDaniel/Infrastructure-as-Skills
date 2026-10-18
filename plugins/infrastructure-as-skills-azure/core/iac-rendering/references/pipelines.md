@@ -91,7 +91,9 @@ reports as "not checkable" instead of passing them.
     decision document tells the customer ("Solange diese Punkte offen sind, wird nichts
     ausgerollt"). The check is the same one line on every platform:
     `grep -Eq '00000000-0000-0000-0000-000000000000|OPEN-'`. A resolved stage whose file
-    still holds a marker fails it too, which is the point.
+    still holds a marker fails it too, which is the point - and the grep reads comments as
+    well, so a resolved stage's file must not spell either marker out, not even to explain
+    the convention (the example's staging file once did, and would have refused itself).
 
 ## What the render hands over besides the files
 
@@ -105,6 +107,11 @@ header comment of the entry file and in the reply, as a short list:
   environments, GitLab protected environments and CI/CD variables;
 - the approval check on each gated stage's environment;
 - every variable the pipeline reads and where it is set.
+
+Paths in a pipeline are relative to the deployable root. When the root is the repository
+root that is `.`; when it is a directory (`bicep/` beside a Terraform root, a `infra/`
+folder) the render sets the working directory of every step to it, in the platform's own
+construct, and says so in the header comment.
 
 A stage whose values are `open:` in the spec still gets its block, its variables set and
 its stage file, filled with placeholders ([terraform-idiom.md](terraform-idiom.md#the-context-values-and-the-stage-files)):

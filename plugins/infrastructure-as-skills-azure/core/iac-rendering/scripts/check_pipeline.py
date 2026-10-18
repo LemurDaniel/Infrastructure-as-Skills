@@ -583,19 +583,25 @@ def check_guard(root, mech):
 
 def check_stage_files(root, stages, target, open_stages):
     """Every stage has its file; an open stage's file holds placeholders, a resolved stage's none."""
+    code = root
     if target == 'terraform':
         names = {s: os.path.join('environments', f'{s}.tfvars') for s in stages}
         present = bool(glob.glob(os.path.join(root, '*.tf')))
     else:
         names = {s: f'main.{s}.bicepparam' for s in stages}
-        present = bool(glob.glob(os.path.join(root, '*.bicep')))
+        # the Bicep root may sit in a directory of the repository (bicep/, infra/)
+        for d in (root, os.path.join(root, 'bicep'), os.path.join(root, 'infra')):
+            if glob.glob(os.path.join(d, '*.bicep')):
+                code = d
+                break
+        present = bool(glob.glob(os.path.join(code, '*.bicep')))
     if not present:
         note("no code beside the pipeline - the stage files were not checked")
         return
     for s in stages:
-        path = os.path.join(root, names[s])
+        path = os.path.join(code, names[s])
         if not os.path.isfile(path):
-            err(f"{names[s]}: missing - every stage gets its file, with placeholders while its values are open")
+            err(f"{os.path.relpath(path, root)}: missing - every stage gets its file, with placeholders while its values are open")
             continue
         with open(path, encoding='utf-8') as f:
             has = bool(MARKER_RE.search(f.read()))

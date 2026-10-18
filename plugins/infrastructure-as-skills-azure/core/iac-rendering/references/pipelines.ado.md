@@ -55,6 +55,7 @@ pr:
 pool:
   vmImage: ubuntu-latest
 
+# Terraform only - a Bicep root has no TF_VERSION and renders no `variables:` block here.
 variables:
   - name: TF_VERSION
     value: "1.16.6"           # the newest patch of the ~> 1.16.0 constraint on 2026-10-18; re-resolve on render
@@ -248,14 +249,23 @@ Queue, never cancel: add an *Exclusive lock* check to the environment, behaviour
 
 ## Stage template - Bicep
 
-Same parameters, stage skeleton, placeholder guard and `deployment` job; the two steps
-differ. Variables `AZURE_SUBSCRIPTION_ID` and `AZURE_RESOURCE_GROUP` come from the group.
+Same parameters and stage skeleton; the jobs below replace the Terraform ones and the
+`terraform-install.yml` template is not rendered. A root that is not the repository root
+(`bicep/`) puts `workingDirectory: <root>` on every step, `checkout` aside; the paths below
+are then relative to it. Variables `AZURE_SUBSCRIPTION_ID` and `AZURE_RESOURCE_GROUP` come from the group.
 
 ```yaml
       - job: plan
         steps:
           - checkout: self
-          # the "Refuse placeholder values" step above, with f="main.$(STAGE).bicepparam"
+          - bash: |
+              f="main.$(STAGE).bicepparam"
+              [ -f "$f" ] || { echo "##vso[task.logissue type=error]$f is missing"; exit 1; }
+              if grep -Eq '00000000-0000-0000-0000-000000000000|OPEN-' "$f"; then
+                echo "##vso[task.logissue type=error]Stage $(STAGE) still holds placeholder values in $f - answer the open items first."
+                exit 1
+              fi
+            displayName: Refuse placeholder values
           - task: AzureCLI@2
             displayName: What-if
             name: plan

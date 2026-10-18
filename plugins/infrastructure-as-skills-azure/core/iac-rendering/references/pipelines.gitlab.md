@@ -192,6 +192,13 @@ validate:
 
 .plan:
   script:
+    - |
+      f="main.$CI_ENVIRONMENT_NAME.bicepparam"
+      [ -f "$f" ] || { echo "$f is missing"; exit 1; }
+      if grep -Eq '00000000-0000-0000-0000-000000000000|OPEN-' "$f"; then
+        echo "Stage $CI_ENVIRONMENT_NAME still holds placeholder values in $f - answer the open items first."
+        exit 1
+      fi
     - !reference [.login]
     - >
       az deployment group what-if --resource-group "$AZURE_RESOURCE_GROUP"
