@@ -75,6 +75,8 @@ current one before rendering (next section).
 | Storage account | `avm-res-storage-storageaccount` v0.10.0 | `avm/res/storage/storage-account` 0.33.1 | Terraform module is AzAPI-based since 0.7 — see *Provider requirements* |
 | Virtual network | `avm-res-network-virtualnetwork` v0.22.3 | `avm/res/network/virtual-network` 0.10.2 | Terraform module is AzAPI-based; subnets are a child module, usable alone for a referenced vnet |
 | Log Analytics workspace | `avm-res-operationalinsights-workspace` v0.5.1 | `avm/res/operational-insights/workspace` 0.16.1 | Terraform module still requires `azurerm` **4.x** (`>= 4.36, < 5.0`) |
+| App Service plan | `avm-res-web-serverfarm` v2.0.8 | `avm/res/web/serverfarm` 0.7.0 | Terraform module is AzAPI-based (`azapi ~> 2.4`); exposes only `name` and `resource_id` as outputs. Looked up 2026-10-18 |
+| App Service (web app) | `avm-res-web-site` v0.24.1 | `avm/res/web/site` 0.24.0 | Terraform module is AzAPI-based (`azapi ~> 2.12`, `time`); `resource` output is the site. Looked up 2026-10-18 |
 | Private endpoint | `avm-res-network-privateendpoint` v0.2.0 | `avm/res/network/private-endpoint` 0.12.1 | Rarely called directly — every resource module carries the interface |
 | Key Vault | `avm-res-keyvault-vault` v0.12.0, **Orphaned** | `avm/res/key-vault/vault` 0.14.2 | For `key_management: customer_managed` |
 | Resource group | `avm-res-resources-resourcegroup` v0.4.0 | `avm/res/resources/resource-group` 0.4.4 | Not rendered — the deployment set expects the group to exist |

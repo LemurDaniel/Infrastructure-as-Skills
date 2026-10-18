@@ -150,6 +150,7 @@ supports disabling local auth, disable it:
 |---|---|
 | Storage account | `shared_access_key_enabled: false` |
 | Key Vault | `rbac_authorization: true` (not access policies) |
+| App Service | FTP and SCM basic publishing credentials disabled; both switches, they are separate |
 | Service Bus / Event Hub | local auth disabled |
 | Cosmos DB | local auth disabled |
 | SQL | Entra-only authentication |

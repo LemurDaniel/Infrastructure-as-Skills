@@ -147,8 +147,20 @@ Verified Modules first, authored resources second.
   is never open, a stated value holds in every stage. No grader checks
   `implementation` or `module_source` yet; B6's customer-question graders are not
   written.
+- **`compute/app-service` landed 2026-10-18** (28 questions, both checks green): plan and
+  web app as two AVM modules per target (Terraform `avm-res-web-serverfarm` v2.0.8 +
+  `avm-res-web-site` v0.24.1, both AzAPI; Bicep `web/serverfarm` 0.7.0 + `web/site`
+  0.24.0). No new customer question: zone redundancy and instance count derive from
+  `outage_impact`, exposure, basic auth and diagnostics are inherited. Not yet done: no
+  rendered example, no tests exercised (the Terraform plan module exposes only `name` and
+  `resource_id`, so its three decisions will be `not-testable`; the `siteConfig` property
+  paths for the asserts are to be read off a first `terraform test` run), the diagnostic
+  category names are from memory and want `az monitor diagnostic-settings categories
+  list` against a real site, and `time` provider is required by the site module. The
+  `integration_subnet` under `network_ownership: create` is specified as forced by the
+  virtual-network set, which has no delegation question yet.
 - Remaining families, in the order `ROADMAP.md` C1 sets: `security` (Key Vault,
-  user-assigned identity), `compute` (App Service, Container Apps), `data` (Azure SQL,
+  user-assigned identity), `compute` (Container Apps, function apps), `data` (Azure SQL,
   PostgreSQL Flexible), `integration` (Service Bus). Key Vault's Terraform AVM module is
   `Orphaned` in the index — usable, flagged in the handover.
 - **A sandbox subscription for real plans, applies and the deploy agent** (`ROADMAP.md`
@@ -169,8 +181,8 @@ Verified Modules first, authored resources second.
 
 Re-run the eval suite (full, ~$5) against the two rules written after the baseline and
 accept the run if `vague-public-dev` rises without the other two dropping. Then
-`ROADMAP.md` C1: the `security` family (Key Vault, user-assigned identity) and `compute`
-(App Service, Container Apps), each with `audience`, `plain`, `per_environment` where it
+`ROADMAP.md` C1: the `security` family (Key Vault, user-assigned identity) and the rest of
+`compute` (Container Apps), plus a rendered App Service example with its tests; each with `audience`, `plain`, `per_environment` where it
 applies, both rendering references and a diagram icon. B6's two graders and the
 extension run that writes a further stage's file once its open entries are answered stay
 on the list; A5 waits on the owner's sandbox.

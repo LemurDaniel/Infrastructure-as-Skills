@@ -122,6 +122,7 @@ Infrastructure-as-Skills-Azure/
     │   │       ├── terraform.md
     │   │       └── bicep.md
     │   ├── network/                # virtual-network
+    │   ├── compute/                # app-service
     │   └── observability/          # log-analytics-workspace
     └── patterns/                   # compositions of resource families
 ```
@@ -218,6 +219,7 @@ Nothing has been applied.
 - [x] Guardrails: the rules every question set takes its defaults from, shared with
       `Infrastructure-by-Skill`
 - [x] Three resources: `storage-account`, `virtual-network`, `log-analytics-workspace`
+- [x] A fourth, `app-service` (family `compute`): question set and both rendering references; no rendered example yet
 - [x] `check_spec.py` — validates a spec against the contract, and separately whether it
       is applyable at all
 - [x] `check_render_coverage.py` — every spec decision asserted by the rendered tests, or
