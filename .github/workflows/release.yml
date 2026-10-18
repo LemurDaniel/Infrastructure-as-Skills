@@ -1,0 +1,63 @@
+name: Release
+
+# A tag v<major>.<minor>.<patch>[-suffix] builds the plugin ZIP and publishes it as a
+# release. While the major version is 0 the release is marked as a prerelease.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PLUGIN_DIR: plugins/infrastructure-as-skills-azure
+      PLUGIN_NAME: infrastructure-as-skills-azure
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check the tag against the manifest
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          manifest="$(python3 -c "import json; print(json.load(open('$PLUGIN_DIR/.claude-plugin/plugin.json'))['version'])")"
+          if [ "$version" != "$manifest" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match plugin.json version $manifest"
+            exit 1
+          fi
+          if [ "${version%%.*}" = "0" ] || [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Run the repository checks
+        run: |
+          pip install pyyaml
+          python3 .claude/skills/git-commit-conventions/scripts/check_repo_consistency.py
+          python3 $PLUGIN_DIR/core/iac-authoring/scripts/check_question_set.py
+          python3 $PLUGIN_DIR/core/iac-diagram/tests/run_diagram_tests.py
+
+      - name: Build the ZIP
+        run: |
+          zip_name="$PLUGIN_NAME-${{ steps.version.outputs.version }}.zip"
+          git archive --format=zip --prefix="$PLUGIN_NAME/" -o "$zip_name" "HEAD:$PLUGIN_DIR"
+          sha256sum "$zip_name" > "$zip_name.sha256"
+          echo "ZIP_NAME=$zip_name" >> "$GITHUB_ENV"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then flags="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" "$ZIP_NAME" "$ZIP_NAME.sha256" \
+            --title "$GITHUB_REF_NAME" --generate-notes $flags
