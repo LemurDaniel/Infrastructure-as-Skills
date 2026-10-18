@@ -21,13 +21,13 @@ groups:
   - id: placement
     title: Placement
     questions:
-      - id: environment
-        ask: Which environment is this for?
-        type: enum
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
         audience: engineer
         plain:
-          en: "Placed in the {value} environment."
-          de: "Liegt in der Umgebung {value}."
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         from_context: true
@@ -61,6 +61,7 @@ groups:
         ref: resource_group
         required: true
         from_context: true
+        per_environment: true
         why: >
           The account is placed into an existing group. Creating one here would
           make this skill own a lifecycle wider than the resource it describes.
@@ -104,6 +105,7 @@ groups:
           de: "Seine private Anbindung landet im Subnetz {value}."
         ref: subnet
         from_deployment: private_endpoint_subnet
+        per_environment: true
         why: >
           One subnet carries the deployment's private endpoints, so this is
           inherited rather than asked. Overridden only where an account genuinely
@@ -141,6 +143,7 @@ groups:
           de: "Durch die Firewall erlaubte öffentliche Adressen: {value}."
         default: []
         depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        per_environment: true
         why: >
           An enumerated allowlist. An empty list with the firewall enabled denies
           everything public, which is a valid and deliberate state. `0.0.0.0/0`
@@ -157,6 +160,7 @@ groups:
         ref: subnet
         default: []
         depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        per_environment: true
         why: >
           Service endpoints are cheaper than private endpoints but leave the
           account publicly addressable — the ACL does the refusing. Prefer a
@@ -215,6 +219,7 @@ groups:
         ref: user_assigned_identity
         required: true
         depends_on: { question: managed_identity, equals: user_assigned }
+        per_environment: true
         why: The identities must already exist; this skill does not create them.
         renders: identity.identity_ids / identity.userAssignedIdentities
 
@@ -226,6 +231,7 @@ groups:
           en: "Access rights granted to: {value}."
           de: "Zugriffsrechte vergeben an: {value}."
         default: []
+        per_environment: true
         why: >
           With shared-key auth disabled, nothing can read the account until a role
           is assigned — so an empty list means a working account nobody can use.
@@ -362,6 +368,7 @@ groups:
         ref: key_vault_key
         required: true
         depends_on: { question: key_management, equals: customer_managed }
+        per_environment: true
         why: >
           The key must exist and the account's identity must hold wrap/unwrap on
           it before the account can be created — an ordering that bites every
@@ -407,6 +414,7 @@ groups:
           question: outage_impact
           map: { tolerable: LRS, disruptive: ZRS, critical: GZRS }
         confirm_in: [production]
+        non_production_default: LRS
         why: >
           Derived from how bad an outage is, which the customer answered once for
           the whole system. ZRS survives the loss of an availability zone at roughly
@@ -414,6 +422,9 @@ groups:
           GZRS adds a secondary region and only pays off with a documented failover
           plan — without one it is cost for a capability nobody will exercise. GRS
           is reachable only as an engineer's departure, for a region without zones.
+          The derivation is production's; the non-production stages take LRS
+          while non_production_savings is enabled - a development stage that
+          survives a zone loss protects nothing anyone would miss.
           Replication cannot be changed between local and geo tiers in place, so
           this choice forces a replacement later.
         renders: account_replication_type / sku.name
@@ -562,6 +573,7 @@ groups:
           de: "Seine Protokolle gehen in {value}."
         ref: log_analytics_workspace
         from_deployment: diagnostics_destination
+        per_environment: true
         why: >
           Inherited: one deployment, one destination, or correlating an incident
           across its resources means querying two workspaces. A storage account

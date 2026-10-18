@@ -20,13 +20,13 @@ groups:
   - id: placement
     title: Placement
     questions:
-      - id: environment
-        ask: Which environment is this for?
-        type: enum
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
         audience: engineer
         plain:
-          en: "Placed in the {value} environment."
-          de: "Liegt in der Umgebung {value}."
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
         values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
         required: true
         from_context: true
@@ -59,6 +59,7 @@ groups:
         ref: resource_group
         required: true
         from_context: true
+        per_environment: true
         why: >
           A workspace normally outlives the workloads reporting into it, which
           argues for a platform resource group rather than the application's — and
@@ -77,6 +78,7 @@ groups:
           en: "Logs are kept for {value} days."
           de: "Protokolle werden {value} Tage aufbewahrt."
         from_deployment: log_retention_days
+        non_production_default: 30
         why: >
           Inherited from the deployment set. 30 days covers incident investigation,
           which is what most logs are for; longer is an audit or regulatory
