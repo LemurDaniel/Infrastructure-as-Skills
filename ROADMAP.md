@@ -126,7 +126,10 @@ the quality claim rests on:
 1. **PSRule for Azure** on every render: Bicep directly, Terraform through the plan JSON.
    It is Microsoft's rule set for the Well-Architected Framework and it judges the output
    independently of this plugin's own guardrails. Where a guardrail and a rule disagree,
-   the disagreement is documented, never suppressed.
+   the disagreement is documented, never suppressed. It is a pipeline gate, not part of
+   the plugin: it runs on the GitHub runner (`microsoft/ps-rule`, which brings its own
+   PowerShell) here and in the deploy workflow of E1, never on the customer's machine. The
+   plugin itself stays Markdown, YAML and Python.
 2. **The cross-backend diff automated:** both renders normalised to the decision level,
    failing on any difference not listed as a known asymmetry in the idiom files.
 3. **The AVM version drift check** as a scheduled, read-only task that reports what moved.
