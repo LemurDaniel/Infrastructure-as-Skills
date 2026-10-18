@@ -134,18 +134,25 @@ groups:
           en: "The log workspace is {value}."
           de: "Der Protokoll-Arbeitsbereich ist {value}."
         plain_values:
-          disabled: { en: "not reachable from the internet; reading logs then needs a private link scope", de: "aus dem Internet nicht erreichbar; zum Lesen braucht es dann einen privaten Zugang" }
-          enabled: { en: "reachable from the internet", de: "aus dem Internet erreichbar" }
+          disabled: { en: "reachable only through the platform's private link scope", de: "nur über den privaten Zugang der Plattform erreichbar" }
+          enabled: { en: "reachable from the internet, with company accounts and encryption - there is no private link scope to go through", de: "aus dem Internet erreichbar, mit Firmenkonten und Verschlüsselung; einen privaten Zugang dafür gibt es nicht" }
         values: [disabled, enabled]
-        from_deployment: network_exposure
+        default: enabled
         confirm_in: [production]
         why: >
-          Inherited from the deployment posture, with one consequence worth saying
-          out loud: `disabled` needs an Azure Monitor Private Link Scope (AMPLS),
-          not just a private endpoint, and an AMPLS is tenant-wide infrastructure
-          with real blast radius — it changes resolution for every agent in the
-          networks linked to it. Query and ingestion are two separate switches,
-          which is why a half-configured workspace accepts logs nobody can read.
+          The one resource that does not simply inherit the private posture.
+          `disabled` needs an Azure Monitor Private Link Scope (AMPLS) - not a
+          private endpoint on the workspace - and an AMPLS is tenant-wide
+          infrastructure with real blast radius: it changes resolution for every
+          agent in the networks linked to it, which is why a landing zone platform
+          owns it and a deployment never creates one. This set is reached only
+          when the deployment creates its workspace (observability_ownership:
+          create), which is the standalone case where no AMPLS exists; `disabled`
+          there is a workspace that accepts logs nobody can read. So `enabled` is
+          the default: ingestion and query stay authenticated with Entra ID and
+          encrypted, and the first render's eval run flagged the inherited
+          `disabled` as unworkable. `disabled` is for a stated AMPLS the workspace
+          joins. Query and ingestion are two separate switches, rendered together.
         renders: >
           internet_ingestion_enabled and internet_query_enabled /
           properties.publicNetworkAccessForIngestion and ...ForQuery
