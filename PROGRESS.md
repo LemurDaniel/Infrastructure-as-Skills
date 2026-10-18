@@ -159,6 +159,34 @@ Verified Modules first, authored resources second.
   list` against a real site, and `time` provider is required by the site module. The
   `integration_subnet` under `network_ownership: create` is specified as forced by the
   virtual-network set, which has no delegation question yet.
+- **The pipeline landed as references, 2026-10-18** (not yet as renders): the `delivery`
+  group in `deployment.yaml` (`deploy_mechanism` customer/required, `pipeline_auth`
+  platform/workload_identity, `pipeline_approvals` engineer/production) and
+  `core/iac-rendering/references/pipelines{,.github,.ado,.gitlab,.local}.md`, derived from
+  the owner's scaffolds (`ARCHIVE__ProgrammingResources/Scaffoldings`; action versions
+  there were stale and are re-looked-up). GitLab has no scaffold behind it and is marked
+  untested. `scripts/check_pipeline.py` checks the invariants of `pipelines.md` per
+  platform; `tests/run_pipeline_tests.py` (55 cases) runs it on five fixtures taken from
+  the references (GitHub x2 targets, Azure DevOps, GitLab, local) and on ~45 single-invariant
+  breaks. **A rendered example exists** (2026-10-18): `examples/private-storage-on-platform`
+  got `request.pipeline.md` (an extension run), `deploy_mechanism: github` in its spec and
+  `.github/workflows/` with all three stage blocks; development and test are `open:` and
+  hold **placeholder** stage files (all-zero GUID, `OPEN-<what>`) - the owner's call
+  2026-10-18, reversing "an open stage gets no file": the scaffold stands, and invariant 11
+  of `pipelines.md` (the plan job's first step refuses a placeholder; the stage chain then
+  holds every later stage, production included) keeps it from deploying. Run on it: `check_pipeline.py`, `check_spec.py`, `actionlint` 1.7.12
+  (on a copy in a throwaway git repo; it resolves the reusable workflow from the repository
+  root), and the pipeline's own validate steps (`fmt`, `init -backend=false`, `validate`,
+  `test`, 7 passed). Not run: anything that needs Azure or a GitHub repository - the
+  environments, the federated login, `plan`, `apply`; `init -backend-config=...` was run
+  against a dummy account and got as far as authentication, so the arguments are valid.
+  **Found by doing it:** `terraform init -backend-config=...` without a backend block is
+  ignored without an error (local state, gone with the runner) - the example now holds an
+  empty `backend "azurerm" {}`, `terraform-idiom.md` and `pipelines.md` say so, and
+  `check_pipeline.py` fails on a root without one. Not yet done: the Azure DevOps, GitLab
+  and Bicep pipelines have no rendered example, `spec.md` does not document the new `deployment:`
+  keys, the diagram does not draw the pipeline, no eval case, and `deploy_mechanism` is a
+  customer question on top of an interview already over its six-question budget.
 - Remaining families, in the order `ROADMAP.md` C1 sets: `security` (Key Vault,
   user-assigned identity), `compute` (Container Apps, function apps), `data` (Azure SQL,
   PostgreSQL Flexible), `integration` (Service Bus). Key Vault's Terraform AVM module is
