@@ -2,6 +2,10 @@
 // one root: one Azure Verified Module call per resource and the wiring between them.
 // deployment.landing_zone: standalone - the deployment owns its network, its privatelink
 // zone and its workspace; nothing is referenced.
+// One template for the whole stack (context.environments): every value that differs per
+// stage - the address range, the subnets, the cost knobs - is a parameter, and each stage
+// has its own main.<stage>.bicepparam. Only staging's values are known; the other stages'
+// files are written once their open: entries are answered, never with guessed values.
 // Versions resolved 2026-10-18 from the MCR tag lists: virtual-network 0.10.2,
 // operational-insights/workspace 0.16.1, private-dns-zone 0.8.1, storage-account 0.33.1.
 targetScope = 'resourceGroup'
@@ -33,6 +37,30 @@ param workload string
 
 @description('Instance number, for a second instance beside the first.')
 param index int = 1
+
+// ------------------------------------------ per-stage values, from main.<stage>.bicepparam
+
+@description('Address range of this stage\'s network (deployment.address_space, per stage). Assigned by the address owner; never a literal here.')
+param addressSpace string
+
+@description('This stage\'s subnets (virtual-network.addressing.subnets, per stage). The first carries the private endpoints.')
+param subnets subnet[]
+
+type subnet = {
+  @description('Subnet name, from the convention or as stated.')
+  name: string
+  @description('Prefix out of addressSpace.')
+  addressPrefix: string
+}
+
+@description('Replication of the storage account for this stage (storage-account.data_protection.replication): ZRS in production, LRS in the non-production stages while savings are on.')
+@allowed(['Standard_LRS', 'Standard_ZRS', 'Standard_GRS', 'Standard_GZRS'])
+param storageSkuName string
+
+@description('Log retention in days for this stage (log-analytics-workspace.cost.retention_days): the stated value in production, 30 in the non-production stages while savings are on.')
+@minValue(30)
+@maxValue(730)
+param logRetentionDays int
 
 @description('The organisation\'s tag set, applied to every resource. Open in the spec: nothing stated yet.')
 param tags object = {}
@@ -80,8 +108,6 @@ var idx = padLeft(index, 2, '0')
 
 // patterns.Azure."Microsoft.Network/virtualNetworks": <TYPE>-<LOCATION>-<ENVIRONMENT>-<NAME>-<INDEX>
 var virtualNetworkName = 'vnet-${loc}-${env}-${workload}-${idx}'
-// patterns.Azure."Microsoft.Network/virtualNetworks/subnets": <TYPE>-<ENVIRONMENT>-<NAME>-<INDEX>
-var privateEndpointSubnetName = 'snet-${env}-privatelink-${idx}'
 // patterns.Azure.default: <TYPE>-<LOCATION>-<ENVIRONMENT>-<NAME><?SUBNAME;-%s>-<INDEX>
 var workspaceName = 'log-${loc}-${env}-${workload}-${idx}'
 var privateEndpointNames = [for sub in privateEndpointSubresources: 'pep-${loc}-${env}-${workload}-${sub}-${idx}']
@@ -112,8 +138,9 @@ module workspace 'br/public:avm/res/operational-insights/workspace:0.16.1' = {
 
     // decision: log-analytics-workspace.cost.sku
     skuName: 'PerGB2018'
-    // decision: log-analytics-workspace.cost.retention_days - stated 90; the module default is 365
-    dataRetention: 90
+    // decision: log-analytics-workspace.cost.retention_days - per stage, from the stage file;
+    // the module default is 365
+    dataRetention: logRetentionDays
     // decision: log-analytics-workspace.cost.daily_quota_gb - a string on this module, -1 is no cap
     dailyQuotaGb: '-1'
 
@@ -147,25 +174,19 @@ module virtualNetwork 'br/public:avm/res/network/virtual-network:0.10.2' = {
     location: location
     tags: tags
 
-    // decision: virtual-network.addressing.address_space
-    addressPrefixes: ['10.20.0.0/16']
+    // decision: virtual-network.addressing.address_space - per stage, from the stage file
+    addressPrefixes: [addressSpace]
 
-    // decision: virtual-network.addressing.subnets
+    // decision: virtual-network.addressing.subnets - per stage, from the stage file; the
+    // first entry is the private-endpoint subnet (private_endpoint_subnet_prefix).
     subnets: [
-      {
-        name: privateEndpointSubnetName
-        // decision: virtual-network.addressing.private_endpoint_subnet_prefix
-        addressPrefix: '10.20.1.0/27'
+      for subnet in subnets: {
+        name: subnet.name
+        addressPrefix: subnet.addressPrefix
         // decision: virtual-network.subnet_policy.private_endpoint_network_policies - NSG
         // and routes apply to endpoint traffic.
         privateEndpointNetworkPolicies: 'Enabled'
         // decision: virtual-network.subnet_policy.service_endpoints - none: the weaker posture
-        serviceEndpoints: []
-      }
-      {
-        name: 'snet-app'
-        addressPrefix: '10.20.2.0/24'
-        privateEndpointNetworkPolicies: 'Enabled'
         serviceEndpoints: []
       }
     ]
@@ -219,9 +240,10 @@ module storageAccount 'br/public:avm/res/storage/storage-account:0.33.1' = {
     location: location
     tags: tags
     kind: 'StorageV2'
-    // decision: storage-account.data_protection.replication - derived from outage_impact;
-    // the module default is Standard_GRS
-    skuName: 'Standard_ZRS'
+    // decision: storage-account.data_protection.replication - derived from outage_impact for
+    // production, LRS in the non-production stages; per stage, from the stage file. The
+    // module default is Standard_GRS.
+    skuName: storageSkuName
     // decision: storage-account.data_protection.access_tier - derived from data_access_pattern
     accessTier: 'Hot'
 

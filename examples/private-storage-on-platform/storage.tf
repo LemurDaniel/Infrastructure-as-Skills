@@ -24,9 +24,10 @@ module "storage" {
   parent_id = data.azurerm_resource_group.this.id
 
   account_kind = "StorageV2"
-  # decision: storage-account.data_protection.replication - the SKU name carries it;
-  # account_tier / account_replication_type are ignored while this is set.
-  account_sku_name = "Standard_ZRS"
+  # decision: storage-account.data_protection.replication - per stage, from the stage
+  # file; the SKU name carries it, and account_tier / account_replication_type are
+  # ignored while this is set.
+  account_sku_name = "Standard_${var.replication}"
   # decision: storage-account.data_protection.access_tier
   access_tier = "Hot"
 

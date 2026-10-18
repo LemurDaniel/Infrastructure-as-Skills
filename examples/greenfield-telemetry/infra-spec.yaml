@@ -8,14 +8,18 @@ spec:
   skill_version: 0.1.0
   at: 2026-10-18T14:00:00Z
 
-# Values every resource inherits. Resolved once, not per resource.
-# All stated in the request - nothing here was guessed.
+# Values every resource inherits. Resolved once, not per resource. The request named
+# the staging stage; the stack is the default, so staging joins development, test and
+# production, and what the request gave for staging is staging's value - the other
+# stages' subscriptions, groups and ranges are open: entries, never guessed.
 context:
-  environment: staging
+  environments: [development, test, staging, production]
   location: germanywestcentral
   workload: telemetry
-  subscription_id: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-  resource_group_name: rg-telemetry-stg-gwc
+  subscription_id:
+    staging: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+  resource_group_name:
+    staging: rg-telemetry-stg-gwc
   # Not stated, repository has none, nobody to ask (headless run) - see open:.
   tags: {}
 
@@ -28,6 +32,12 @@ deployment:
     value: avm
     source: default         # the versions are pinned in the render, never here
   module_telemetry:
+    value: enabled
+    source: default
+  stage_isolation:
+    value: subscription
+    source: default
+  non_production_savings:
     value: enabled
     source: default
   # The requirements group - the request said nothing about outage, loss or access
@@ -65,10 +75,12 @@ deployment:
     value: create
     source: stated          # "ein eigenes VNet"
   address_space:
-    value: 10.20.0.0/16
-    source: stated
+    value:
+      staging: 10.20.0.0/16
+    source: stated          # the other stages' ranges: open, the address owner's
   private_endpoint_subnet_prefix:
-    value: 10.20.1.0/27
+    value:
+      staging: 10.20.1.0/27
     source: stated
   private_dns_ownership:
     value: deployment
@@ -78,8 +90,11 @@ deployment:
     value: create
     source: stated          # "ein eigener Log Analytics Workspace"
   log_retention_days:
-    value: 90
+    # Stated 90 applies to production; the non-production stages keep the
+    # non_production_default while non_production_savings is enabled.
+    value: { development: 30, test: 30, staging: 30, production: 90 }
     source: stated
+    non_production: default
   daily_quota_gb:
     value: -1
     source: default
@@ -94,20 +109,24 @@ resources:
   virtual-network:
     addressing:
       address_space:
-        value: 10.20.0.0/16
+        value:
+          staging: 10.20.0.0/16
         source: deployment
       subnets:
         # The private-endpoint subnet's prefix was stated, its name follows the
-        # convention; the app subnet was stated with both.
+        # convention; the app subnet was stated with both. Per stage: the other
+        # stages' prefixes follow their ranges, which are open.
         value:
-          - name: snet-stg-privatelink-01
-            prefix: 10.20.1.0/27
-            purpose: private_endpoints
-          - name: snet-app
-            prefix: 10.20.2.0/24
+          staging:
+            - name: snet-stg-privatelink-01
+              prefix: 10.20.1.0/27
+              purpose: private_endpoints
+            - name: snet-app
+              prefix: 10.20.2.0/24
         source: stated
       private_endpoint_subnet_prefix:
-        value: 10.20.1.0/27
+        value:
+          staging: 10.20.1.0/27
         source: deployment
       dns_servers:
         value: []
@@ -144,8 +163,9 @@ resources:
   log-analytics-workspace:
     cost:
       retention_days:
-        value: 90
-        source: deployment        # log_retention_days, stated
+        value: { development: 30, test: 30, staging: 30, production: 90 }
+        source: deployment        # log_retention_days, stated 90 for production
+        non_production: default
       daily_quota_gb:
         value: -1
         source: deployment
@@ -221,9 +241,12 @@ resources:
         source: default
     data_protection:
       replication:
-        value: ZRS
+        # Derived for production; the non-production stages take the question's
+        # non_production_default while non_production_savings is enabled.
+        value: { development: LRS, test: LRS, staging: LRS, production: ZRS }
         source: requirement
         derived_from: deployment.outage_impact
+        non_production: default
       access_tier:
         value: Hot
         source: requirement
@@ -278,6 +301,41 @@ wiring:
     forced_by: deployment.private_dns_ownership
 
 open:
+  - key: context.subscription_id
+    environments: [development, test, production]
+    question: Which subscriptions do the development, test and production stages deploy into? The request named staging's only; the stack is one subscription per stage.
+    owner: platform team
+    blocks: apply
+  - key: context.resource_group_name
+    environments: [development, test, production]
+    question: Which resource group does each of the other stages deploy into?
+    owner: platform team
+    blocks: apply
+  - key: deployment.address_space
+    environments: [development, test, production]
+    question: Which address ranges are assigned to the development, test and production networks? Staging's is 10.20.0.0/16; the others cannot overlap it.
+    owner: network / IPAM owner
+    blocks: apply
+  - key: deployment.private_endpoint_subnet_prefix
+    environments: [development, test, production]
+    question: Which prefix out of each stage's range carries its private endpoints?
+    owner: network / IPAM owner
+    blocks: apply
+  - key: resources.virtual-network.addressing.address_space
+    environments: [development, test, production]
+    question: Follows deployment.address_space per stage.
+    owner: network / IPAM owner
+    blocks: apply
+  - key: resources.virtual-network.addressing.subnets
+    environments: [development, test, production]
+    question: Each stage's subnets follow its range; the app subnet keeps its name and size.
+    owner: network / IPAM owner
+    blocks: apply
+  - key: resources.virtual-network.addressing.private_endpoint_subnet_prefix
+    environments: [development, test, production]
+    question: Follows deployment.private_endpoint_subnet_prefix per stage.
+    owner: network / IPAM owner
+    blocks: apply
   - key: context.tags
     question: Which tag set does the organisation apply? Nothing in the request, no repository to read it from.
     owner: workload owner

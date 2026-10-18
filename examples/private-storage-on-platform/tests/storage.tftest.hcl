@@ -53,6 +53,7 @@ variables {
   private_endpoint_subnet_name  = "snet-privatelink"
   workspace_name                = "log-platform-prod-we"
   workspace_resource_group_name = "rg-observability-prod-we"
+  replication                   = "ZRS"
 }
 
 run "naming" {
@@ -72,6 +73,28 @@ run "naming" {
   assert {
     condition     = module.storage.resource.parent_id == data.azurerm_resource_group.this.id
     error_message = "The account is placed into the context's resource group."
+  }
+}
+
+# A non-production stage renders from the same code with its own file: the name
+# carries the stage, and the savings knob lands in the SKU.
+run "non_production_stage" {
+  command = plan
+
+  variables {
+    environment         = "development"
+    replication         = "LRS"
+    resource_group_name = "rg-invoicing-dev-we"
+  }
+
+  assert {
+    condition     = module.storage.resource.name == "stwedevinvoicing01"
+    error_message = "The development stage's name carries its environment code."
+  }
+
+  assert {
+    condition     = module.storage.resource.body.sku.name == "Standard_LRS"
+    error_message = "non_production_savings: the development stage runs on LRS."
   }
 }
 

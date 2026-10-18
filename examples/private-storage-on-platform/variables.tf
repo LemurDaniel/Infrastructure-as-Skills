@@ -70,6 +70,16 @@ variable "workspace_resource_group_name" {
 
 # --- storage account decisions the caller may still vary ---------------------
 
+variable "replication" {
+  description = "Replication of the account for this stage (storage-account.data_protection.replication): ZRS in production, LRS in the non-production stages while non_production_savings is on. Per stage, from environments/<stage>.tfvars."
+  type        = string
+
+  validation {
+    condition     = contains(["LRS", "ZRS", "GRS", "GZRS"], var.replication)
+    error_message = "replication must be one of LRS, ZRS, GRS, GZRS."
+  }
+}
+
 variable "private_endpoint_subresources" {
   description = "Storage services that get a private endpoint. One endpoint and one DNS record per entry, so list only what is used."
   type        = list(string)

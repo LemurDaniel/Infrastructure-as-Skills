@@ -7,8 +7,8 @@ idiom, a reviewer sees what `source:` buys.
 
 | Example | Targets | Scenario | Why it is here |
 |---|---|---|---|
-| [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account, production, behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec on the **Azure Verified Modules** (`avm-res-storage-storageaccount` v0.10.0, `avm/res/storage/storage-account` 0.33.1, resolved 2026-10-18), so the two can be diffed. The git history before that date holds the authored render of the same spec |
-| [`greenfield-telemetry/`](greenfield-telemetry/) | Bicep | Three resources, staging, nothing referenced: own network with two subnets, own workspace, private storage, `landing_zone: standalone` | The `create` branches the first example never reaches, including the privatelink zone the deployment owns and links. Four AVM modules in one root, the wiring between them in the root. The first render with tests against the compiled ARM, and the first spec carrying `source: requirement` |
+| [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account on the default stack (development, test, production - the request named production), behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec on the **Azure Verified Modules** (`avm-res-storage-storageaccount` v0.10.0, `avm/res/storage/storage-account` 0.33.1, resolved 2026-10-18), so the two can be diffed. The git history before that date holds the authored render of the same spec |
+| [`greenfield-telemetry/`](greenfield-telemetry/) | Bicep | Three resources on a four-stage stack (the request named staging), nothing referenced: own network with two subnets, own workspace, private storage, `landing_zone: standalone`; only staging's stage file is resolved | The `create` branches the first example never reaches, including the privatelink zone the deployment owns and links. Four AVM modules in one root, the wiring between them in the root. The first render with tests against the compiled ARM, and the first spec carrying `source: requirement` |
 
 
 ## What each directory holds
@@ -19,6 +19,7 @@ idiom, a reviewer sees what `source:` buys.
   infra-spec.yaml       # the interview's output - the artefact everything else follows from
   infra-decisions.md    # the spec as the customer reads it, rendered by export_decisions.py
   naming.yaml           # the convention, a full copy of naming.default.yaml - Terraform only
+  environments/*.tfvars # one file per resolved stage (Terraform); bicep/main.<stage>.bicepparam (Bicep)
   platform.yaml         # the platform profile the platform team would have written
   *.tf, *.tfvars        # the Terraform render, one concern per file
   tests/*.tftest.hcl    # plan-only, platform mocked, naming provider real - one
@@ -34,15 +35,15 @@ idiom, a reviewer sees what `source:` buys.
 
 ```powershell
 cd examples/private-storage-on-platform
-terraform init
+terraform init          # a real root adds -backend-config="key=invoicing/production.tfstate"
 terraform fmt -check -recursive
-terraform validate
+terraform validate      # terraform plan -var-file=environments/production.tfvars needs credentials
 terraform test
 python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
 python3 ../../plugins/infrastructure-as-skills/core/iac-authoring/scripts/export_decisions.py ./infra-spec.yaml --language de
 
 bicep build --stdout bicep/main.bicep > $null
-bicep build-params bicep/main.bicepparam --stdout > $null
+bicep build-params bicep/main.staging.bicepparam --stdout > $null   # one per resolved stage
 bicep lint bicep/main.bicep
 
 cd ../greenfield-telemetry

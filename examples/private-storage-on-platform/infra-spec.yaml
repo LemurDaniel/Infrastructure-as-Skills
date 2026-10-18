@@ -8,14 +8,18 @@ spec:
   skill_version: 0.1.0
   at: 2026-10-18T10:30:00Z
 
-# Values every resource inherits. Resolved once, not per resource.
-# All stated in the request - nothing here was guessed.
+# Values every resource inherits. Resolved once, not per resource. The request named
+# production; the stack development, test, production is the default, so "Produktion"
+# is its production stage, and what the request stated is production's value - the
+# other stages' subscriptions, groups and platform parts are open: entries, never guessed.
 context:
-  environment: production
+  environments: [development, test, production]
   location: westeurope
   workload: invoicing
-  subscription_id: 11111111-2222-3333-4444-555555555555
-  resource_group_name: rg-invoicing-prod-we
+  subscription_id:
+    production: 11111111-2222-3333-4444-555555555555
+  resource_group_name:
+    production: rg-invoicing-prod-we
   # Not stated, repository has none, nobody to ask (headless run) - see open:.
   tags: {}
 
@@ -30,6 +34,12 @@ deployment:
                             # br/public:avm/res/storage/storage-account (bicep);
                             # the versions are pinned in the renders, never here
   module_telemetry:
+    value: enabled
+    source: default
+  stage_isolation:
+    value: subscription
+    source: default
+  non_production_savings:
     value: enabled
     source: default
   # The requirements group - nothing in the request answered them, so each default
@@ -65,12 +75,15 @@ deployment:
     value: reference
     source: stated
   existing_vnet:
+    # Per stage: the platform's hub for each stage. Only production's was stated.
     value:
-      name: vnet-hub-prod-we
-      resource_group_name: rg-network-prod-we
+      production:
+        name: vnet-hub-prod-we
+        resource_group_name: rg-network-prod-we
     source: stated
   private_endpoint_subnet:
-    value: snet-privatelink
+    value:
+      production: snet-privatelink
     source: stated
   private_dns_ownership:
     value: platform
@@ -83,8 +96,9 @@ deployment:
     source: stated
   diagnostics_destination:
     value:
-      name: log-platform-prod-we
-      resource_group_name: rg-observability-prod-we
+      production:
+        name: log-platform-prod-we
+        resource_group_name: rg-observability-prod-we
     source: stated
 
 # One resource, no modules/ in the repository -> one root.
@@ -99,7 +113,8 @@ resources:
         value: disabled
         source: deployment        # network_exposure: private
       private_endpoint_subnet:
-        value: snet-privatelink
+        value:
+          production: snet-privatelink
         source: deployment
       private_endpoint_subresources:
         value: [blob]
@@ -140,9 +155,12 @@ resources:
         source: default
     data_protection:
       replication:
-        value: ZRS
+        # Derived for production; development and test take the question's
+        # non_production_default while non_production_savings is enabled.
+        value: { development: LRS, test: LRS, production: ZRS }
         source: requirement       # confirm_in production
         derived_from: deployment.outage_impact
+        non_production: default
       access_tier:
         value: Hot
         source: requirement
@@ -171,8 +189,9 @@ resources:
     observability:
       diagnostic_workspace:
         value:
-          name: log-platform-prod-we
-          resource_group_name: rg-observability-prod-we
+          production:
+            name: log-platform-prod-we
+            resource_group_name: rg-observability-prod-we
         source: deployment
       diagnostic_categories:
         value: [audit]
@@ -182,6 +201,41 @@ resources:
         source: default
 
 open:
+  - key: context.subscription_id
+    environments: [development, test]
+    question: Which subscriptions do the development and test stages deploy into? The request named production's; the stack is one subscription per stage.
+    owner: platform team
+    blocks: apply
+  - key: context.resource_group_name
+    environments: [development, test]
+    question: Which resource group does each of the other stages deploy into?
+    owner: platform team
+    blocks: apply
+  - key: deployment.existing_vnet
+    environments: [development, test]
+    question: Which hub network do the development and test stages attach to?
+    owner: platform team
+    blocks: apply
+  - key: deployment.private_endpoint_subnet
+    environments: [development, test]
+    question: Which subnet carries the private endpoints in the development and test hubs?
+    owner: platform team
+    blocks: apply
+  - key: deployment.diagnostics_destination
+    environments: [development, test]
+    question: Which workspace receives the development and test stages' diagnostics?
+    owner: platform team
+    blocks: apply
+  - key: resources.storage-account.networking.private_endpoint_subnet
+    environments: [development, test]
+    question: Follows deployment.private_endpoint_subnet per stage.
+    owner: platform team
+    blocks: apply
+  - key: resources.storage-account.observability.diagnostic_workspace
+    environments: [development, test]
+    question: Follows deployment.diagnostics_destination per stage.
+    owner: platform team
+    blocks: apply
   - key: context.tags
     question: Which tag set does the organisation apply? Nothing in the request, no repository to read it from.
     owner: workload owner

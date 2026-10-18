@@ -12,16 +12,21 @@ landing_zone: corp
 naming_convention: default
 module_telemetry: enabled
 
+# Per stage, like every platform fact that differs between the stages' subscriptions;
+# only production's hub is known so far.
 network_ownership: reference
 existing_vnet:
-  name: vnet-hub-prod-we
-  resource_group_name: rg-network-prod-we
-private_endpoint_subnet: snet-privatelink
+  production:
+    name: vnet-hub-prod-we
+    resource_group_name: rg-network-prod-we
+private_endpoint_subnet:
+  production: snet-privatelink
 
 private_dns_ownership: platform
 private_dns_records: policy
 
 observability_ownership: reference
 diagnostics_destination:
-  name: log-platform-prod-we
-  resource_group_name: rg-observability-prod-we
+  production:
+    name: log-platform-prod-we
+    resource_group_name: rg-observability-prod-we

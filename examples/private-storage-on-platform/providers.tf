@@ -2,6 +2,12 @@ terraform {
   # The AVM storage module requires >= 1.10 (write-only arguments, ephemeral values).
   required_version = ">= 1.10"
 
+  # One state per stage, selected at init by the backend key, never by a workspace:
+  #   terraform init -backend-config="key=invoicing/production.tfstate"
+  #   terraform plan -var-file=environments/production.tfvars
+  # The backend block itself is the consuming repository's (its storage account, its
+  # container); an example has none.
+
   required_providers {
     # The root's own use: the data blocks that reference the platform. The module
     # itself does not use azurerm at all.

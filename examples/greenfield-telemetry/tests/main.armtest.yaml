@@ -4,35 +4,47 @@
 # what the compiled template cannot show is not_testable with its reason.
 # check_render_coverage.py checks both. Values the compiler turned into expressions -
 # anything referencing another module or a var - are matched by regex on their text.
+# A per-stage value is asserted twice: in the template as a parameter reference (no
+# literal), and in the stage's parameter file (`stage: staging`) as the stage's value.
 
 # ---------------------------------------------------------------- virtual-network
 - decision: virtual-network.addressing.address_space
+  stage: staging
+  path: parameters.addressSpace.value
+  equals: 10.20.0.0/16
+- deployment: deployment.address_space
   path: resources.virtualNetwork.properties.parameters.addressPrefixes.value
-  equals: ['10.20.0.0/16']
+  equals: ["[parameters('addressSpace')]"]
 
 - decision: virtual-network.addressing.subnets
-  path: resources.virtualNetwork.properties.parameters.subnets.value
-  matches: 'privateEndpointSubnetName.*10\.20\.1\.0/27.*snet-app.*10\.20\.2\.0/24'
+  stage: staging
+  path: parameters.subnets.value
+  equals:
+    - { name: snet-stg-privatelink-01, addressPrefix: 10.20.1.0/27 }
+    - { name: snet-app, addressPrefix: 10.20.2.0/24 }
 
 - decision: virtual-network.addressing.private_endpoint_subnet_prefix
-  path: resources.virtualNetwork.properties.parameters.subnets.value[0].addressPrefix
+  stage: staging
+  path: parameters.subnets.value[0].addressPrefix
   equals: 10.20.1.0/27
 
 - decision: virtual-network.addressing.dns_servers
   path: resources.virtualNetwork.properties.parameters.dnsServers.value
   equals: []
 
+# The subnets compile to a copy over the stage's list; the policy decisions are in its
+# expression text, the same for every subnet.
 - decision: virtual-network.subnet_policy.private_endpoint_network_policies
-  path: resources.virtualNetwork.properties.parameters.subnets.value[0].privateEndpointNetworkPolicies
-  equals: Enabled
+  path: resources.virtualNetwork.properties.parameters.subnets
+  matches: "'privateEndpointNetworkPolicies', 'Enabled'"
 
 - decision: virtual-network.subnet_policy.service_endpoints
-  path: resources.virtualNetwork.properties.parameters.subnets.value[0].serviceEndpoints
-  equals: []
+  path: resources.virtualNetwork.properties.parameters.subnets
+  matches: "'serviceEndpoints', createArray\\(\\)"
 
 - decision: virtual-network.subnet_policy.subnet_delegations
-  path: resources.virtualNetwork.properties.parameters.subnets.value[0].delegation
-  absent: true
+  path: resources.virtualNetwork.properties.parameters.subnets
+  matches: "^(?!.*delegation)"
 
 - decision: virtual-network.security.ddos_protection
   path: resources.virtualNetwork.properties.parameters.ddosProtectionPlanResourceId
@@ -51,8 +63,12 @@
 
 # --------------------------------------------------------- log-analytics-workspace
 - decision: log-analytics-workspace.cost.retention_days
+  stage: staging
+  path: parameters.logRetentionDays.value
+  equals: 30
+- deployment: deployment.log_retention_days
   path: resources.workspace.properties.parameters.dataRetention.value
-  equals: 90
+  equals: "[parameters('logRetentionDays')]"
 
 - decision: log-analytics-workspace.cost.daily_quota_gb
   path: resources.workspace.properties.parameters.dailyQuotaGb.value
@@ -135,8 +151,12 @@
   equals: false
 
 - decision: storage-account.data_protection.replication
+  stage: staging
+  path: parameters.storageSkuName.value
+  equals: Standard_LRS
+- deployment: deployment.non_production_savings
   path: resources.storageAccount.properties.parameters.skuName.value
-  equals: Standard_ZRS
+  equals: "[parameters('storageSkuName')]"
 
 - decision: storage-account.data_protection.access_tier
   path: resources.storageAccount.properties.parameters.accessTier.value
