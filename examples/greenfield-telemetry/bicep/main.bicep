@@ -21,10 +21,10 @@ targetScope = 'resourceGroup'
   'sandbox'
   'demo'
   'hotfix'
-]) // keys of mappings.environment in naming.yaml
+]) // keys of mappings.environment in the convention (naming.default.yaml)
 param environment string
 
-@description('Azure region. Part of every rendered name, so it must be mapped in naming.yaml.')
+@description('Azure region. Part of every rendered name, so it must be mapped in the convention.')
 param location string = resourceGroup().location
 
 @description('Workload short name, rendered into every resource name. 15 characters at most, or the storage account name exceeds 24.')
@@ -54,7 +54,8 @@ type roleAssignment = {
 }
 
 // ------------------------------------------------------------------ naming
-// Generated from naming.yaml (mappings, patterns, abbreviations). Regenerate, do not edit here.
+// Generated from the convention, naming.default.yaml (mappings, patterns, abbreviations) - a Bicep
+// root carries no copy of it. Regenerate, do not edit here.
 
 var environmentCodes = {
   development: 'dev'

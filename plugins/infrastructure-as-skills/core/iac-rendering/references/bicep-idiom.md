@@ -203,8 +203,10 @@ never a literal. Values the user stated go into `main.bicepparam`, not into the 
 
 The registry's naming modules (`utility/naming/schema`, `utility/naming/generator`,
 `genName`) are **not ready to ship** — do not import them and do not call them. On the
-Bicep side the name is assembled from `var`s generated from the repository's `naming.yaml`:
-its pattern for the type, its abbreviation, its location and environment codes. See
+Bicep side the name is assembled from `var`s generated from the convention (the plugin's
+`naming.default.yaml`, with the repository's `naming.yaml` merged over it when a `custom`
+convention exists; a Bicep root gets no copy otherwise): its pattern for the type, its
+abbreviation, its location and environment codes. See
 [naming.md](naming.md) for the full pattern and the character limits that come with doing
 it by hand.
 

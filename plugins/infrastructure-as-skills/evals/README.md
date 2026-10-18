@@ -38,7 +38,8 @@ run, costs nothing, and its failure says exactly which decision went wrong. Each
   range, subscription id or resource group. These are the failures that look plausible and
   surface at apply time, which is why they are weighted up.
 - **The process** — `Skill` fired (an indicator, not scored against the no-plugin arm),
-  `naming.yaml` written, no `.tf`/`.bicep` written before confirmation.
+  `naming.yaml` written for a Terraform target and not for a Bicep one, no `.tf`/`.bicep`
+  written before confirmation.
 
 `check_spec.py` — the contract check covering sources, enums, backend attribute spellings
 and composition — runs on the produced specs after the suite, not inside it.
