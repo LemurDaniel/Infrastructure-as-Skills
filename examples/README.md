@@ -8,9 +8,8 @@ idiom, a reviewer sees what `source:` buys.
 | Example | Targets | Scenario | Why it is here |
 |---|---|---|---|
 | [`private-storage-on-platform/`](private-storage-on-platform/) | Terraform, Bicep | One storage account, production, behind a referenced hub and workspace, BSI C5 | The straightforward case: every platform part is referenced, one resource, `granularity: single`. Rendered to both targets from the one spec on the **Azure Verified Modules** (`avm-res-storage-storageaccount` v0.10.0, `avm/res/storage/storage-account` 0.33.1, resolved 2026-10-18), so the two can be diffed. The git history before that date holds the authored render of the same spec |
+| [`greenfield-telemetry/`](greenfield-telemetry/) | Bicep | Three resources, staging, nothing referenced: own network with two subnets, own workspace, private storage, `landing_zone: standalone` | The `create` branches the first example never reaches, including the privatelink zone the deployment owns and links. Four AVM modules in one root, the wiring between them in the root. The first render with tests against the compiled ARM, and the first spec carrying `source: requirement` |
 
-Planned: `greenfield-telemetry` — three resources, created network and workspace, Bicep —
-the harder case, exercising the `create` branches this example never reaches.
 
 ## What each directory holds
 
@@ -23,8 +22,11 @@ the harder case, exercising the `create` branches this example never reaches.
   *.tf, *.tfvars        # the Terraform render, one concern per file
   tests/*.tftest.hcl    # plan-only, platform mocked, naming provider real - one
                         # assert per spec decision, checked by check_render_coverage.py
+  tests/*.armtest.yaml  # the Bicep tests: one entry per decision against the compiled
+                        # ARM, run by run_arm_tests.py, counted by the same coverage check
   bicep/main.bicep      # the Bicep render of the same spec
   bicep/main.bicepparam # its parameters - the same values as terraform.tfvars
+  bicep/bicepconfig.json # symbolicNameCodegen on, so the tests can address resources by name
 ```
 
 ## Running one
@@ -40,6 +42,11 @@ python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_
 bicep build --stdout bicep/main.bicep > $null
 bicep build-params bicep/main.bicepparam --stdout > $null
 bicep lint bicep/main.bicep
+
+cd ../greenfield-telemetry
+bicep build --stdout bicep/main.bicep > $null && bicep lint bicep/main.bicep
+python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/run_arm_tests.py ./infra-spec.yaml
+python3 ../../plugins/infrastructure-as-skills/core/iac-rendering/scripts/check_render_coverage.py ./infra-spec.yaml
 ```
 
 Needs the AVM module and the `azurerm`, `azapi`, `modtm`, `random` and
