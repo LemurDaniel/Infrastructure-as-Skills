@@ -1,0 +1,336 @@
+# Pipeline on GitHub Actions
+
+`deployment.deploy_mechanism: github`. The flow, the invariants and the decision mapping are
+in [pipelines.md](pipelines.md); this file is the GitHub spelling of them, for Terraform and
+for Bicep.
+
+Status: written from the vendor documentation and a working scaffold of the owner's, with the
+action versions looked up on 2026-10-18. It has been parsed, not run against a repository.
+
+## Files
+
+```
+.github/workflows/
+  infra.yaml          # entry: validate, then one call per stage, in order
+  infra-stage.yaml    # reusable: plan -> approve -> apply for one stage
+```
+
+One reusable workflow instead of one file per stage (the scaffold had three near-identical
+ones): a change to the flow is one edit, and a stage is a `with:` block.
+
+## Versions (snapshot 2026-10-18 - look them up again)
+
+```bash
+git ls-remote --tags --refs https://github.com/<owner>/<action>.git | sed 's#.*/##' | sort -V | tail -3
+```
+
+| Action | Major |
+|---|---|
+| `actions/checkout` | `v7` |
+| `hashicorp/setup-terraform` | `v4` |
+| `actions/upload-artifact` / `download-artifact` | `v7` / `v8` (a pair; they must agree on the artifact format) |
+| `azure/login` | `v3` |
+| Terraform | `~> 1.16.0` |
+
+## Environments
+
+Two per stage, because GitHub evaluates an environment's protection rules for every job that
+names it:
+
+| Environment | Holds | Protection |
+|---|---|---|
+| `<stage>` | The stage's variables; the plan and apply jobs run in it, so it is also the OIDC subject | Deployment branches: the default branch only |
+| `<stage>-approval` | Nothing | Required reviewers - only on a gated stage (`pipeline_approvals`) |
+
+The approval job is empty on purpose: it exists to stop the run between plan and apply, after
+the approver has had the plan in the job summary, and never holds a credential.
+
+Variables of `<stage>` (plain variables, not secrets - all are identifiers):
+
+| Variable | Target | Value |
+|---|---|---|
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` | both | The stage's identity |
+| `TF_STATE_SUBSCRIPTION_ID`, `TF_STATE_RESOURCE_GROUP`, `TF_STATE_STORAGE_ACCOUNT`, `TF_STATE_CONTAINER` | Terraform | The state backend |
+| `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` | Bicep | The deployment target; Terraform reads both from `environments/<stage>.tfvars` |
+
+The identity (an app registration or a user-assigned managed identity) carries one federated
+credential per stage: issuer `https://token.actions.githubusercontent.com`, subject
+`repo:<owner>/<repo>:environment:<stage>`. With `stage_isolation: subscription` each stage has
+its own identity and the roles of its own subscription.
+
+## Stages that are still open
+
+A stage with `open:` entries in the spec still gets its block in the entry workflow, its
+environments and variables in the header comment, and its stage file filled with
+placeholders. Its plan job fails at the first step, *Refuse placeholder values*, before any
+login - and because each stage waits for the one before, nothing behind it runs either.
+Filling the file with real values is the whole change that opens it.
+
+## Entry workflow
+
+```yaml
+# Rendered from infra-spec.yaml. Platform prerequisites: see pipelines.github.md.
+name: Infrastructure
+
+on:
+  pull_request:
+    paths: ["**.tf", "**.tfvars", "**.bicep", "**.bicepparam", ".github/workflows/infra*.yaml"]
+  push:
+    branches: [master]
+    paths: ["**.tf", "**.tfvars", "**.bicep", "**.bicepparam", ".github/workflows/infra*.yaml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # the target's validate steps, below
+      - uses: actions/checkout@v7
+
+  development:
+    needs: validate
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/infra-stage.yaml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      stage: development
+      gated: false
+
+  test:
+    needs: development
+    uses: ./.github/workflows/infra-stage.yaml
+    permissions: { contents: read, id-token: write }
+    with: { stage: test, gated: false }
+
+  production:
+    needs: test
+    uses: ./.github/workflows/infra-stage.yaml
+    permissions: { contents: read, id-token: write }
+    with: { stage: production, gated: true }   # pipeline_approvals: production
+```
+
+A pull request runs `validate` and nothing else: no job in it holds `id-token: write`, so
+code nobody has reviewed cannot ask Azure for anything. A skipped `development` skips the
+stages behind it.
+
+### Validate steps - Terraform
+
+```yaml
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~> 1.16.0"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - run: terraform test
+```
+
+### Validate steps - Bicep
+
+```yaml
+      - uses: actions/checkout@v7
+      - run: az bicep build --file main.bicep --stdout > /dev/null
+      - run: az bicep lint --file main.bicep
+      - name: Parameter files compile against the template
+        run: for f in main.*.bicepparam; do az bicep build-params --file "$f" --stdout > /dev/null; done
+```
+
+## Stage workflow - Terraform
+
+```yaml
+name: Infrastructure stage
+
+on:
+  workflow_call:
+    inputs:
+      stage: { type: string, required: true }
+      gated: { type: boolean, required: true }
+
+permissions:
+  contents: read
+
+# Queue, never cancel: an apply cut off halfway is how state and reality part.
+concurrency:
+  group: infra-${{ inputs.stage }}
+  cancel-in-progress: false
+
+env:
+  STAGE: ${{ inputs.stage }}
+  ARM_USE_OIDC: "true"
+  ARM_USE_AZUREAD: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  TF_IN_AUTOMATION: "true"
+  TF_STATE_KEY_PREFIX: payments        # context.workload
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    permissions: { contents: read, id-token: write }
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Refuse placeholder values
+        run: |
+          f="environments/${STAGE}.tfvars"
+          [ -f "$f" ] || { echo "::error::$f is missing"; exit 1; }
+          if grep -Eq '00000000-0000-0000-0000-000000000000|OPEN-' "$f"; then
+            echo "::error file=$f::Stage ${STAGE} still holds placeholder values - answer the open items first."
+            exit 1
+          fi
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~> 1.16.0"
+          terraform_wrapper: false      # the wrapper swallows the exit code the plan step reads
+      - name: Init
+        run: |
+          terraform init -input=false \
+            -backend-config="subscription_id=${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
+            -backend-config="key=${TF_STATE_KEY_PREFIX}/${STAGE}.tfstate" \
+            -backend-config="use_azuread_auth=true"
+      - name: Plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -input=false -detailed-exitcode \
+            -var-file="environments/${STAGE}.tfvars" -out=tfplan
+          code=$?
+          set -e
+          if [ "$code" -eq 1 ]; then exit 1; fi
+          echo "changes=$([ "$code" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          { echo "### Plan: ${STAGE}"; echo '```'; terraform show -no-color tfplan; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: steps.plan.outputs.changes == 'true'
+        with:
+          name: tfplan-${{ inputs.stage }}
+          path: tfplan
+          retention-days: 1             # a plan file can hold sensitive values in clear
+
+  approve:
+    needs: plan
+    if: ${{ inputs.gated && needs.plan.outputs.changes == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}-approval
+    steps:
+      - run: echo "Approved for ${{ inputs.stage }}."
+
+  apply:
+    needs: [plan, approve]
+    # approve is skipped on an ungated stage; !failure() lets that pass and still stops on a rejection
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.changes == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~> 1.16.0"
+          terraform_wrapper: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: tfplan-${{ inputs.stage }}
+      - name: Init
+        run: |
+          terraform init -input=false \
+            -backend-config="subscription_id=${{ vars.TF_STATE_SUBSCRIPTION_ID }}" \
+            -backend-config="resource_group_name=${{ vars.TF_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ vars.TF_STATE_CONTAINER }}" \
+            -backend-config="key=${TF_STATE_KEY_PREFIX}/${STAGE}.tfstate" \
+            -backend-config="use_azuread_auth=true"
+      - name: Apply the approved plan
+        run: terraform apply -input=false tfplan
+```
+
+`TF_STATE_KEY_PREFIX` is the literal workload when the spec holds it; when `workload` is
+`parameterized`, it is `${{ vars.WORKLOAD }}` and `WORKLOAD` joins the stage's variables.
+
+## Stage workflow - Bicep
+
+Same header, `concurrency`, `approve` job and `apply` condition as above; `plan` and
+`apply` differ. Deployment scope is a resource group; a subscription-scope root swaps
+`az deployment group` for `az deployment sub` and `--location`.
+
+```yaml
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    permissions: { contents: read, id-token: write }
+    outputs:
+      changes: ${{ steps.whatif.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Refuse placeholder values
+        run: |
+          f="main.${STAGE}.bicepparam"
+          [ -f "$f" ] || { echo "::error::$f is missing"; exit 1; }
+          if grep -Eq '00000000-0000-0000-0000-000000000000|OPEN-' "$f"; then
+            echo "::error file=$f::Stage ${STAGE} still holds placeholder values - answer the open items first."
+            exit 1
+          fi
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: What-if
+        id: whatif
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          az deployment group what-if --resource-group "$RESOURCE_GROUP" \
+            --template-file main.bicep --parameters "main.${STAGE}.bicepparam" \
+            --no-pretty-print > whatif.json
+          n=$(jq '[.changes[] | select(.changeType != "NoChange" and .changeType != "Ignore")] | length' whatif.json)
+          echo "changes=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          { echo "### What-if: ${STAGE}"; echo '```'; jq -r '.changes[] | select(.changeType != "NoChange" and .changeType != "Ignore") | "\(.changeType)\t\(.resourceId)"' whatif.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  approve:
+    # unchanged from the Terraform workflow
+
+  apply:
+    needs: [plan, approve]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.changes == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      # The approver read a prediction: what-if is read-only and create redeploys. Same
+      # commit, template and parameter file as the plan job - nothing else is promised.
+      - name: Deploy
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          az deployment group create --name "payments-${STAGE}" --resource-group "$RESOURCE_GROUP" \
+            --template-file main.bicep --parameters "main.${STAGE}.bicepparam"
+```
+
+The `jq` filter assumes the `changes[].changeType` shape of `az deployment group what-if
+--no-pretty-print`; check it against one real run before relying on the skip.
+
+## Left out of the scaffold
+
+- `auth_type: ClientSecret` and the JSON-in-a-secret `AZURE_AUTH` - federation only; a
+  `client_secret` decision is an `open:` item, not a branch of this file.
+- The temporary container-registry IP rules: a case of its own, not a default.
+- A `what_if_only` input: the gate is `approve`, not a boolean someone can flip at dispatch.
+- `azure/login@v1` and `actions/checkout@v4`: superseded, see the table above.

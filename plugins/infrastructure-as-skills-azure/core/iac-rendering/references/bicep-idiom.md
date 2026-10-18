@@ -25,7 +25,9 @@ Every decision whose question is `per_environment`, or whose spec value is a map
 stage, is a `param` without a default whose value lives in the stage file — the address
 range, the subnets, `storageSkuName` and `logRetentionDays` that `non_production_savings`
 sets cheaper outside production — never a literal in the template. A stage whose values
-are still `open:` gets no file.
+are still `open:` gets its file with placeholders (the all-zero GUID, `OPEN-<what>`), as
+in [terraform-idiom.md](terraform-idiom.md#the-context-values-and-the-stage-files); the
+pipeline refuses to deploy it.
 The conditionals are where environments silently diverge.
 
 ## Modules

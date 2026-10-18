@@ -264,9 +264,23 @@ group, the referenced network and workspace by name, the address ranges, the cos
 production. Not into variable `default`s: a default makes the value look optional, and the
 next stage then inherits production's subscription by forgetting to set it. Not as
 literals in the template: a literal range is the one that is wrong in every stage but
-one. The files are committed; they hold names and ids, never a secret. A stage whose
-values are still `open:` in the spec gets **no file** rather than a file with guessed
-values.
+one. The files are committed; they hold names and ids, never a secret.
+
+**A stage whose values are still `open:` in the spec gets its file anyway, with
+placeholders** - the scaffold stands, and filling it in is an edit of values, not of
+structure. The convention is the same for every target and every pipeline:
+
+- an open id is the all-zero GUID `00000000-0000-0000-0000-000000000000`; an open name is
+  `OPEN-<what>` (`OPEN-resource-group`, `OPEN-hub-vnet`). Nothing is invented that looks
+  real;
+- what the spec does know stays real - `environment`, `location`, `workload`, and the
+  `non_production_default` knobs (`replication = "LRS"`);
+- the file opens with a comment naming the spec's `open:` entries for that stage and who
+  answers them;
+- **a placeholder never deploys.** The pipeline's first step in a stage refuses a file that
+  holds either marker ([pipelines.md](pipelines.md)), and the spec's `open:` entries keep
+  blocking `apply`. Placeholders stand in for values nobody has given; they are not
+  `assumed` values and not a default.
 
 One state per stage, chosen at init by the backend key and never by a workspace — a
 workspace is invisible in the file tree and the thing a pipeline forgets to select:
@@ -276,9 +290,13 @@ terraform init -backend-config="key=<workload>/<stage>.tfstate"
 terraform plan -var-file=environments/<stage>.tfvars
 ```
 
-The backend block (its storage account and container) is the consuming repository's;
+The backend's values (its storage account and container) are the consuming repository's;
 the render adds the key convention as a comment in `providers.tf` and never a backend
-with values of its own. The test file plans a non-production stage once besides the
+with values of its own. With a pipeline (`deployment.deploy_mechanism` other than
+`local`) it adds the **empty** block `backend "azurerm" {}` as well, because the pipeline
+passes the values as `-backend-config` and `terraform init` ignores `-backend-config`
+without raising an error when no backend block exists - the state would be local, and gone
+with the runner. A local run without a state uses `terraform init -backend=false`. The test file plans a non-production stage once besides the
 decisions' runs: the name carries the stage's code, the savings knob lands where it
 renders.
 
