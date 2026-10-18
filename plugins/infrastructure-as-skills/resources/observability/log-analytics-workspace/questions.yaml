@@ -80,7 +80,9 @@ groups:
         from_deployment: log_retention_days
         non_production_default: 30
         why: >
-          Inherited from the deployment set. 30 days covers incident investigation,
+          Inherited from the deployment set, per stage: a stated retention holds in
+          every stage, an unstated one is 30 outside production while the savings
+          are on. 30 days covers incident investigation,
           which is what most logs are for; longer is an audit or regulatory
           requirement rather than an operational one. The first 31 days are
           included in the ingestion price, so 30 is also where the retention line

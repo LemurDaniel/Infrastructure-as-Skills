@@ -161,7 +161,8 @@ own parameter file with its own state. Two fields say how a decision behaves acr
   because a development stage that is less secure than production is where the breach
   happens. Everything else is identical in every stage: parity is what the stack is for.
 
-A value the customer states applies to every stage unless they say which; a derived value
+A value the customer states holds in every stage unless they say which stage they mean —
+the savings relax defaults and derived values, never a stated one. A derived value
 (`derived_from`) is production's, and the non-production stages take the savings default
 where one exists.
 

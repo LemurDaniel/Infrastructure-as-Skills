@@ -155,7 +155,9 @@ The same reading settles how the code is split, which the spec records under
   in its question is a parameter whose value lives in the stage's file, never a literal
   in the template; a stage whose values nobody could give gets no file and an `open:`
   entry naming it. Only what `non_production_savings` relaxes differs between the
-  stages; everything else is identical, which is what the stack is for.
+  stages; everything else is identical, which is what the stack is for. A value the
+  customer stated holds in every stage unless they said which stage; the savings relax
+  defaults and derived values only.
 - An existing `infra-spec.yaml` → its `composition` is `carried`; do not re-decide it
 - A flat repository, or a single resource → `single`
 - Otherwise → `per-concern`
@@ -182,6 +184,9 @@ resource, in two halves:
   `parameterized`: never asked, rendered as input variables, supplied at deploy time —
   a user who is only designing has no deployment target yet. Use them from the
   description if stated (as the variable's documentation/example, not a baked-in value).
+  **A parameterized value is never an `open:` entry**: a parameter without a value is
+  complete, and `open:` is for decisions nobody could make, not for inputs the stage file
+  supplies. A stage whose parameters are unknown simply has no stage file yet.
   The environment is `required`, because nothing can be guessed and everything downstream reads them. A
   resource question marked `from_context: true` points here; without this group that field
   pointed at nothing, and a run could reach the renderer with no region and therefore no

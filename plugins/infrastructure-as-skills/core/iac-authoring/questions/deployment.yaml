@@ -124,7 +124,9 @@ groups:
           stage used as a production-like rehearsal.
         renders: >
           per stage: the question's non_production_default in every stage but
-          production when enabled; recorded per stage in the spec's value map
+          production when enabled, for defaulted and derived values only - a
+          stated value holds in every stage; recorded per stage in the spec's
+          value map
 
       - id: location
         ask: Which Azure region?
@@ -135,9 +137,10 @@ groups:
           de: "Alles läuft in der Azure-Region {value}."
         parameterized: true
         why: >
-          Always an input variable of the template, never asked: every resource
-          in a deployment shares it, it is supplied at deploy time, and a region
-          demanded during design is a value the user may not have chosen yet.
+          Always an input variable of the template, never asked and never an
+          open item: a parameter without a value is complete, the stage file
+          supplies it at deploy time, and a region demanded during design is a
+          value the user may not have chosen yet.
           It is still a naming input, so the region abbreviation in every name
           is computed from the variable at plan time, not at render time.
         renders: variable location / param location - and the region abbreviation in every name
@@ -197,9 +200,9 @@ groups:
         parameterized: true
         per_environment: true
         why: >
-          Always an input variable of the template, never asked and never
-          guessed. The same rendered code deploys into any subscription without
-          editing it.
+          Always an input variable of the template, never asked, never guessed
+          and never an open item - the stage file supplies it. The same rendered
+          code deploys into any subscription without editing it.
         renders: variable subscription_id (provider subscription_id) / the deployment's target scope
 
       - id: resource_group_name
@@ -213,8 +216,9 @@ groups:
         parameterized: true
         per_environment: true
         why: >
-          Always an input variable of the template, never asked. Expected, not
-          created - every question set here declares that as a boundary. A
+          Always an input variable of the template, never asked and never an
+          open item - the stage file supplies it. Expected, not created - every
+          question set here declares that as a boundary. A
           network that belongs in a platform group is a separate, asked decision
           (network_ownership), not this value.
         renders: variable resource_group_name / param resourceGroupName / scope
@@ -808,10 +812,12 @@ groups:
           where the retention line item starts - the first 31 days are included in
           the ingestion price. Longer retention is an audit or regulatory
           requirement rather than an operational one, and it is charged per
-          gigabyte per month for as long as it is set. A longer retention the
-          customer states applies to production; the non-production stages keep
-          30 days while non_production_savings is enabled, since nobody audits a
-          test stage's logs.
+          gigabyte per month for as long as it is set. A retention the customer
+          states holds in every stage - the savings relax defaults and derived
+          values, never a stated one - unless they say which stage they mean;
+          unstated, the non-production stages keep 30 days while
+          non_production_savings is enabled, since nobody audits a test stage's
+          logs.
         renders: azurerm_log_analytics_workspace.retention_in_days / properties.retentionInDays
 
       - id: daily_quota_gb
