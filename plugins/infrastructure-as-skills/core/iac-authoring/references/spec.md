@@ -165,7 +165,10 @@ object) or **a map keyed by stage**:
 
 A map is required for a `per_environment` question (the value differs per stage by
 nature: ranges, subscriptions, referenced platform parts) and allowed for any other where
-a stage departs — a cost saving, or a departure the user named per stage. Its keys are a
+a stage departs — a cost saving (`non_production_default`), or a departure the user named
+for that stage, recorded `overridden`. A posture decision is never a map otherwise: one
+posture per system, and `check_spec.py` refuses a stage split on a question that is neither
+`per_environment` nor a cost knob unless its source is `overridden`. Its keys are a
 subset of `context.environments`; a stage missing from the map is an `open:` entry that
 names the stage:
 

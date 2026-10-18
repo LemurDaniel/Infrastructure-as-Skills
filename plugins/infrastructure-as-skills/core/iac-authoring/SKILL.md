@@ -129,6 +129,14 @@ mapping:
   subnet or central workspace means a platform exists, so `landing_zone` is `corp` (private)
   or `online` (public), recorded as `forced` by that reference — never `standalone`, and
   never an open item, because the references are the answer.
+- **A stated value holds in every stage, and posture is one per system.** "Öffentlich
+  erreichbar ist okay" said about the development stage is said about the system: the
+  exposure is `public` in every stage, the network `none` in every stage. A run never
+  splits a posture decision (exposure, local auth, keys, DNS, landing zone) by stage; only
+  the customer's explicit word for a named stage does, recorded as `overridden` there.
+- **An empty list is not always an answer.** Storage role assignments with shared keys
+  off: an empty default renders an account nobody can use, so it is an `open:` entry with
+  its owner rather than a decided value - read the question's `why` before recording `[]`.
 - **Context values are bare.** `context:` holds values (`environments: [...]`,
   `workload: payments`, a per-stage map), not `value:`/`source:` records; the provenance
   of a context value is the deployment set's, under `deployment:`.

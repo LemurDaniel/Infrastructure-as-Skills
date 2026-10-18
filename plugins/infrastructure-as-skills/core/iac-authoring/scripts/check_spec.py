@@ -50,6 +50,36 @@ BACKEND_SPELLINGS = [
     'supportsHttpsTrafficOnly', 'minimumTlsVersion', 'requireInfrastructureEncryption',
 ]
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+PLUGIN = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
+
+
+def load_question_index(yaml):
+    """(resource or 'deployment', question id) -> question dict, from the plugin's sets."""
+    index = {}
+
+    def add(owner, doc):
+        for g in (doc.get('groups') or []) if isinstance(doc, dict) else []:
+            for q in (g.get('questions') or []):
+                if isinstance(q, dict) and q.get('id'):
+                    index[(owner, q['id'])] = q
+    dep = os.path.join(HERE, '..', 'questions', 'deployment.yaml')
+    if os.path.isfile(dep):
+        with open(dep, encoding='utf-8') as f:
+            add('deployment', yaml.safe_load(f))
+    res_root = os.path.join(PLUGIN, 'resources')
+    if os.path.isdir(res_root):
+        for fam in os.listdir(res_root):
+            fam_dir = os.path.join(res_root, fam)
+            if os.path.isdir(fam_dir):
+                for res in os.listdir(fam_dir):
+                    qs = os.path.join(fam_dir, res, 'questions.yaml')
+                    if os.path.isfile(qs):
+                        with open(qs, encoding='utf-8') as f:
+                            add(res, yaml.safe_load(f))
+    return index
+
+
 COLORS = {'cyan': '36', 'green': '32', 'red': '31', 'yellow': '33', 'gray': '90'}
 USE_COLOR = sys.stdout.isatty() and not os.environ.get('NO_COLOR')
 
@@ -132,6 +162,10 @@ def main():
             for e in (o.get('environments') or []):
                 open_stages.setdefault(str(o['key']), set()).add(e)
     stage_maps = 0
+    try:
+        questions = load_question_index(yaml)
+    except (yaml.YAMLError, OSError):
+        questions = {}
 
     # --- 2-5. walk every decision ------------------------------------------
     decisions = 0
@@ -155,6 +189,11 @@ def main():
                 np = node.get('non_production')
                 if np is not None and np not in ('default', 'stated'):
                     errors.append(f"{path}.non_production '{np}' is not default or stated")
+                parts = path.split('.')
+                owner = 'deployment' if parts[0] == 'deployment' else (parts[1] if parts[0] == 'resources' and len(parts) > 1 else None)
+                q = questions.get((owner, parts[-1]))
+                if q is not None and not q.get('per_environment') and 'non_production_default' not in q and src != 'overridden':
+                    errors.append(f"{path} is split by stage, but its question is neither per_environment nor a cost knob - one value for every stage, or the user's departure recorded as overridden")
             elif environments and isinstance(v, dict) and any(k in environments for k in v):
                 errors.append(f"{path} mixes stage names and other keys in its value")
             if not src:

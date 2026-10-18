@@ -234,7 +234,10 @@ groups:
         per_environment: true
         why: >
           With shared-key auth disabled, nothing can read the account until a role
-          is assigned — so an empty list means a working account nobody can use.
+          is assigned — so an empty list means a working account nobody can use,
+          and it is not an answer: when no consumer is named and shared keys are
+          off, the list stays empty and the decision is an `open:` entry owned by
+          the workload owner, blocking apply.
           Scope each assignment to the container it needs, not to the account, and
           never to the subscription. A pattern skill normally fills this from the
           consumers it knows about.

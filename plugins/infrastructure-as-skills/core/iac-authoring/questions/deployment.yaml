@@ -456,6 +456,12 @@ groups:
           `overridden`. `public` is a deliberate posture for a system whose
           consumers genuinely live off-network - it is not the absence of a
           decision, and the portal default being permissive is not a reason.
+          One posture for every stage: a system is as exposed in production as
+          the customer said it is, and "öffentlich ist okay" said while
+          describing the development stage is said about the system, not about
+          that stage. A stage departs only on the customer's explicit word for
+          that stage ("in prod aber nur intern"), recorded as overridden there -
+          never split by the run.
         renders: >
           pre-answers public_network_access in every resource question set, and
           decides whether private endpoints and DNS records are generated at all
