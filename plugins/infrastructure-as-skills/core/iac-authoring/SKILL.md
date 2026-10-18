@@ -47,6 +47,29 @@ value in it answers a deployment-set question with `audience: platform` before a
 asked. Say in the first message whether one was found. Never write it from an interview:
 [references/platform.md](references/platform.md).
 
+## Who is in the interview — customer mode and engineer mode
+
+The person answering is, by default, **the customer**: someone who can say what the
+system is for, who uses it and how bad an outage or a loss would be, and who did not
+come to answer questions about subnets. Every question carries an `audience`
+([question-set-format](references/question-set-format.md#who-answers-audience)), and
+the mode decides which audiences are put to the person:
+
+| Mode | Asked | Resolved without asking | Entered when |
+|---|---|---|---|
+| **customer** (default) | `customer` questions only — the deployment set's context, posture, mandates and `requirements` group | `platform` from `platform.yaml` or its default, `engineer` from its default; a `required` one nobody present can answer is an `open:` entry naming its owner | Nothing says otherwise |
+| **engineer** | `customer` and `engineer` questions; `platform` too when no profile answers them | — | The user says they are the engineer or asks in engineer terms (names a subnet, a SKU, a provider argument), or the repository already holds IaC code or a spec and the user is extending it |
+
+Say which mode the run is in, in the first message, so the person can redirect:
+"Ich frage dich nur, was das System braucht; die technischen Entscheidungen setze ich
+nach den Vorgaben und zeige sie dir am Ende" versus "Ich frage dich auch die technischen
+Entscheidungen". A customer who starts answering engineer questions has switched mode;
+an engineer who says "frag mich nur das Fachliche" has switched back.
+
+In customer mode no question with Azure vocabulary reaches the person, whatever it
+would cost to default it. The cost of a wrong default is a line in Phase 4 that the
+person can object to; the cost of a subnet question is a person who stops answering.
+
 ## Phase 0 — Ask what is being built, in the user's own words
 
 The interview opens with one open question, not with the question set. Let the user
@@ -66,13 +89,21 @@ description; it names the resource and nothing about the system around it.
 
 Ask in plain text, not through `AskUserQuestion`: the point is free prose, and options
 would turn it back into the structured interview it precedes. Give the user a short list
-of what is worth mentioning, so the description lands on the questions that matter:
+of what is worth mentioning, so the description lands on the questions that matter. In
+customer mode the list is the `requirements` group in prose and nothing technical:
 
 ```
-Beschreib kurz, was du aufbauen willst. Hilfreich ist alles davon, nichts davon ist Pflicht:
-  - Wofür ist es da, und für welche Umgebung (dev / test / prod)?
-  - Wer oder was greift zu, und von wo (Internet, Firmennetz, nur andere Azure-Dienste)?
-  - Gibt es Vorgaben (BSI C5, ISO 27001, interne Richtlinien)?
+Beschreib kurz, was ihr braucht. Hilfreich ist alles davon, nichts davon ist Pflicht:
+  - Wofür ist es da, und ist es zum Ausprobieren, zum Testen oder für den Echtbetrieb?
+  - Wer arbeitet damit, und von wo (nur Mitarbeiter im Firmennetz, Partner, das Internet)?
+  - Wie schlimm wäre es, wenn es einen Tag nicht erreichbar ist?
+  - Wie weit zurück müsst ihr kommen, wenn jemand versehentlich etwas löscht?
+  - Gibt es Vorgaben, die ihr nachweisen müsst (BSI C5, ISO 27001, DSGVO, interne Richtlinien)?
+```
+
+In engineer mode add the platform line, which is the one a customer cannot answer:
+
+```
   - Was existiert schon (VNet, Log Analytics Workspace, DNS) und soll genutzt werden?
 ```
 
@@ -151,7 +182,7 @@ For each question, the answer then comes from the first source that has one:
 | 2 | The existing `infra-spec.yaml` | `carried` |
 | 3 | The repository's `platform.yaml` | `platform` |
 | 4 | A pattern skill's pre-answers | `pattern` |
-| 5 | The deployment set's answer, for a `from_deployment` question | `deployment` |
+| 5 | The deployment set's answer: copied for a `from_deployment` question, mapped through the question's table for a `derived_from` one | `deployment`, or `requirement` with `derived_from: deployment.<id>` |
 | 6 | The question's `default` | `default` |
 
 A carried value outranks a pattern and a default on purpose: it was decided, and quite
@@ -178,8 +209,22 @@ lives. Read it before choosing any default or justifying one.
 
 ## Phase 3 — Ask, in at most two batches
 
-Only what Phase 0's description left open reaches this phase. A question the user already
-answered in prose and is asked again tells them the description was not read.
+Only what Phase 0's description left open reaches this phase, and only the audiences the
+mode allows. A question the user already answered in prose and is asked again tells them
+the description was not read.
+
+**In customer mode there is one batch**: the surviving `customer` questions — the
+environment, who reaches it and from where, the mandates, and the three requirements
+(outage impact, data-loss tolerance, access pattern), fewer when the description settled
+some. Nothing else is asked. An `engineer` question takes its default; a `platform`
+question takes the profile's value or its default; a `required` question of either
+audience that nothing answers becomes an `open:` entry with its owner named, and Phase 4
+says so. Put the batch in the customer's words — the `ask` texts of the `requirements`
+group are written for that — and never a decision's vocabulary (`ZRS`, `TLS1_2`, a
+subnet) in a question to a customer.
+
+**In engineer mode** the two batches below apply, with the customer questions in the
+first.
 
 **Fold Phase 1's question into the first batch** when the repository did not answer it.
 Target and layout are two more questions, not a separate exchange — a round trip per
@@ -238,7 +283,25 @@ the values whose blast radius makes a silent default inappropriate.
 
 ## Phase 4 — Report what was defaulted, before generating
 
-Show a compact account. Not forty rows — group it:
+Show a compact account. Not forty rows — group it. In customer mode the account opens
+with what the person's answers decided, in their words and their language, and keeps the
+technical rows for the engineer section below it:
+
+```
+Was aus euren Antworten folgt:
+  Ausfall wäre störend        -> Daten liegen in drei Rechenzentren der Region (ZRS)
+  Eine Woche zurück           -> gelöschte Dateien und Ordner 7 Tage wiederherstellbar, alte Versionen bleiben
+  Daten in laufender Nutzung  -> Standard-Speicherklasse, kein Aufpreis beim Lesen
+  Nur aus dem Firmennetz      -> kein öffentlicher Zugang, Anbindung über private Endpunkte
+
+Nach den Vorgaben gesetzt (ohne Rückfrage):
+  Zugriff nur mit Firmenkonten, verschlüsselt, Protokolle in den zentralen Workspace
+
+Offen (braucht jemanden vom Plattform-Team):
+  Welche Anwendung greift zu und braucht welche Rechte?
+```
+
+The engineer's view follows, as before:
 
 ```
 Deployment-wide:
