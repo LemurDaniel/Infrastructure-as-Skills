@@ -46,6 +46,9 @@ python3 plugins/infrastructure-as-skills-azure/core/iac-authoring/scripts/check_
 # Renders fixture specs with the diagram script and asserts on the .drawio: zones, lines,
 # colours, the bundled endpoint icon. The evals cannot draw, so this is where it is tested.
 python3 plugins/infrastructure-as-skills-azure/core/iac-diagram/tests/run_diagram_tests.py
+# The PNG side: draw.io's broken embedded PNG is repaired, extract/embed round-trips, a diagram
+# is verified against its spec, every icon path exists in draw.io's library (needs draw.io for that).
+python3 plugins/infrastructure-as-skills-azure/core/iac-diagram/tests/run_png_tests.py
 
 # Checks a rendered pipeline (GitHub, Azure DevOps, GitLab or local) against the
 # invariants of references/pipelines.md; the test runner breaks one invariant per

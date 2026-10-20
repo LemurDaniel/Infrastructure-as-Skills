@@ -9,6 +9,9 @@ Clears ELECTRON_RUN_AS_NODE for the call. VS Code sets it for its own child
 processes, and with it set draw.io starts as plain Node and rejects every
 export flag as a "bad option".
 
+An embedded export is repaired and checked afterwards: the draw.io desktop CLI writes
+a bad zTXt CRC and no IEND chunk with --embed-diagram, every time. See drawio_png.py.
+
 Without draw.io the script exits 2 and leaves the .drawio file in place. That
 file is the diagram; the PNG is a convenience, and a missing exporter is said
 out loud rather than papered over.
@@ -16,8 +19,9 @@ out loud rather than papered over.
 Usage:
     python3 export_diagram.py ./infra-diagram.drawio
     python3 export_diagram.py ./infra-diagram.drawio --out ./preview.png --no-embed
+    python3 export_diagram.py ./infra-diagram.drawio --scale 1 --border 10
 
-Exit 0 written, 1 export failed, 2 could not export (no file, no draw.io).
+Exit 0 written, 1 export failed or the PNG is still bad after the repair, 2 could not export (no file, no draw.io).
 """
 
 import argparse
@@ -25,6 +29,9 @@ import os
 import shutil
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import drawio_png  # noqa: E402
 
 COLORS = {'green': '32', 'red': '31', 'yellow': '33'}
 USE_COLOR = sys.stdout.isatty() and not os.environ.get('NO_COLOR')
@@ -60,6 +67,8 @@ def main():
     ap.add_argument('--out', help='the PNG to write (default: <path>.png, i.e. infra-diagram.drawio.png)')
     ap.add_argument('--no-embed', action='store_true',
                     help='write a plain PNG without the diagram inside - for a visual check only, never for the deliverable')
+    ap.add_argument('--scale', type=int, default=2, help='export scale (default 2, legible when pasted into a document)')
+    ap.add_argument('--border', type=int, default=20, help='border in px around the diagram (default 20)')
     args = ap.parse_args()
 
     if not os.path.isfile(args.path):
@@ -76,9 +85,8 @@ def main():
 
     env = dict(os.environ)
     env.pop('ELECTRON_RUN_AS_NODE', None)
-    # --embed-diagram keeps the XML inside the PNG; --scale 2 keeps it legible
-    # when pasted into a document.
-    cmd = [drawio, '--export', '--format', 'png', '--scale', '2', '--border', '20']
+    # --embed-diagram keeps the XML inside the PNG.
+    cmd = [drawio, '--export', '--format', 'png', '--scale', str(args.scale), '--border', str(args.border)]
     if not args.no_embed:
         cmd.append('--embed-diagram')
     cmd += ['--output', out, path]
@@ -93,6 +101,11 @@ def main():
         say(f"[fail] draw.io exited {code}, no PNG written.", 'red')
         return 1
 
+    if not args.no_embed:
+        drawio_png.repair(out)
+        if not drawio_png.check(out):
+            say(f"[fail] {out} is still not a valid PNG with the diagram embedded.", 'red')
+            return 1
     say(f"[ ok ] {out}", 'green')
     return 0
 

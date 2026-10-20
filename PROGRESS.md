@@ -213,6 +213,13 @@ Verified Modules first, authored resources second.
 - The stack's stage files are written only for resolved stages; nothing yet generates
   the other stages' files once their `open:` entries are answered - that is an extension
   run, and the first one has not been exercised.
+- **The diagram's PNG is repaired and checked on export** (2026-10-20, taken from the
+  owner's profile skill `drawio-diagrams`). The draw.io CLI writes a bad zTXt CRC and no
+  IEND with `--embed-diagram`; both example PNGs had it. `iac-diagram/scripts/` now has
+  `drawio_png.py` (check/labels/extract/embed/repair/icons), `verify_diagram.py` (diagram
+  against spec, umlauts for `de`) and `tests/run_png_tests.py`. Not exercised: a fresh
+  export through `export_diagram.py` end to end, and the customer-edit diff path in
+  `SKILL.md` (extract, regenerate, diff). Not taken over: the repo-card style library.
 - A cloud session needs `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
   release downloads and `mcr.microsoft.com` allowed, and installs `terraform` and `bicep`
   into `~/.local/bin` itself (neither is in the image). Done once on 2026-10-18.
