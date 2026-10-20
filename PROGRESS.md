@@ -222,6 +222,8 @@ Verified Modules first, authored resources second.
   `SKILL.md` (extract, regenerate, diff). Not taken over: the repo-card style library.
   The diagram has no subscription frame (owner's call, 2026-10-20: it changes per
   environment and only adds a layer); the resource group is the outermost container.
+  One file is delivered, `infra-diagram.drawio.png`: the export deletes the `.drawio` it
+  came from (`--keep` leaves it), and the examples carry only the PNG.
 - A cloud session needs `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
   release downloads and `mcr.microsoft.com` allowed, and installs `terraform` and `bicep`
   into `~/.local/bin` itself (neither is in the image). Done once on 2026-10-18.

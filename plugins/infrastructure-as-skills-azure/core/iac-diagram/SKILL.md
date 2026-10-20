@@ -23,9 +23,12 @@ for Terraform and Bicep, as the spec is.
 
 ```sh
 python3 <plugin>/core/iac-diagram/scripts/new_diagram.py    ./infra-spec.yaml --language de
-python3 <plugin>/core/iac-diagram/scripts/export_diagram.py ./infra-diagram.drawio
 python3 <plugin>/core/iac-diagram/scripts/verify_diagram.py  ./infra-spec.yaml ./infra-diagram.drawio --language de
+python3 <plugin>/core/iac-diagram/scripts/export_diagram.py ./infra-diagram.drawio
 ```
+
+Verify first: the export deletes the `.drawio`, and `verify_diagram.py` also reads the PNG,
+so it can be run afterwards too.
 
 `--language` is the user's language, `de` or `en`. It covers the fixed labels and the
 decisions panel; Azure names, types, ranges and role names stay as Azure spells them,
@@ -38,17 +41,18 @@ those wrong in a way that only shows in the picture — labels that wrap after e
 because they inherit the 48px icon width, a label running into the icon below, two role
 names stacked on the same line. If the generated layout is wrong, fix the script.
 
-| File | What it is |
-|---|---|
-| `infra-diagram.drawio` | The source. Plain XML, stable ids from spec keys, so a regeneration diffs readably |
-| `infra-diagram.drawio.png` | The deliverable. A PNG with the diagram embedded — it opens in a document, a chat or an email like any image, and opens in draw.io as the editable diagram |
+**One file is delivered: `infra-diagram.drawio.png`.** A PNG with the diagram embedded — it
+opens in a document, a chat or an email like any image, and opens in draw.io as the
+editable diagram. `new_diagram.py` writes `infra-diagram.drawio` only as the input of the
+export, and `export_diagram.py` deletes it once the PNG carries it (`--keep` leaves it).
+The ids come from the spec keys, so two generations diff readably after `extract`.
 
 Exit codes, all scripts: `0` ok, `1` failed, `2` could not run.
 
 - `new_diagram.py` exit 1 with `overlaps` or `does not fit` is a layout bug in the script, not
   something to patch in the output.
 - `export_diagram.py` exit 2 means draw.io desktop is not installed. Say so, deliver the
-  `.drawio` file, and do not substitute a different renderer — a PNG without the embedded
+  `.drawio` file (the one case where it is the deliverable), and do not substitute a different renderer — a PNG without the embedded
   diagram is a picture the customer cannot correct.
 - `export_diagram.py` repairs and checks the PNG after an embedded export. The draw.io
   desktop CLI writes a bad zTXt CRC and no IEND chunk with `--embed-diagram`, every time:
@@ -56,7 +60,7 @@ Exit codes, all scripts: `0` ok, `1` failed, `2` could not run.
   call the draw.io CLI directly, and never hand over a PNG `drawio_png.py check` calls BAD.
   `--scale` (default 2) and `--border` (default 20) are options.
 
-**Regeneration overwrites both.** Manual edits in draw.io are lost on the next run. A change
+**Regeneration overwrites the PNG.** Manual edits in draw.io are lost on the next run. A change
 the customer makes in the picture is a change to a decision, and it goes back into the spec.
 
 To see what the customer changed, take the XML out of their PNG and diff it against a fresh

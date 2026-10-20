@@ -114,6 +114,28 @@ def case_verify_catches_transliterated_umlauts(tmp):
     return [] if r.returncode == 1 and 'transliterated' in r.stdout else [f"not caught: {r.stdout!r}"]
 
 
+def case_export_delivers_one_file(tmp):
+    """The export leaves the PNG alone - the .drawio is deleted, --keep leaves it."""
+    import shutil
+    sys.path.insert(0, SCRIPTS)
+    import export_diagram
+    if not export_diagram.find_drawio():
+        print('       (draw.io not installed - export not exercised)')
+        return []
+    spec = os.path.join(FIXTURES, 'ten-resources.yaml')
+    bad = []
+    for keep in (False, True):
+        d = os.path.join(tmp, 'k' if keep else 'n', 'infra-diagram.drawio')
+        os.makedirs(os.path.dirname(d))
+        run(os.path.join(SCRIPTS, 'new_diagram.py'), spec, '--out', d)
+        r = run(os.path.join(SCRIPTS, 'export_diagram.py'), d, '--scale', '1', *(['--keep'] if keep else []))
+        if r.returncode != 0 or not dp.check(d + '.png'):
+            bad.append(f"export failed (keep={keep}): {r.stdout}")
+        elif os.path.exists(d) != keep:
+            bad.append(f"keep={keep}: the .drawio {'was deleted' if keep else 'is still there'}")
+    return bad
+
+
 def case_icon_table_is_in_the_library(tmp):
     """Every path in ICONS must exist in draw.io's bundled library - else it exports a placeholder."""
     if dp.bundled_icons() is None:
@@ -132,6 +154,7 @@ CASES = [
     ('export without a file exits 2', case_export_without_file_is_exit_2),
     ('verify catches a missing resource', case_verify_catches_a_missing_resource),
     ('verify catches transliterated umlauts', case_verify_catches_transliterated_umlauts),
+    ('export delivers one file', case_export_delivers_one_file),
     ('icon table is in the library', case_icon_table_is_in_the_library),
 ]
 

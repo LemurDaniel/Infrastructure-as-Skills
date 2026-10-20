@@ -12,6 +12,9 @@ export flag as a "bad option".
 An embedded export is repaired and checked afterwards: the draw.io desktop CLI writes
 a bad zTXt CRC and no IEND chunk with --embed-diagram, every time. See drawio_png.py.
 
+After a successful embedded export the .drawio is deleted: the PNG carries it, so one file is
+delivered, not two. --keep leaves it.
+
 Without draw.io the script exits 2 and leaves the .drawio file in place. That
 file is the diagram; the PNG is a convenience, and a missing exporter is said
 out loud rather than papered over.
@@ -20,6 +23,7 @@ Usage:
     python3 export_diagram.py ./infra-diagram.drawio
     python3 export_diagram.py ./infra-diagram.drawio --out ./preview.png --no-embed
     python3 export_diagram.py ./infra-diagram.drawio --scale 1 --border 10
+    python3 export_diagram.py ./infra-diagram.drawio --keep
 
 Exit 0 written, 1 export failed or the PNG is still bad after the repair, 2 could not export (no file, no draw.io).
 """
@@ -69,6 +73,7 @@ def main():
                     help='write a plain PNG without the diagram inside - for a visual check only, never for the deliverable')
     ap.add_argument('--scale', type=int, default=2, help='export scale (default 2, legible when pasted into a document)')
     ap.add_argument('--border', type=int, default=20, help='border in px around the diagram (default 20)')
+    ap.add_argument('--keep', action='store_true', help='keep the .drawio after an embedded export (it is deleted by default; the PNG carries it)')
     args = ap.parse_args()
 
     if not os.path.isfile(args.path):
@@ -106,6 +111,8 @@ def main():
         if not drawio_png.check(out):
             say(f"[fail] {out} is still not a valid PNG with the diagram embedded.", 'red')
             return 1
+        if not args.keep and os.path.abspath(out) != path:
+            os.remove(path)
     say(f"[ ok ] {out}", 'green')
     return 0
 

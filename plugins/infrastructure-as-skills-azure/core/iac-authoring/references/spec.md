@@ -445,8 +445,7 @@ nothing, and the answers would drift from the code already deployed.
 ```
 infra/                       # or wherever the repository's IaC root already is
   infra-spec.yaml            # the decisions
-  infra-diagram.drawio       # drawn from it
-  infra-diagram.drawio.png
+  infra-diagram.drawio.png   # drawn from it; the PNG carries the editable diagram
   naming.yaml                # the naming convention - the customer edits it
   main.tf | main.bicep ...   # rendered from it
 ```
