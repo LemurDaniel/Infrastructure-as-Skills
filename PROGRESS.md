@@ -220,6 +220,8 @@ Verified Modules first, authored resources second.
   against spec, umlauts for `de`) and `tests/run_png_tests.py`. Not exercised: a fresh
   export through `export_diagram.py` end to end, and the customer-edit diff path in
   `SKILL.md` (extract, regenerate, diff). Not taken over: the repo-card style library.
+  The diagram has no subscription frame (owner's call, 2026-10-20: it changes per
+  environment and only adds a layer); the resource group is the outermost container.
 - A cloud session needs `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
   release downloads and `mcr.microsoft.com` allowed, and installs `terraform` and `bicep`
   into `~/.local/bin` itself (neither is in the image). Done once on 2026-10-18.

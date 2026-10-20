@@ -87,7 +87,7 @@ and offer it, rather than putting module versions on the customer's.
 One page, the decisions a customer can judge. Not forty attributes.
 
 ```
- external zone │ subscription > resource group > [ virtual network: subnets with their compute │ Azure PaaS ] │ monitoring, name resolution │ decisions
+ external zone │ resource group > [ virtual network: subnets with their compute │ Azure PaaS ] │ monitoring, name resolution │ decisions
 ```
 
 The picture answers one question: **who can reach what.** It is drawn in zones, and the
@@ -95,7 +95,7 @@ lines are access, not plumbing.
 
 | Spec | Drawn as |
 |---|---|
-| `context` | Nested containers: subscription → resource group, region and environment in the group's label; title and one-line subtitle (exposure, keyless) above |
+| `context` | The resource group as the outermost container, region and environment in its label; no subscription frame (it changes per environment and adds only a layer); title and one-line subtitle (exposure, keyless) above |
 | `virtual-network` subnets, `deployment.address_space` | A virtual network zone with its subnets and ranges. A subnet that hosts compute carries its delegation (`delegated to Microsoft.Web/serverFarms`) |
 | Compute (`app-service`, `function-app`, `container-app`, `virtual-machine`, …) | An icon inside the subnet named by its `networking.integration_subnet` decision, else the first integration-like subnet |
 | Other `resources:` (storage, vault, database, bus, registry, …) | An icon in the *Azure PaaS* zone below the network, titled *public access disabled* when every one is. A PaaS service is not in the VNet; its endpoint is |
@@ -109,7 +109,7 @@ lines are access, not plumbing.
 | A resource type with no icon | A box with the type's name, marked as having no question set; the script warns |
 | Diagnostics | **Not** a line per resource: a *Monitoring* zone with the workspace and the note *Diagnostic settings of all resources* |
 | Private DNS zones | One bundled icon in a *Name resolution* zone (`8× privatelink.*`) |
-| Referenced things (`network_ownership: reference`, a central workspace, platform DNS) | Grey and dashed, outside the subscription, labelled as existing and not created |
+| Referenced things (`network_ownership: reference`, a central workspace, platform DNS) | Grey and dashed, outside the resource group, labelled as existing and not created |
 | `open:` entries, `assumed` values | The affected resource in red, and listed in the panel |
 
 A legend at the bottom lists only what the picture uses.

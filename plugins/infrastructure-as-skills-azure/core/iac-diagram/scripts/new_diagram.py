@@ -10,7 +10,7 @@ something to fix by hand in draw.io.
 
 The picture is about who can reach what, drawn in zones:
 
-  external zone | subscription > resource group > [ virtual network (subnets with
+  external zone | resource group > [ virtual network (subnets with
   their compute) / Azure PaaS ] | platform and monitoring zones | decisions
 
 Compute sits in the subnet it integrates with. Every private endpoint of the
@@ -110,7 +110,6 @@ LABELS = {
 # Paths verified against draw.io's azure2 library - a wrong path exports as a
 # broken-image placeholder, silently. A resource without a row is drawn as a box.
 ICONS = {
-    'subscription': 'img/lib/azure2/general/Subscriptions.svg',
     'resource-group': 'img/lib/azure2/general/Resource_Groups.svg',
     'storage-account': 'img/lib/azure2/storage/Storage_Accounts.svg',
     'virtual-network': 'img/lib/azure2/networking/Virtual_Networks.svg',
@@ -529,7 +528,7 @@ def main():
     main_h = vn_h + (gap if (vn_h and paas_h) else 0) + paas_h
 
     # Right column: platform and monitoring zones. Created things belong to the
-    # resource group, referenced ones sit outside the subscription.
+    # resource group, referenced ones sit outside it.
     law_existing = (not has_law_res) and obs_ownership != 'create'
     dns_existing = dns_ownership != 'deployment'
     right = []   # dicts: id, h, inside
@@ -544,15 +543,15 @@ def main():
 
     # --- Geometry, phase B: positions --------------------------------------
     ext_w = ZONE_W if actors else 0
-    sub_x, sub_y = 20 + (ext_w + 40 if actors else 0), TOP
-    rg_x, rg_y = sub_x + PAD, sub_y + HEAD
+    # No subscription frame: it changes per environment and only adds a layer.
+    rg_x, rg_y = 20 + (ext_w + 40 if actors else 0), TOP
+    sub_x, sub_y = rg_x, rg_y
     main_x, main_y = rg_x + PAD, rg_y + HEAD + 10
     rin_x = main_x + w_main + PAD
     rg_w = (rin_x + ZONE_W + PAD - rg_x) if right_in else (main_x + w_main + PAD - rg_x)
     content_h = max(main_h, in_h, 140)
     rg_h = HEAD + 10 + content_h + PAD + (24 if is_private else 0)
-    sub_w = rg_w + 2 * PAD
-    sub_h = rg_h + HEAD + PAD
+    sub_w, sub_h = rg_w, rg_h   # the extent the panel and the legend line up with
     out_x = sub_x + sub_w + 40
     out_w = ZONE_W if right_out else 0
     panel_x = out_x + (out_w + 40 if right_out else 0)
@@ -626,15 +625,11 @@ def main():
             else:
                 add_icon(cid, 'z-ext', slot_x, slot_y, actor_base(name), f"<b>{esc(actor_title(name))}</b>", False, False, slot_h=110, warn=False)
 
-    # Subscription and resource group
-    sub_label = format_label('Subscription', s(get_value(ctx.get('subscription_id'))), '')
-    add_container({'id': 'sub', 'parent': '1', 'x': sub_x, 'y': sub_y, 'w': sub_w, 'h': sub_h, 'style': CONTAINER_STYLE, 'value': sub_label})
-    icons.append({'id': 'sub-icon', 'parent': 'sub', 'x': sub_x + 6, 'y': sub_y + 6, 'w': 24, 'h': 24,
-                  'style': f"image;aspect=fixed;html=1;image={ICONS['subscription']};", 'value': ''})
+    # Resource group
     loc, env_ = s(get_value(ctx.get('location'))), s(get_value(ctx.get('environment')))
     rg_name = get_value(ctx.get('resource_group_name'))
     rg_label = format_label(s(rg_name if rg_name is not None else 'resource group'), ' · '.join(p for p in (loc, env_) if p != ''), '')
-    add_container({'id': 'rg', 'parent': 'sub', 'x': rg_x, 'y': rg_y, 'w': rg_w, 'h': rg_h, 'style': CONTAINER_STYLE, 'value': rg_label})
+    add_container({'id': 'rg', 'parent': '1', 'x': rg_x, 'y': rg_y, 'w': rg_w, 'h': rg_h, 'style': CONTAINER_STYLE, 'value': rg_label})
     icons.append({'id': 'rg-icon', 'parent': 'rg', 'x': rg_x + 6, 'y': rg_y + 6, 'w': 24, 'h': 24,
                   'style': f"image;aspect=fixed;html=1;image={ICONS['resource-group']};", 'value': ''})
     if is_private:
