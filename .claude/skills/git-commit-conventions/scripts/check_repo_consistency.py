@@ -322,7 +322,10 @@ def main():
                     conv = re.search(rf'^\s*{t}::default:\s*(\S*)\s*$', convention, re.M)
                     if not conv:
                         q_warnings.append(f"{r} - {bc.group(1).strip()} has no ::default abbreviation in naming.default.yaml")
-                    elif conv.group(1) != ab.group(1).strip():
+                    elif conv.group(1) != ab.group(1).strip() and not re.search(
+                            rf'^\s*{t}::\w+:\s*{re.escape(ab.group(1).strip())}\s*$', convention, re.M):
+                        # A set may declare a per-kind variant (Microsoft.Web/sites::function)
+                        # instead of the default; only an abbreviation no entry carries is drift.
                         q_errors.append(f"{r} - naming.abbreviation '{ab.group(1).strip()}' differs from the convention's '{conv.group(1)}'")
 
             # Per-entry structural rules. Split on the "- id:" boundaries, which
