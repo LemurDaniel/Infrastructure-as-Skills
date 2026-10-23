@@ -514,14 +514,31 @@ def main():
     def rows_height(keys, cols):
         return sum(max(pitch[k] for k in r) for r in rows_of(keys, cols))
 
+    callers = []
+    for a in access:
+        if a['from'] in compute and a['to'] in paas and a['from'] not in callers:
+            callers.append(a['from'])
+    # Side layout: with four or more services the PaaS zone is a column beside the network, as in
+    # a hand-drawn architecture - short horizontal lines through a routing channel of their own,
+    # one track per caller - and not a block below it that every line has to bend around.
+    side = bool(draw_vnet and callers and len(paas) >= 4)
     cols_c = min(max([len(v) for v in groups.values()] or [1]), 4)
     # Up to five services in one row; more wrap into two, the second row shifted by half a slot, so
     # that the line to a second-row icon comes down in the gap between two first-row icons and not
     # through one. A narrower row means a narrower network and less empty space in it.
-    cols_p = len(paas) if len(paas) <= 5 else math.ceil(len(paas) / 2)
-    cols_p = min(max(cols_p, 1), 8)
-    stagger = SLOT_W // 2 if len(paas) > cols_p else 0
-    w_main = max(cols_c * SLOT_W + 4 * PAD, cols_p * SLOT_W + stagger + 2 * PAD, min(len(support), cols_p) * SLOT_W + 2 * PAD, 2 * SLOT_W + 4 * PAD)
+    if side:
+        cols_p = 2 if len(paas) > 9 else 1
+        stagger = 0
+        w_main = max(cols_c * SLOT_W + 4 * PAD, 2 * SLOT_W + 4 * PAD)
+        chan_w = 36 + 16 * (len(callers) + 2)
+        paas_w = cols_p * SLOT_W + 2 * PAD
+    else:
+        cols_p = len(paas) if len(paas) <= 5 else math.ceil(len(paas) / 2)
+        cols_p = min(max(cols_p, 1), 8)
+        stagger = SLOT_W // 2 if len(paas) > cols_p else 0
+        w_main = max(cols_c * SLOT_W + 4 * PAD, cols_p * SLOT_W + stagger + 2 * PAD, min(len(support), cols_p) * SLOT_W + 2 * PAD, 2 * SLOT_W + 4 * PAD)
+        chan_w = paas_w = 0
+    block_w = w_main + (chan_w + paas_w if side else 0)   # what the zones below the network span
 
     # What the spec says each subnet is delegated to wins; the kind's usual delegation is the
     # fallback for a spec that does not say.
@@ -557,16 +574,18 @@ def main():
         vn_h = ZHEAD + rows_height(compute, cols_c) + PAD
     PAAS_TOP, PAAS_TITLE = 14, 26
     paas_h = (PAAS_TOP + rows_height(paas, cols_p) + PAAS_TITLE) if paas else 0
-    cols_s = min(max(len(support), 1), max(cols_p, 3))
+    if side:
+        PAAS_HEAD = 48   # a two-line title: the column is narrow
+        paas_h = PAAS_HEAD + rows_height(paas, cols_p) + PAD
+    cols_s = min(max(len(support), 1), max(block_w // SLOT_W, 1) if side else max(cols_p, 3))
     support_h = (ZHEAD + rows_height(support, cols_s) + PAD) if support else 0
 
     # One bus lane per compute resource that calls PaaS, between the network and the PaaS zone.
-    callers = []
-    for a in access:
-        if a['from'] in compute and a['to'] in paas and a['from'] not in callers:
-            callers.append(a['from'])
     gap = 30 + 10 * len(callers)
-    main_h = vn_h + (gap if (vn_h and paas_h) else 0) + paas_h + (support_h + PAD if support else 0)
+    if side:
+        main_h = max(vn_h, paas_h) + (support_h + PAD if support else 0)
+    else:
+        main_h = vn_h + (gap if (vn_h and paas_h) else 0) + paas_h + (support_h + PAD if support else 0)
 
     # Right column: platform and monitoring zones. Created things belong to the
     # resource group, referenced ones sit outside it.
@@ -588,8 +607,8 @@ def main():
     rg_x, rg_y = 20 + (ext_w + 40 if actors else 0), TOP
     sub_x, sub_y = rg_x, rg_y
     main_x, main_y = rg_x + PAD, rg_y + HEAD + 10
-    rin_x = main_x + w_main + PAD
-    rg_w = (rin_x + ZONE_W + PAD - rg_x) if right_in else (main_x + w_main + PAD - rg_x)
+    rin_x = main_x + block_w + PAD
+    rg_w = (rin_x + ZONE_W + PAD - rg_x) if right_in else (main_x + block_w + PAD - rg_x)
     content_h = max(main_h, in_h, 140)
     rg_h = HEAD + 10 + content_h + PAD + (24 if is_private else 0)
     sub_w, sub_h = rg_w, rg_h   # the extent the panel and the legend line up with
@@ -679,7 +698,8 @@ def main():
 
     # Network zone: subnets with their compute, then the bundled endpoints
     vn_sub = ''
-    paas_y = main_y + vn_h + (gap if (vn_h and paas_h) else 0)
+    paas_y = main_y if side else main_y + vn_h + (gap if (vn_h and paas_h) else 0)
+    paas_x = main_x + w_main + chan_w if side else main_x
     bus_base = main_y + vn_h + 14
     if draw_vnet:
         vn_name = vnet_ref['name'] if (vnet_existing and vnet_ref['name']) else 'Virtual Network'
@@ -723,11 +743,16 @@ def main():
     if paas:
         all_private = all(pna(k) == 'disabled' for k in paas)
         title = f"{T['paas']} &#8212; {esc(T['paasPrivate'])}" if all_private else T['paas']
-        add_container({'id': 'z-paas', 'parent': 'rg', 'x': main_x, 'y': paas_y, 'w': w_main, 'h': paas_h, 'style': ZONES['paas_in'], 'value': title})
-        place_grid(paas, 'z-paas', main_x + PAD, paas_y + PAAS_TOP, cols_p, stagger)
+        if side:
+            # the lines come in from the left here, so the title can stay at the top
+            add_container({'id': 'z-paas', 'parent': 'rg', 'x': paas_x, 'y': paas_y, 'w': paas_w, 'h': paas_h, 'style': ZONES['paas'], 'value': title})
+            place_grid(paas, 'z-paas', paas_x + PAD, paas_y + PAAS_HEAD, cols_p)
+        else:
+            add_container({'id': 'z-paas', 'parent': 'rg', 'x': main_x, 'y': paas_y, 'w': w_main, 'h': paas_h, 'style': ZONES['paas_in'], 'value': title})
+            place_grid(paas, 'z-paas', main_x + PAD, paas_y + PAAS_TOP, cols_p, stagger)
     if support:
-        support_y = paas_y + (paas_h + PAD if paas else 0)
-        add_container({'id': 'z-support', 'parent': 'rg', 'x': main_x, 'y': support_y, 'w': w_main, 'h': support_h, 'style': ZONES['paas'], 'value': esc(T['support'])})
+        support_y = (main_y + max(vn_h, paas_h) + PAD) if side else paas_y + (paas_h + PAD if paas else 0)
+        add_container({'id': 'z-support', 'parent': 'rg', 'x': main_x, 'y': support_y, 'w': block_w, 'h': support_h, 'style': ZONES['paas'], 'value': esc(T['support'])})
         place_grid(support, 'z-support', main_x + PAD, support_y + ZHEAD, cols_s)
 
     # Platform and monitoring zones
@@ -854,7 +879,14 @@ def main():
         style = EDGE_BASE + f"strokeColor={color};fontColor={color};fontSize=10;labelBackgroundColor=#FFFFFF;"
         sc, dc = by_id[src], by_id[dst]
         edge = {'id': f"e-{n}", 'source': src, 'target': dst, 'value': a['label']}
-        if a['from'] in caller_i and a['to'] in paas:
+        if side and a['from'] in caller_i and a['to'] in paas:
+            # Out to the right, along the caller's own track in the channel, in to the service
+            # from the left. Top caller: leftmost track, so a lower caller's run towards its
+            # track never has to cross an upper one's vertical on the way.
+            tx = (vn_cell['x'] + vn_cell['w'] + 18 + 16 * track_rank[a['from']]) if vn_cell else dc['x'] - 30
+            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
+            edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': dc['y'] + dc['h'] / 2}]
+        elif a['from'] in caller_i and a['to'] in paas:
             tx = gut0 - 16 * track_rank[a['from']]
             bus_y = bus_base + 10 * lane_rank[a['from']]
             edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0.5;entryY=0;'
@@ -864,6 +896,15 @@ def main():
             tx = gut0 - 16 * (len(callers) + 1 + k)
             edge['style'] = style + 'exitX=1;exitY=0.5;entryX=1;entryY=0.5;'
             edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': dc['y'] + dc['h'] / 2}]
+        elif side and a['from'] in compute and base(a['to']) in MONITOR_KINDS:
+            # past the PaaS column along the free strip above the zones, down in the gap in front
+            # of the monitoring zone
+            tx = vn_cell['x'] + vn_cell['w'] + 18 + 16 * (len(callers) + 1)
+            top = main_y - 6
+            zone = by_id.get('z-monitoring')
+            gx = (zone['x'] - 9) if zone else dc['x'] - 22
+            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
+            edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': top}, {'x': gx, 'y': top}, {'x': gx, 'y': dc['y'] + dc['h'] / 2}]
         elif a['from'] in compute and base(a['to']) in MONITOR_KINDS:
             # To the monitoring zone: out to the right along the row, up or down in the gap between
             # the network and the zone, in from the left - not across the picture.

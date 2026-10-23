@@ -119,15 +119,20 @@ lines are access, not plumbing.
 | Referenced things (`network_ownership: reference`, a central workspace, platform DNS) | Grey and dashed, outside the resource group, labelled as existing and not created |
 | `open:` entries, `assumed` values | The affected resource in red, and listed in the panel |
 
-**How the lines run.** A caller leaves its icon to the right, drops on a track of its own in
-the free space at the right of the subnets - never through another icon - to a lane below the
-network, and fans out from there to its services. Up to five sit in one row; more wrap into two, the second row shifted by half a slot, so that a line comes down in the gap between two icons and not through one - and the network stays narrow. Tracks are assigned right to left from the top caller down, so a lower
-run ends before the track of an upper one; lanes are assigned fewest targets first, since a drop
-crosses the lanes below its own. A line to Application Insights goes out along the row and in
-from the left through the gap beside the network. **With three or more callers the private
-lines are told apart by colour**, one per caller, and the legend names them; fewer callers keep
-the single blue, and orange stays what leaves or crosses the internet. A picture where the
-lines still read badly is a layout bug in the script, not something to move by hand.
+**Layout and how the lines run.** With four or more PaaS services the zone is a **column beside
+the network**, as in a hand-drawn architecture, with a free **routing channel** between the two:
+a caller leaves its icon to the right, runs on a track of its own in the channel - one per caller,
+the top caller leftmost - and goes in to its service from the left. The lines are short and
+horizontal, and never run through an icon or a title. With fewer services the zone sits below the
+network instead, and the lines run on tracks in the free space beside the subnets and on lanes
+under them (up to five in one row, more wrap into two, the second shifted by half a slot). A line
+to Application Insights goes out along the row, over the zones through the strip under the
+group's title, and down in the gap in front of the monitoring zone. Lines to and from an actor
+(users, Entra ID) run in the gap between the external zone and the group, never on the group's
+border. **With three or more callers the private lines are told apart by colour**, one per caller,
+and the legend names them; fewer callers keep the single blue, and orange stays what leaves or
+crosses the internet. A picture where the lines still read badly is a layout bug in the script,
+not something to move by hand.
 
 AI Foundry and Container Apps have no icon of their own in draw.io's library; the nearest are
 used (Cognitive Services, Container Instances) and the label carries the real type. Lines run
