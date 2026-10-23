@@ -1,6 +1,6 @@
 # The request
 
-Verbatim the eval prompt `evals/greenfield-telemetry`, run headless: nobody answers
+Verbatim the eval prompt `evals/spec/greenfield-telemetry`, run headless: nobody answers
 follow-up questions, unstated required values become `open:` entries, everything else
 takes its default.
 

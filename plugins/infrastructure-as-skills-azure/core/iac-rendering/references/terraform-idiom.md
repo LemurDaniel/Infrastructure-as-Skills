@@ -20,7 +20,10 @@ environments/
   test.tfvars
   production.tfvars
 tests/
-  storage.tftest.hcl
+  naming.tftest.hcl     # one file per question-set group, never one for everything
+  networking.tftest.hcl
+  security.tftest.hcl
+  ...
 ```
 
 The reason to split is review, not tidiness: a private endpoint change and a retention
@@ -302,8 +305,22 @@ renders.
 
 ## Tests
 
-Generate a `.tftest.hcl` alongside, asserting the decisions the question set recorded.
+Generate the tests alongside, asserting the decisions the question set recorded.
 Plan-only (`command = plan`) so it needs no credentials.
+
+**Always several files, one per concern — never one `.tftest.hcl` for the whole render.**
+The file is named after the question-set group it covers, in `tests/`:
+`naming.tftest.hcl` (with the non-production stage run), `networking.tftest.hcl`,
+`security.tftest.hcl`, `data_protection.tftest.hcl`, `observability.tftest.hcl`,
+`identity.tftest.hcl`, … A resource with several groups gets one file per group; a group
+with a single decision still gets its own file. The reason is the one that splits the
+`.tf` files: a failing networking test is read apart from a security one, and a change to
+one group touches one test file. For a render with more than one resource, prefix the
+resource (`storage.security.tftest.hcl`). Terraform has no include, so **every file
+repeats** the `mock_provider` blocks and the `variables { }` header it needs — keep that
+header to what the file's `run` blocks use and copy it unchanged, so the files differ only
+in their asserts. `terraform test` runs all of them; `check_render_coverage.py` reads the
+whole directory, so a decision is asserted in exactly one file.
 
 **Coverage is the contract, not the example.** Every decision under `resources:` in the
 spec gets exactly one `assert`, and the assert names it in a comment on the line above:

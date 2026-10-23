@@ -1,6 +1,6 @@
 # The request
 
-Verbatim the eval prompt `evals/private-storage-on-platform`, run headless: nobody answers
+Verbatim the eval prompt `evals/spec/private-storage-on-platform`, run headless: nobody answers
 follow-up questions, unstated required values become `open:` entries, everything else
 takes its default.
 

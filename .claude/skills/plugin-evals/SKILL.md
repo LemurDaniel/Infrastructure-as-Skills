@@ -47,7 +47,7 @@ Each of these cost a run to discover.
 - **Write tools must be in the case, not only on the command line.** A grader that reads a
   file the run creates is flagged "cannot pass" unless the case's `allowed_tools` includes
   `Write`/`Edit` *and* the run grants them with `--allow-tools Write Edit`.
-- **`plugins: ["../.."]`** in every `prompt.md` — the path from the case directory to the
+- **`plugins: ["../.."]`** in every `prompt.md` (`"../../.."` from `evals/<group>/<case>/`) — the path from the case directory to the
   plugin. Without it the plugin may not resolve and the run has no with-arm.
 - **The workspace starts empty.** No IaC root, so the spec lands in `infra/` — which is
   why every path grader says `infra/...`. A case that needs an existing repository (an

@@ -2,7 +2,7 @@
 description: A short, underspecified request - dev, public, no subscription, no resource group, no region, no workspace. Tests that missing values become open items instead of plausible inventions.
 expected_outcome: infra/infra-spec.yaml with public exposure and no network, open entries for subscription, resource group, region and the diagnostics workspace, no invented ids or names; the final message says the spec is not applyable yet.
 tags: [terraform, development, public, missing-info]
-plugins: ["../.."]
+plugins: ["../../.."]
 runs: 3
 max_turns: 60
 timeout_seconds: 900

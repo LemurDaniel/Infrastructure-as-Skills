@@ -2,7 +2,7 @@
 description: An API that calls an external service and signs users in through Entra ID, with one optional component. Tests that outside parties become external actors in wiring.access and that "optional" is recorded as such.
 expected_outcome: infra/infra-spec.yaml with wiring.access lines to external:<graph> and external:<entra> actors, the cache listed under wiring.optional, no Terraform written.
 tags: [terraform, development, diagram, wiring, external, optional]
-plugins: ["../.."]
+plugins: ["../../.."]
 runs: 3
 max_turns: 80
 timeout_seconds: 1200

@@ -2,7 +2,7 @@
 description: Three resources whose calls the request names (web app reads storage, fetches secrets from the vault, staff reach the app from the company network). Tests that the spec records who reaches what - the input the diagram draws - exactly as stated.
 expected_outcome: infra/infra-spec.yaml with wiring.access for the three named calls, a purpose for the storage account, private exposure and no call the request did not name; no Terraform written, no diagram drawn.
 tags: [terraform, development, private, diagram, wiring]
-plugins: ["../.."]
+plugins: ["../../.."]
 runs: 3
 max_turns: 80
 timeout_seconds: 1200

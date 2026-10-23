@@ -13,6 +13,18 @@ diagram run outside the suite. How to run, check and read the suite is in the re
 `plugin-evals` skill (`.claude/skills/plugin-evals/`). Results land in `evals/results/`,
 which is ignored.
 
+## Layout
+
+One directory per group, one per case below it. The runner finds `**/case.yaml`, so the
+grouping costs nothing; a case's `prompt.md` reaches the plugin with `plugins: ["../../.."]`.
+
+| Group | Grades | Cases |
+|---|---|---|
+| `spec/` | The interview's output, `infra/infra-spec.yaml` | `greenfield-telemetry`, `private-storage-on-platform`, `vague-public-dev` |
+| `diagram/` | What the spec carries for the picture | `diagram-*` |
+| `interview/` | The final message: what was asked | `interview-asks-no-context` |
+| `outcome/` | The IaC a user receives, with and without the plugin | `outcome-private-storage` (pilot) |
+
 ## The cases
 
 Chosen along the dimensions where this plugin can go wrong, so three cases cover the

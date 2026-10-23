@@ -224,13 +224,32 @@ Verified Modules first, authored resources second.
   environment and only adds a layer); the resource group is the outermost container.
   One file is delivered, `infra-diagram.drawio.png`: the export deletes the `.drawio` it
   came from (`--keep` leaves it), and the examples carry only the PNG.
+- **What the plugin adds over plain Claude has been measured once, as a pilot** (2026-10-23,
+  `evals/outcome/outcome-private-storage`, 1 run per arm, ~$5): same request, no mention of a
+  spec, scored on the union of `infra/**/*.tf` and `*.tfvars` by
+  `.claude/skills/plugin-evals/scripts/score_outcome.py` (the harness reads one file per
+  grader, real code is many). Plugin 17/17, without 15/17: the difference is AVM (hand-written
+  `azurerm_storage_account`) and tests (none); every security decision was equal in both arms.
+  So the case that was easy for the model shows little; the claim to test is the many small
+  decisions (replication, soft delete, infrastructure encryption, SFTP). Needs 3 runs and
+  harder cases before it counts. The spec-graded cases (`evals/spec/`) cannot be run without
+  the plugin - the spec is its format. No Linux in WSL here, so `terraform validate` in an
+  eval needs a Linux runner.
+- **Evals sit in groups** (`spec/`, `diagram/`, `interview/`, `outcome/`); a case reaches the
+  plugin with `plugins: ["../../.."]`. The 0-cost load check prints "0 case(s)" with or
+  without the move and proves nothing - the first paid run is the check that the runner
+  still finds them.
+- **Terraform tests are always several files**, one per question-set group
+  (`terraform-idiom.md`, Tests): the two examples were split and pass `terraform test` and
+  the coverage check. The Bicep side (`*.armtest.yaml`) is still one file per example.
 - A cloud session needs `registry.terraform.io`, `releases.hashicorp.com`, `github.com`
   release downloads and `mcr.microsoft.com` allowed, and installs `terraform` and `bicep`
   into `~/.local/bin` itself (neither is in the image). Done once on 2026-10-18.
 
 ## Next
 
-Re-run the eval suite (full, ~$5) against the two rules written after the baseline and
+Widen the plugin-vs-plain measurement (3 runs per arm, cases on the small decisions, ~$15-25)
+before trusting the pilot. Re-run the eval suite (full, ~$5) against the two rules written after the baseline and
 accept the run if `vague-public-dev` rises without the other two dropping. Then
 `ROADMAP.md` C1: the `security` family (Key Vault, user-assigned identity) and the rest of
 `compute` (Container Apps), plus a rendered App Service example with its tests; each with `audience`, `plain`, `per_environment` where it

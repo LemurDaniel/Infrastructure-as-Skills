@@ -1,8 +1,8 @@
 ---
-description: Production storage behind an existing platform network and workspace, under BSI C5. Tests that referenced infrastructure is referenced, never created, and that the description settles the interview.
-expected_outcome: infra/infra-spec.yaml with private exposure, referenced vnet and workspace, one storage account; no Terraform written.
-tags: [terraform, production, private, reference, mandate]
-plugins: ["../.."]
+description: Outcome pilot - same request as private-storage-on-platform, but graded on the Terraform a user receives, not on the spec. Run with and without the plugin to measure what the skills add.
+expected_outcome: Terraform under infra/ (any layout) with one private storage account, referenced network and workspace, no invented values.
+tags: [terraform, production, private, reference, outcome, ablation]
+plugins: ["../../.."]
 runs: 3
 max_turns: 80
 timeout_seconds: 1200
@@ -19,5 +19,5 @@ snet-privatelink. Die Logs gehen in unseren zentralen Workspace log-platform-pro
 rg-observability-prod-we. Wir unterliegen BSI C5.
 
 Zum Ablauf: Es ist niemand da, der Rückfragen beantwortet. Was oben nicht steht, nimmst du
-nicht an — Pflichtwerte ohne Antwort kommen als offene Punkte in die Spec, für alles andere
-gelten die Defaults. Kein Diagramm und noch keinen IaC-Code — nur die Spec.
+nicht an. Schreibe den Terraform-Code unter infra/ - so, wie du es in einem echten
+Repository aufbauen würdest.

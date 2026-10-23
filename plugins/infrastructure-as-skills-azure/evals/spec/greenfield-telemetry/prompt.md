@@ -2,7 +2,7 @@
 description: A self-contained staging deployment in Bicep - own vnet, own workspace, private storage. Tests that every resource routes, that given ranges are carried exactly, and that a stated retention overrides the default.
 expected_outcome: infra/infra-spec.yaml targeting bicep with three resources (virtual-network, log-analytics-workspace, storage-account), the stated ranges and 90-day retention; no Bicep written.
 tags: [bicep, staging, private, create, multi-resource]
-plugins: ["../.."]
+plugins: ["../../.."]
 runs: 3
 max_turns: 100
 timeout_seconds: 1500
