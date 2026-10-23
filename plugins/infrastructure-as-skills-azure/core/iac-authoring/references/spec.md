@@ -310,6 +310,17 @@ reviewer accepting it and reopening the decision from scratch.
         forced_by: deployment.key_protection   # hsm, from mandate BSI C5
 ```
 
+## Several of a kind
+
+A key under `resources:` is a question set's directory name (`storage-account`). A second
+resource of the same kind - an uploads account beside a host account, two App Services - takes
+the set's name, two underscores and an instance name: `storage-account__host`. It reads the
+questions of `storage-account`, is its own set of decisions with its own key paths
+(`storage-account__host.security.min_tls_version`), and is its own entry in `composition` and
+`wiring`. The first of a kind may stay unsuffixed or take an instance name too; use one style
+per spec. Underscores because the key path is dot-separated and a hyphen already occurs in the
+set names.
+
 ## Backend-neutral on purpose
 
 The spec names **decisions**, not attributes. `public_network_access: disabled`, never

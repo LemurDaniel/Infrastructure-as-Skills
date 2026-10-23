@@ -258,6 +258,33 @@ AVM render (`examples/private-storage-on-platform`, storage module v0.10.0, 2026
   published. What the render tests prove is that *this* root passes *these* decisions —
   which is the part a module cannot test for you.
 
+**What twelve more modules showed** (`examples/chatbot`, 2026-10-23) - the contract holds, the
+reachable surface varies by module, and one module cannot be tested at all:
+
+- **A module's `resource` output is one of three things.** The `azapi_resource` itself (storage,
+  virtual network, App Service site, function app): assert on `resource.body.properties.*`. The
+  attributes of the former `azurerm` resource, echoed from the inputs (Log Analytics, Search,
+  Application Insights, Foundry, identity): assert on `resource.<attribute>`, for Foundry under
+  the `azurerm` spelling (`public_network_access`, `local_authentication_enabled`). Or nothing:
+  Key Vault, Container Registry and the Container App module expose no attribute at all, and the
+  plan modules only `name` and `resource_id`, so their decisions are `# not-testable:` and the
+  call is the review. Cosmos DB exposes many attributes as outputs of their own.
+- **A list is compared as JSON.** A `list(string)` output and a list literal are different types
+  in HCL (`list` against `tuple`), so `x == ["a"]` is false for equal values: compare
+  `jsonencode(x) == jsonencode([...])`.
+- **A module with an ephemeral resource cannot be planned under mock providers.**
+  `avm-res-app-managedenvironment` declares one in every version, even at `count = 0`, and
+  `override_module` does not help: the root cannot be tested at all while the module is in it.
+  The render uses an authored `azapi_resource` for it and records the departure in the spec
+  (`_target_overrides`).
+- **Some modules need a mocked `azapi` data source.** The Flex plan module reads the regions
+  that advertise zone-redundant Flex Consumption (`azapi_resource_action`), the Application
+  Insights module the subscription's resource id (`azapi_client_config`): `mock_data` with a
+  value of the right shape, or the plan fails before any assert.
+- **The unreachable share is large and honest.** 79 of 284 decisions of the chatbot example are
+  asserted, 205 are marked with a reason - mostly private endpoints, role assignments, diagnostic
+  settings and sub-resources the modules build in children. Say it in the handover.
+
 `check_render_coverage.py` accepts either an assert or a marker per decision, never both.
 
 Bicep asserts on the compiled ARM ([bicep-idiom.md](bicep-idiom.md#tests)): a module call

@@ -190,7 +190,7 @@ def main():
                 if np is not None and np not in ('default', 'stated'):
                     errors.append(f"{path}.non_production '{np}' is not default or stated")
                 parts = path.split('.')
-                owner = 'deployment' if parts[0] == 'deployment' else (parts[1] if parts[0] == 'resources' and len(parts) > 1 else None)
+                owner = 'deployment' if parts[0] == 'deployment' else (parts[1].split('__')[0] if parts[0] == 'resources' and len(parts) > 1 else None)  # <set>__<instance>: a second one of a kind
                 q = questions.get((owner, parts[-1]))
                 if q is not None and not q.get('per_environment') and 'non_production_default' not in q and src != 'overridden':
                     errors.append(f"{path} is split by stage, but its question is neither per_environment nor a cost knob - one value for every stage, or the user's departure recorded as overridden")

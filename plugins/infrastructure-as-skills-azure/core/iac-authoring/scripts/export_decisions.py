@@ -143,6 +143,9 @@ class Renderer:
     def value_words(self, q, value):
         pv = (q or {}).get('plain_values') or {}
         if self.is_stage_map(value):
+            if len(self.environments) == 1:
+                # One stage is the whole system: no stage prefix on a value that cannot differ.
+                return self.value_words(q, next(iter(value.values())))
             return '; '.join(f"{self.stage_name(k)}: {self.value_words(q, v)}" for k, v in value.items())
         if isinstance(value, bool):
             if value in pv:
@@ -153,6 +156,10 @@ class Renderer:
                 return self.L['none']
             return ', '.join(self.value_words(q, v) for v in value)
         if isinstance(value, dict):
+            # a role granted to a principal, a subnet handed to a service: pairs read as "who (what)"
+            for who, what in (('principal', 'role'), ('subnet', 'service')):
+                if who in value and what in value:
+                    return f"{value[who]} ({value[what]})"
             if 'name' in value:
                 detail = value.get('resource_group_name') or value.get('prefix')
                 base = str(value['name']) + (f" ({detail})" if detail else '')
@@ -229,6 +236,13 @@ def main():
     R.env_q = dep_q.get('environments', (None, None))[1]
     dep = spec.get('deployment') or {}
     resources = spec.get('resources') or {}
+    # `<set>__<instance>` is a second resource of one kind (spec.md, "Several of a kind"):
+    # it reads the questions of its set and is titled with its instance name.
+    for res in resources:
+        base, _, inst = res.partition('__')
+        if inst and res not in sets and base in sets:
+            sets[res] = sets[base]
+            titles[res] = f"{titles.get(base, base)} ({inst})"
     head = spec.get('spec') or {}
     workload = ctx.get('workload') or head.get('id') or '?'
     at = str(head.get('at') or datetime.date.today())[:10]
