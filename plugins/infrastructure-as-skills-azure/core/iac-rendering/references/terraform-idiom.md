@@ -29,7 +29,7 @@ tests/
 The reason to split is review, not tidiness: a private endpoint change and a retention
 change land in different files and can be read apart.
 
-That is the `granularity: single` shape. With modules, the same files move one level down.
+That is the `granularity: single` shape. With modules, the same files move one level down; under AVM with several families the shape is [`per-family`](#grouped-avm-calls-modulesfamily).
 
 ## Modules
 
@@ -129,16 +129,84 @@ beside `azurerm` and `naming`, and an azurerm-based module may pin `azurerm` to 
 the root did not plan on. Read the module README's *Requirements* before writing
 `providers.tf`; the details are in [avm.md](avm.md#provider-requirements-terraform).
 
-With AVM the module split is mostly decided: one module call per resource, the
-resource's own private endpoints, diagnostics and role assignments as its inputs, and the
-root holding the wiring between modules. `composition.granularity: per-concern` describes
-the authored layout; under AVM it collapses to `single` unless a pattern says otherwise.
+With AVM the module split is mostly decided: one AVM call per resource, the resource's
+own private endpoints, diagnostics and role assignments as its inputs. One family or
+fewer renders flat (`granularity: single`); a spec with several families renders
+`granularity: per-family`, below.
+
+### Grouped AVM calls: `modules/<family>/`
+
+A spec with several resource families would put dozens of AVM calls into one root. Group
+them instead: **a local submodule per family, and a root that only calls the submodules.**
+
+```
+modules.network.tf     # module "network" { source = "./modules/network" ... } - nothing else
+modules.security.tf
+modules.ai.tf
+providers.tf  variables.tf  locals.tf  outputs.tf  infra-spec.yaml
+environments/  tests/
+modules/
+  network/
+    avm.storage.tf     # one file per resource: its naming data source, the AVM call, and what
+    avm.cosmos.tf      #   belongs only to it (a role assignment, a child resource, its locals)
+    private_endpoints.tf  # the family's endpoint names, when it has endpoints
+    roles.tf           # wiring inside the family, when there is some
+    variables.tf       # what the root hands over - names, ids, subnet ids, decisions
+    outputs.tf         # what other families and the tests read
+    versions.tf        # required_providers only, no provider block
+```
+
+A family has no `main.tf`: the file is named after the resource it holds, `avm.<resource>.tf`
+(`avm.` because the call is an Azure Verified Module; an authored resource is
+`resource.<name>.tf`). Resources that render as several instances (`for_each`) or as a pair
+of modules (plan and app) stay in one file.
+
+Rules:
+
+- **The family is the resource's directory under `resources/`** (`network`, `security`,
+  `identity`, `observability`, `data`, `ai`, `compute`). Resources of one family that
+  share a lifecycle stay together; do not invent finer groups.
+- **The root file is a call and nothing else.** `modules.<family>.tf` holds one `module`
+  block with `source = "./modules/<family>"` (no `version` - local path) and its
+  arguments: context variables, the outputs of the families it `needs`, and the stage's
+  values. No resource, no AVM call, no `locals` in it.
+- **The AVM calls live in the submodule**, versions pinned there, every decision written
+  as an explicit input with its `# decision:` comment, as in the AVM example above.
+- **Wiring stays in the root**, as for any composition: a role assignment or private link
+  between two families needs both ends. A family that needs another's id takes it as a
+  variable; it never reads the other's resources.
+- **Names are resolved in the submodule** (the `naming` provider data sources live beside
+  the call they name); the root passes `workload`, `environment` and the instance index.
+- **Providers are configured in the root only.** The submodule's `versions.tf` declares
+  `required_providers` and nothing else; a provider alias comes in through `providers =`.
+- **Outputs are the contract with the tests.** A family exposes the AVM module's
+  `resource` / `resource_id` it holds (`output "foundry" { value = module.foundry.resource }`,
+  `sensitive` where the module's is), so a test asserts on `module.ai.foundry` instead of
+  reaching into the nesting. A decision a test needs and no output carries is an output
+  to add, not a reason to mark it not-testable.
+- **Never `depends_on` a family module to order it behind another.** A module-level
+  `depends_on` defers every `data` source in it to apply time, so the rendered names are
+  unknown at plan and the naming tests cannot assert. Pass the ids that must exist as an
+  input and use them where the wait happens (`triggers = { scopes = join(",", var.role_scope_ids) }`
+  on a `time_sleep`).
+- **A whole-module output is sensitive.** `output "foundry" { value = module.foundry }` carries
+  the module's sensitive values and is marked `sensitive = true`; the root then cannot
+  output a field of it unmarked. Give the root's own outputs (an id, a URI) their own
+  non-sensitive output in the family.
+- **`_target_overrides` that replace an AVM call** (an authored resource in its place) live
+  in the same submodule and keep their comment.
+
+The spec carries it as `composition.granularity: per-family` with one `modules` entry per
+family (`id` = family, `contains` = its resource keys). A repository that already has its
+own module layout keeps it - the first rule of this file.
 
 ### Do not generate a module per resource by reflex
 
 `granularity: per-resource` exists for patterns whose parts get reused separately. A
 one-resource module whose variables restate the resource's arguments is a wrapper that adds
-a file to read and removes nothing from the one below it.
+a file to read and removes nothing from the one below it. The family module is not that:
+it holds several AVM calls and the decisions that belong together, and it is what keeps
+the root readable.
 
 ## Resource naming inside HCL
 

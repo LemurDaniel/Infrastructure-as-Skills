@@ -364,6 +364,7 @@ particular split.
 | `single` | One root, no modules | A single resource, a throwaway, or a repository that has no `modules/` |
 | `per-concern` | A module per concern — the resource, its networking, its observability | Default. Mirrors the one-concern-per-file rule a level up |
 | `per-resource` | A module per resource | A pattern with many resources whose parts are reused separately |
+| `per-family` | A module per resource family (`network`, `security`, `ai`, ...), each holding that family's AVM calls | Default under AVM when the spec has more than one family. Terraform only for now; the root then holds one call per family and the wiring between them |
 
 Do not ask for it when the repository answers it. An existing `modules/` directory, or an
 existing spec, decides this before the interview starts.
