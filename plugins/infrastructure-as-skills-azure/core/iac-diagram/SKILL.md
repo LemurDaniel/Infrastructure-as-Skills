@@ -119,20 +119,22 @@ lines are access, not plumbing.
 | Referenced things (`network_ownership: reference`, a central workspace, platform DNS) | Grey and dashed, outside the resource group, labelled as existing and not created |
 | `open:` entries, `assumed` values | The affected resource in red, and listed in the panel |
 
-**Layout and how the lines run.** With four or more PaaS services the zone is a **column beside
-the network**, as in a hand-drawn architecture, with a free **routing channel** between the two:
-a caller leaves its icon to the right, runs on a track of its own in the channel - one per caller,
-the top caller leftmost - and goes in to its service from the left. The lines are short and
-horizontal, and never run through an icon or a title. With fewer services the zone sits below the
-network instead, and the lines run on tracks in the free space beside the subnets and on lanes
-under them (up to five in one row, more wrap into two, the second shifted by half a slot). A line
-to Application Insights goes out along the row, over the zones through the strip under the
-group's title, and down in the gap in front of the monitoring zone. Lines to and from an actor
-(users, Entra ID) run in the gap between the external zone and the group, never on the group's
-border. **With three or more callers the private lines are told apart by colour**, one per caller,
-and the legend names them; fewer callers keep the single blue, and orange stays what leaves or
-crosses the internet. A picture where the lines still read badly is a layout bug in the script,
-not something to move by hand.
+**Layout and how the lines run.** With four or more PaaS services the picture is a **hub**, as in
+a hand-drawn architecture: the compute subnets on the left, the endpoint subnet as a tall column
+beside them with the bundled *Private Endpoints* in its middle, the services as a column outside
+the network. **Each caller has one line into the endpoints** - the farther a caller sits from the
+endpoints' height, the further right its track, so a vertical never crosses another caller's run
+- and **one line leaves the endpoints for each service**, all on a single trunk. Eleven
+connections become four plus seven, and who calls what is text at the service
+(`← App Service · web, Function App`), not a line. With fewer services the zone sits below the
+network instead and each caller runs on a track beside the subnets and a lane under them to its
+services. A line to Application Insights goes out along the row, over the zones through the strip
+under the group's title and down in the gap in front of the monitoring zone; lines to and from an
+actor (users, Entra ID) run in the gap between the external zone and the group, never on the
+group's border. **With three or more callers the lines into the endpoints are told apart by
+colour**, one per caller, and the legend names them; the lines out of the endpoints stay blue,
+and orange stays what leaves or crosses the internet. A picture where the lines still read badly
+is a layout bug in the script, not something to move by hand.
 
 AI Foundry and Container Apps have no icon of their own in draw.io's library; the nearest are
 used (Cognitive Services, Container Instances) and the label carries the real type. Lines run

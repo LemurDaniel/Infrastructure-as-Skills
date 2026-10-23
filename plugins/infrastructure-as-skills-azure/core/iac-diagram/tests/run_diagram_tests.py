@@ -211,6 +211,10 @@ def case_example_chatbot(cells):
             colours.add(m.group(1))
     if len(colours) < 4:
         bad.append(f"four callers should draw in four colours, found {sorted(colours)}")
+    out_of_pe = [e for e in edges(cells).values() if e['source'] == 'pe-bundle']
+    into_pe = [e for e in edges(cells).values() if e['target'] == 'pe-bundle']
+    if len(out_of_pe) != 7 or len(into_pe) != 4:
+        bad.append(f"hub layout: expected 4 callers into the endpoints and 7 services out of them, found {len(into_pe)} and {len(out_of_pe)}")
     if "container-apps" in cells['legend']['value'] or 'Container App' not in cells['legend']['value']:
         bad.append('the legend does not name the callers')
     return bad

@@ -80,7 +80,7 @@ LABELS = {
         'diagNote': 'Diagnostic settings of all resources', 'nameRes': 'Name resolution',
         'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'public access disabled', 'support': 'Identities and network baseline',
         'compute': 'Compute', 'computeSubnet': 'snet-compute', 'delegated': 'delegated to', 'optional': 'optional',
-        'legend': 'Legend', 'legCallers': 'private access over private endpoints - one colour per caller', 'legPrivate': 'access over a private endpoint, no public path',
+        'legend': 'Legend', 'legCallers': 'a caller on its way to the private endpoints - one colour per caller', 'legPE': 'from the private endpoints to the service, no public path', 'legPrivate': 'access over a private endpoint, no public path',
         'legPublic': 'access from or over the internet', 'legExisting': 'existing, not created here',
         'legOptional': 'optional component', 'legOpen': 'open or assumed decision',
         'subPrivate': 'No service is reachable from the internet: access runs over private endpoints.',
@@ -97,7 +97,7 @@ LABELS = {
         'diagNote': 'Diagnose-Einstellungen aller Ressourcen', 'nameRes': 'Namensauflösung',
         'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'öffentlicher Zugriff deaktiviert', 'support': 'Identitäten und Netzwerkgrundlage',
         'compute': 'Compute', 'computeSubnet': 'snet-compute', 'delegated': 'delegiert an', 'optional': 'optional',
-        'legend': 'Legende', 'legCallers': 'privater Zugriff über Private Endpoints - eine Farbe je Aufrufer', 'legPrivate': 'Zugriff über Private Endpoint, kein öffentlicher Weg',
+        'legend': 'Legende', 'legCallers': 'Aufrufer auf dem Weg zu den Private Endpoints - eine Farbe je Aufrufer', 'legPE': 'von den Private Endpoints zum Dienst, kein öffentlicher Weg', 'legPrivate': 'Zugriff über Private Endpoint, kein öffentlicher Weg',
         'legPublic': 'Zugriff aus dem oder über das Internet', 'legExisting': 'vorhanden, wird hier nicht erstellt',
         'legOptional': 'optionales Bauteil', 'legOpen': 'offene oder angenommene Entscheidung',
         'subPrivate': 'Kein Dienst ist aus dem Internet erreichbar: Zugriffe laufen über Private Endpoints.',
@@ -479,6 +479,20 @@ def main():
         if s(ra.get('to')) in resources:
             role_lines.setdefault(s(ra.get('to')), []).append(f"{s(ra.get('from'))}: {s(ra.get('role'))}")
 
+    callers = []
+    for a in access:
+        if a['from'] in compute and a['to'] in paas and a['from'] not in callers:
+            callers.append(a['from'])
+    # Side layout: with four or more services the PaaS zone is a column beside the network, as in
+    # a hand-drawn architecture - short horizontal lines through a routing channel of their own,
+    # one track per caller - and not a block below it that every line has to bend around.
+    side = bool(draw_vnet and callers and len(paas) >= 4)
+    callers_of = {}
+    for a in access:
+        if a['from'] in compute and a['to'] in paas:
+            who = TYPE_NAMES.get(base(a['from']), base(a['from'])) + (f" &#183; {a['from'].partition('__')[2]}" if '__' in a['from'] else '')
+            callers_of.setdefault(a['to'], []).append(who + (f" ({a['label']})" if a.get('label') else ''))
+
     def resource_label(k):
         kind_title = TYPE_NAMES.get(base(k), base(k).replace('-', ' ').title())
         sub = s(purposes.get(k)) or (k.partition('__')[2] or k)
@@ -486,6 +500,8 @@ def main():
         label = format_label(kind_title, sub, note)
         for line in role_lines.get(k, []):
             label += f"<br><font style='font-size:10px' color='#5C2D91'>&#8592; {esc(line)}</font>"
+        if side and callers_of.get(k):
+            label += f"<br><font style='font-size:10px' color='#5C2D91'>&#8592; {', '.join(callers_of[k])}</font>"
         return label
 
     labels = {k: resource_label(k) for k in drawn + (['application-insights'] if has_ai else [])}
@@ -514,23 +530,22 @@ def main():
     def rows_height(keys, cols):
         return sum(max(pitch[k] for k in r) for r in rows_of(keys, cols))
 
-    callers = []
-    for a in access:
-        if a['from'] in compute and a['to'] in paas and a['from'] not in callers:
-            callers.append(a['from'])
-    # Side layout: with four or more services the PaaS zone is a column beside the network, as in
-    # a hand-drawn architecture - short horizontal lines through a routing channel of their own,
-    # one track per caller - and not a block below it that every line has to bend around.
-    side = bool(draw_vnet and callers and len(paas) >= 4)
     cols_c = min(max([len(v) for v in groups.values()] or [1]), 4)
     # Up to five services in one row; more wrap into two, the second row shifted by half a slot, so
     # that the line to a second-row icon comes down in the gap between two first-row icons and not
     # through one. A narrower row means a narrower network and less empty space in it.
+    n_inter = sum(1 for a in access if a['from'] in compute and a['to'] in compute)
     if side:
+        # Hub layout, after the hand-drawn ones: compute subnets | collector tracks | the endpoint
+        # column | one trunk | the services. Callers run into the endpoints, one line each; from
+        # there one line leaves for each service. Who calls what is text at the service.
         cols_p = 2 if len(paas) > 9 else 1
         stagger = 0
-        w_main = max(cols_c * SLOT_W + 4 * PAD, 2 * SLOT_W + 4 * PAD)
-        chan_w = 36 + 16 * (len(callers) + 2)
+        cw = max(cols_c * SLOT_W + 2 * PAD, 2 * SLOT_W + 2 * PAD)        # compute subnet width
+        coll_w = 34 + 16 * (len(callers) + n_inter)
+        pe_w = SLOT_W
+        w_main = PAD + cw + coll_w + pe_w + PAD
+        chan_w = 80
         paas_w = cols_p * SLOT_W + 2 * PAD
     else:
         cols_p = len(paas) if len(paas) <= 5 else math.ceil(len(paas) / 2)
@@ -566,7 +581,7 @@ def main():
         vn_h = HEAD
         for _, _, _, h in group_boxes:
             vn_h += h + PAD
-        if show_pe:
+        if show_pe and not side:
             vn_h += pe_box_h + PAD
         vn_h += len(strips) * (44 + 10)
         vn_h += PAD - (10 if strips else 0)
@@ -720,10 +735,20 @@ def main():
             lbl = f"<b>{esc(name)}</b>" + (f"  <font style='font-size:10px'>{esc(prefix)}</font>" if prefix else '')
             if note:
                 lbl += f"<br><font style='font-size:10px'><i>{esc(note)}</i></font>"
-            add_container({'id': f"snet-c{gi}", 'parent': 'vnet', 'x': sn_x, 'y': cursor, 'w': sn_w, 'h': h, 'style': sn_style, 'value': lbl})
+            add_container({'id': f"snet-c{gi}", 'parent': 'vnet', 'x': sn_x, 'y': cursor, 'w': cw if side else sn_w, 'h': h, 'style': sn_style, 'value': lbl})
             place_grid(keys, f"snet-c{gi}", sn_x + PAD, cursor + hh, cols_c)
             cursor += h + PAD
-        if show_pe:
+        if show_pe and side:
+            # the endpoint column, as tall as the compute subnets beside it; the bundle in its middle
+            col_h = cursor - PAD - (main_y + HEAD)
+            pe_x = sn_x + cw + coll_w
+            pe_label = f"<b>{esc(pe_subnet_name)}</b>" + (f"  <font style='font-size:10px'>{esc(pe_subnet_prefix)}</font>" if pe_subnet_prefix else '')
+            add_container({'id': 'snet-pe', 'parent': 'vnet', 'x': pe_x, 'y': main_y + HEAD, 'w': pe_w, 'h': col_h, 'style': sn_style, 'value': pe_label})
+            kinds = list(dict.fromkeys(TYPE_NAMES.get(base(k), base(k)) for k in with_pe))
+            names = ', '.join(kinds[:2]) + (f" +{len(kinds) - 2}" if len(kinds) > 2 else '')
+            add_icon('pe-bundle', 'snet-pe', pe_x, main_y + HEAD + (col_h - SLOT_H) / 2, 'private-endpoint',
+                     format_label(T['peBundle'], f"{len(with_pe)}× {names}", ''), slot_h=SLOT_H)
+        elif show_pe:
             pe_label = f"<b>{esc(pe_subnet_name)}</b>" + (f"  <font style='font-size:10px'>{esc(pe_subnet_prefix)}</font>" if pe_subnet_prefix else '')
             add_container({'id': 'snet-pe', 'parent': 'vnet', 'x': sn_x, 'y': cursor, 'w': sn_w, 'h': pe_box_h, 'style': sn_style, 'value': pe_label})
             kinds = list(dict.fromkeys(TYPE_NAMES.get(base(k), base(k)) for k in with_pe))
@@ -874,32 +899,30 @@ def main():
         if src not in by_id or dst not in by_id:
             say(f"[warn] access {a['from']} -> {a['to']}: endpoint not drawn", 'yellow')
             continue
+        if side and a['from'] in caller_i and a['to'] in paas:
+            continue   # drawn as caller -> endpoints -> service, below
         public = is_public_edge(a)
         color = PUBLIC_COLOR if public else (caller_color.get(a['from'], PRIVATE_COLOR) if dense else PRIVATE_COLOR)
         style = EDGE_BASE + f"strokeColor={color};fontColor={color};fontSize=10;labelBackgroundColor=#FFFFFF;"
         sc, dc = by_id[src], by_id[dst]
         edge = {'id': f"e-{n}", 'source': src, 'target': dst, 'value': a['label']}
-        if side and a['from'] in caller_i and a['to'] in paas:
-            # Out to the right, along the caller's own track in the channel, in to the service
-            # from the left. Top caller: leftmost track, so a lower caller's run towards its
-            # track never has to cross an upper one's vertical on the way.
-            tx = (vn_cell['x'] + vn_cell['w'] + 18 + 16 * track_rank[a['from']]) if vn_cell else dc['x'] - 30
-            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
-            edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': dc['y'] + dc['h'] / 2}]
-        elif a['from'] in caller_i and a['to'] in paas:
+        if a['from'] in caller_i and a['to'] in paas:
             tx = gut0 - 16 * track_rank[a['from']]
             bus_y = bus_base + 10 * lane_rank[a['from']]
             edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0.5;entryY=0;'
             edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': bus_y}, {'x': dc['x'] + dc['w'] / 2, 'y': bus_y}]
         elif a['from'] in compute and a['to'] in compute:
             k = inter.setdefault(a['from'] + '>' + a['to'], len(inter))
-            tx = gut0 - 16 * (len(callers) + 1 + k)
+            if side and 'snet-pe' in by_id:
+                tx = by_id['snet-pe']['x'] - coll_w + 14 + 16 * (len(callers) + k)
+            else:
+                tx = gut0 - 16 * (len(callers) + 1 + k)
             edge['style'] = style + 'exitX=1;exitY=0.5;entryX=1;entryY=0.5;'
             edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': dc['y'] + dc['h'] / 2}]
         elif side and a['from'] in compute and base(a['to']) in MONITOR_KINDS:
             # past the PaaS column along the free strip above the zones, down in the gap in front
             # of the monitoring zone
-            tx = vn_cell['x'] + vn_cell['w'] + 18 + 16 * (len(callers) + 1)
+            tx = vn_cell['x'] + vn_cell['w'] + 54
             top = main_y - 6
             zone = by_id.get('z-monitoring')
             gx = (zone['x'] - 9) if zone else dc['x'] - 22
@@ -932,6 +955,36 @@ def main():
             edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
         edges.append(edge)
 
+    # Hub layout: one line per caller into the endpoints, one per service out of them.
+    #   - A caller's track: the farther a caller is from the endpoints' height, the further right
+    #     its track, so a vertical never crosses another caller's run on its way in.
+    #   - A caller enters the endpoints at its own height, in the order the callers sit.
+    #   - All service lines leave on one trunk, outside the network.
+    if side and 'pe-bundle' in by_id and 'snet-pe' in by_id:
+        pe = by_id['pe-bundle']
+        cx0 = by_id['snet-pe']['x'] - coll_w
+        pe_mid = pe['y'] + pe['h'] / 2
+        n_c = len(callers)
+        mid_y = {k: by_id[node_of[k]]['y'] + by_id[node_of[k]]['h'] / 2 for k in callers if node_of[k] in by_id}
+        by_dist = sorted(mid_y, key=lambda k: -abs(mid_y[k] - pe_mid))
+        by_y = sorted(mid_y, key=lambda k: mid_y[k])
+        for k in by_y:
+            tx = cx0 + 14 + 16 * (n_c - 1 - by_dist.index(k))
+            frac = 0.2 + (0.6 * by_y.index(k) / (n_c - 1) if n_c > 1 else 0.3)
+            public = any(is_public_edge(a) for a in access if a['from'] == k and a['to'] in paas)
+            color = PUBLIC_COLOR if public else (caller_color[k] if dense else PRIVATE_COLOR)
+            st = EDGE_BASE + f"strokeColor={color};exitX=1;exitY=0.5;entryX=0;entryY={num(frac)};"
+            edges.append({'id': f"e-in-{by_y.index(k)}", 'source': node_of[k], 'target': 'pe-bundle', 'value': '', 'style': st,
+                          'points': [{'x': tx, 'y': mid_y[k]}, {'x': tx, 'y': pe['y'] + pe['h'] * frac}]})
+        trunk = vn_cell['x'] + vn_cell['w'] + 28
+        for i, k in enumerate(paas):
+            if k not in callers_of or f"res-{k}" not in by_id:
+                continue
+            dc = by_id[f"res-{k}"]
+            st = EDGE_BASE + f"strokeColor={PRIVATE_COLOR};exitX=1;exitY=0.5;entryX=0;entryY=0.5;"
+            edges.append({'id': f"e-out-{i}", 'source': 'pe-bundle', 'target': f"res-{k}", 'value': '', 'style': st,
+                          'points': [{'x': trunk, 'y': pe_mid}, {'x': trunk, 'y': dc['y'] + dc['h'] / 2}]})
+
     # Legend: only what the picture uses.
     legend = [f"<b>{esc(T['legend'])}</b>"]
     if dense:
@@ -939,7 +992,9 @@ def main():
         for k in by_top:
             legend.append(f"<font color='{caller_color[k]}'><b>&#9473;&#9473;&#9654;</b></font> "
                           f"{esc(TYPE_NAMES.get(base(k), base(k)))} &#183; {esc(s(purposes.get(k)) or (k.partition('__')[2] or k))}")
-    elif any(PRIVATE_COLOR in e['style'] for e in edges):
+    if side:
+        legend.append(f"<font color='{PRIVATE_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPE'])}")
+    elif not dense and any(PRIVATE_COLOR in e['style'] for e in edges):
         legend.append(f"<font color='{PRIVATE_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPrivate'])}")
     if any(PUBLIC_COLOR in e['style'] for e in edges):
         legend.append(f"<font color='{PUBLIC_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPublic'])}")
