@@ -1,6 +1,6 @@
 locals {
   # Subnet ids by name, for the families that put an endpoint or an integration into one.
-  subnet_ids = { for k, s in module.network.network.subnets : k => s.resource_id }
+  subnet_ids = module.network.subnet_ids
 
   # The set itself comes from the spec's context.tags, not from this file.
   tags = var.tags

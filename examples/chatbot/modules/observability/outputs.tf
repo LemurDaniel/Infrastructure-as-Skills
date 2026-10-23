@@ -1,19 +1,15 @@
-output "workspace" {
-  description = "The Log Analytics workspace module."
-  value       = module.workspace
-  sensitive   = true
+output "workspace_resource_id" {
+  description = "Log Analytics workspace every diagnostic setting points at."
+  value       = module.workspace.resource_id
 }
 
-output "insights" {
-  description = "The Application Insights module."
-  value       = module.insights
-  sensitive   = true
+output "insights_resource_id" {
+  description = "Application Insights component."
+  value       = module.insights.resource_id
 }
 
-output "names" {
-  description = "The rendered names, for the tests and the other families."
-  value = {
-    workspace = data.naming_name.workspace.name
-    insights  = data.naming_name.insights.name
-  }
+output "insights_connection_string" {
+  description = "Connection string of the component."
+  value       = module.insights.connection_string
+  sensitive   = true
 }

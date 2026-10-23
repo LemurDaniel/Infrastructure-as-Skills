@@ -1,11 +1,4 @@
 output "identities" {
-  description = "The user-assigned identities by instance (the AVM module objects)."
+  description = "The user-assigned identities by instance: resource id, client id, principal id."
   value       = module.identity
-}
-
-output "names" {
-  description = "The rendered names, for the tests and the other families."
-  value = {
-    identity = { for k, v in data.naming_name.identity : k => v.name }
-  }
 }

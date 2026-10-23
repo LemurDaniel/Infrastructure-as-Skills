@@ -1,25 +1,19 @@
-output "storage" {
-  description = "The storage account modules by instance."
-  value       = module.storage
-  sensitive   = true
+output "storage_resource_ids" {
+  description = "Storage account ids by instance."
+  value       = { for k, m in module.storage : k => m.resource_id }
 }
 
-output "cosmos" {
-  description = "The Cosmos DB module."
-  value       = module.cosmos
-  sensitive   = true
+output "host_storage_account_name" {
+  description = "Name of the function host storage account."
+  value       = module.storage["host"].name
 }
 
-output "names" {
-  description = "The rendered names, for the tests and the other families."
-  value = {
-    storage_account  = { for k, v in data.naming_name.storage_account : k => v.name }
-    cosmos           = data.naming_name.cosmos.name
-    private_endpoint = { for k, v in data.naming_name.private_endpoint : k => v.name }
-  }
+output "cosmos_resource_id" {
+  description = "Resource id of the Cosmos DB account."
+  value       = module.cosmos.resource_id
 }
+
 output "cosmos_endpoint" {
   description = "Endpoint of the Cosmos DB account."
   value       = module.cosmos.endpoint
 }
-
