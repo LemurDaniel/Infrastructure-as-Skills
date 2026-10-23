@@ -103,7 +103,10 @@ lines are access, not plumbing.
 | `virtual-network` subnets, `deployment.address_space` | A virtual network zone with its subnets and ranges. A subnet that hosts compute carries its delegation (`delegated to Microsoft.Web/serverFarms`) |
 | Compute (`app-service`, `function-app`, `container-app`, `virtual-machine`, …) | An icon inside the subnet named by its `networking.integration_subnet` decision, else the first integration-like subnet |
 | Other `resources:` (storage, vault, database, bus, registry, …) | An icon in the *Azure PaaS* zone below the network, titled *public access disabled* when every one is. A PaaS service is not in the VNet; its endpoint is |
+| `user-assigned-identity`, `network-security-group` | Not services that are called: a zone of their own below the PaaS zone (*Identities and network baseline*), so that no line to a service runs through them |
+| A second resource of one kind (`app-service__web`, `app-service__mcp`) | Read as the set before the `__` for icon, title and question set; labelled with its `wiring.purposes` entry, else the instance name |
 | Private endpoints | **One** bundled icon in the endpoint subnet (`9× app-service, function-app +7`), not one per resource |
+| `subnet_policy.subnet_delegations` | The delegation printed on each subnet; the kind's usual delegation only where the spec says none |
 | `wiring.access` | The lines: `{ from, to, label }`. `from` and `to` are resource keys or actors - `internet`, `users`, `external:<name>` - which sit in the *Internet and external services* zone. A line to a PaaS service runs on a shared track and splits on a bus lane, like a tree |
 | `wiring.role_assignments` | A line as well, if `wiring.access` has none for the pair, and `← principal: role` in purple on the target's label |
 | `deployment.network_exposure: public` | An *Internet* actor with an orange line to each compute resource (or PaaS service if there is no compute) |
@@ -115,6 +118,22 @@ lines are access, not plumbing.
 | Private DNS zones | One bundled icon in a *Name resolution* zone (`8× privatelink.*`) |
 | Referenced things (`network_ownership: reference`, a central workspace, platform DNS) | Grey and dashed, outside the resource group, labelled as existing and not created |
 | `open:` entries, `assumed` values | The affected resource in red, and listed in the panel |
+
+**How the lines run.** A caller leaves its icon to the right, drops on a track of its own in
+the free space at the right of the subnets - never through another icon - to a lane below the
+network, and fans out from there to its services, which sit in **one row** so that no line
+runs through a neighbour. Tracks are assigned right to left from the top caller down, so a lower
+run ends before the track of an upper one; lanes are assigned fewest targets first, since a drop
+crosses the lanes below its own. A line to Application Insights goes out along the row and in
+from the left through the gap beside the network. **With three or more callers the private
+lines are told apart by colour**, one per caller, and the legend names them; fewer callers keep
+the single blue, and orange stays what leaves or crosses the internet. A picture where the
+lines still read badly is a layout bug in the script, not something to move by hand.
+
+AI Foundry and Container Apps have no icon of their own in draw.io's library; the nearest are
+used (Cognitive Services, Container Instances) and the label carries the real type. Lines run
+from compute to PaaS and from actors; a PaaS-to-PaaS line (a search service reading a storage
+account) is not routed, so say it in `wiring.purposes` instead.
 
 A legend at the bottom lists only what the picture uses.
 

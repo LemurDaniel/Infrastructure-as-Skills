@@ -15,6 +15,7 @@ Needs PyYAML (new_diagram.py needs it). Exit 0 all passed, 1 a check failed, 2 c
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -192,12 +193,36 @@ def case_example_greenfield(cells):
     return bad
 
 
+def case_example_chatbot(cells):
+    """Twenty resources, two of them twice: instance keys, a zone for what is not called, and
+    lines told apart - one colour per caller, one row of services, no line through an icon."""
+    bad = []
+    for need in ('res-app-service__web', 'res-app-service__mcp', 'res-storage-account__host', 'z-support', 'z-paas', 'legend'):
+        if need not in cells:
+            bad.append(f"missing {need}")
+    for k in cells:
+        if k.startswith('res-user-assigned-identity') or k.startswith('res-network-security-group'):
+            if cells[k]['parent'] != 'z-support':
+                bad.append(f"{k} is a service zone resident, not part of the support zone")
+    colours = set()
+    for e in edges(cells).values():
+        m = re.search(r'strokeColor=(#[0-9A-Fa-f]{6})', e['style'])
+        if m and m.group(1) != PUBLIC:
+            colours.add(m.group(1))
+    if len(colours) < 4:
+        bad.append(f"four callers should draw in four colours, found {sorted(colours)}")
+    if "container-apps" in cells['legend']['value'] or 'Container App' not in cells['legend']['value']:
+        bad.append('the legend does not name the callers')
+    return bad
+
+
 CASES = [
     ('ten-resources', os.path.join(FIXTURES, 'ten-resources.yaml'), 'en', case_ten_resources),
     ('ten-resources-de', os.path.join(FIXTURES, 'ten-resources.yaml'), 'de', case_ten_resources_de),
     ('public-webshop', os.path.join(FIXTURES, 'public-webshop.yaml'), 'en', case_public_webshop),
     ('example-private-storage-on-platform', os.path.join(EXAMPLES, 'private-storage-on-platform', 'infra-spec.yaml'), 'en', case_example_platform),
     ('example-greenfield-telemetry', os.path.join(EXAMPLES, 'greenfield-telemetry', 'infra-spec.yaml'), 'en', case_example_greenfield),
+    ('example-chatbot', os.path.join(EXAMPLES, 'chatbot', 'infra-spec.yaml'), 'en', case_example_chatbot),
 ]
 
 

@@ -78,9 +78,9 @@ LABELS = {
         'forces': 'forces', 'peSubnet': 'private endpoints', 'owner': 'owner', 'noSet': 'no question set',
         'arch': 'Architecture', 'ext': 'Internet and external services', 'monitoring': 'Monitoring',
         'diagNote': 'Diagnostic settings of all resources', 'nameRes': 'Name resolution',
-        'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'public access disabled',
+        'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'public access disabled', 'support': 'Identities and network baseline',
         'compute': 'Compute', 'computeSubnet': 'snet-compute', 'delegated': 'delegated to', 'optional': 'optional',
-        'legend': 'Legend', 'legPrivate': 'access over a private endpoint, no public path',
+        'legend': 'Legend', 'legCallers': 'private access over private endpoints - one colour per caller', 'legPrivate': 'access over a private endpoint, no public path',
         'legPublic': 'access from or over the internet', 'legExisting': 'existing, not created here',
         'legOptional': 'optional component', 'legOpen': 'open or assumed decision',
         'subPrivate': 'No service is reachable from the internet: access runs over private endpoints.',
@@ -95,9 +95,9 @@ LABELS = {
         'forces': 'erzwingt', 'peSubnet': 'Private Endpoints', 'owner': 'zuständig', 'noSet': 'ohne Fragenset',
         'arch': 'Architektur', 'ext': 'Internet und externe Dienste', 'monitoring': 'Monitoring',
         'diagNote': 'Diagnose-Einstellungen aller Ressourcen', 'nameRes': 'Namensauflösung',
-        'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'öffentlicher Zugriff deaktiviert',
+        'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'öffentlicher Zugriff deaktiviert', 'support': 'Identitäten und Netzwerkgrundlage',
         'compute': 'Compute', 'computeSubnet': 'snet-compute', 'delegated': 'delegiert an', 'optional': 'optional',
-        'legend': 'Legende', 'legPrivate': 'Zugriff über Private Endpoint, kein öffentlicher Weg',
+        'legend': 'Legende', 'legCallers': 'privater Zugriff über Private Endpoints - eine Farbe je Aufrufer', 'legPrivate': 'Zugriff über Private Endpoint, kein öffentlicher Weg',
         'legPublic': 'Zugriff aus dem oder über das Internet', 'legExisting': 'vorhanden, wird hier nicht erstellt',
         'legOptional': 'optionales Bauteil', 'legOpen': 'offene oder angenommene Entscheidung',
         'subPrivate': 'Kein Dienst ist aus dem Internet erreichbar: Zugriffe laufen über Private Endpoints.',
@@ -125,6 +125,12 @@ ICONS = {
     'redis-cache': 'img/lib/azure2/databases/Cache_Redis.svg',
     'service-bus': 'img/lib/azure2/integration/Service_Bus.svg',
     'application-insights': 'img/lib/azure2/devops/Application_Insights.svg',
+    # draw.io's library has no icon of its own for AI Foundry or Container Apps: the nearest ones.
+    'foundry': 'img/lib/azure2/ai_machine_learning/Cognitive_Services.svg',
+    'search-service': 'img/lib/azure2/app_services/Search_Services.svg',
+    'container-apps': 'img/lib/azure2/containers/Container_Instances.svg',
+    'user-assigned-identity': 'img/lib/azure2/identity/Managed_Identities.svg',
+    'network-security-group': 'img/lib/azure2/networking/Network_Security_Groups.svg',
     'users': 'img/lib/azure2/identity/Users.svg',
     'entra-id': 'img/lib/azure2/identity/Azure_Active_Directory.svg',
 }
@@ -134,6 +140,8 @@ TYPE_NAMES = {
     'app-service': 'App Service', 'function-app': 'Function App', 'container-registry': 'Container Registry',
     'cosmos-db': 'Cosmos DB', 'sql-server': 'SQL Server', 'redis-cache': 'Redis Cache', 'service-bus': 'Service Bus',
     'application-insights': 'Application Insights',
+    'foundry': 'AI Foundry', 'search-service': 'AI Search', 'container-apps': 'Container App',
+    'user-assigned-identity': 'Managed Identity', 'network-security-group': 'Network Security Group',
 }
 
 ACTOR_TITLES = {'entra-id': 'Entra ID', 'sharepoint-online': 'SharePoint Online', 'm365': 'Microsoft 365',
@@ -141,25 +149,37 @@ ACTOR_TITLES = {'entra-id': 'Entra ID', 'sharepoint-online': 'SharePoint Online'
 
 # Compute is what runs code and integrates with a subnet; monitoring is what receives
 # the logs; everything else that is not the network is PaaS, reached through an endpoint.
-COMPUTE_KINDS = {'app-service', 'function-app', 'container-app', 'container-apps-environment', 'virtual-machine', 'aks'}
+COMPUTE_KINDS = {'app-service', 'function-app', 'container-app', 'container-apps', 'container-apps-environment', 'virtual-machine', 'aks'}
 MONITOR_KINDS = {'log-analytics-workspace', 'application-insights'}
+# Not services that are called: identities hold roles, security groups guard subnets. They get a
+# zone of their own so that no line to a service runs through them.
+SUPPORT_KINDS = {'user-assigned-identity', 'network-security-group'}
 DELEGATIONS = {'app-service': 'Microsoft.Web/serverFarms', 'function-app': 'Microsoft.Web/serverFarms',
-               'container-apps-environment': 'Microsoft.App/environments'}
+               'container-apps-environment': 'Microsoft.App/environments', 'container-apps': 'Microsoft.App/environments'}
+
+
+def base(key):
+    """A second resource of one kind is `<set>__<instance>` in the spec (spec.md, "Several of a
+    kind"); everything that looks a kind up - icon, title, question set - reads the set."""
+    return key.partition('__')[0]
 
 # A slot holds an icon and up to four label lines below it. The label is given
 # the slot's width via labelWidth - without it draw.io wraps the label to the
 # 48px image and breaks after every word.
-SLOT_W, SLOT_H, ICON = 190, 130, 48
+SLOT_W, SLOT_H, ICON = 172, 132, 48
 LABEL_W = SLOT_W - 10
-HEAD, ZHEAD, PAD = 44, 34, 20
+HEAD, ZHEAD, PAD = 40, 30, 16
 ZONE_W = SLOT_W + 40
 TOP = 80
 
 CONTAINER_STYLE = 'rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;'
 EXISTING_STYLE = 'dashed=1;strokeColor=#999999;fontColor=#777777;'
 SUBNET_STYLE = 'rounded=1;arcSize=4;whiteSpace=wrap;html=1;fillColor=#F3F9FD;strokeColor=#7FBAEA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=2;container=1;collapsible=0;'
-EDGE_BASE = 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;'
+EDGE_BASE = 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;'
 PRIVATE_COLOR, PUBLIC_COLOR = '#0078D4', '#D83B01'
+# With three or more callers the private lines are told apart by colour: one colour per caller,
+# a legend entry each. Orange stays what leaves or crosses the internet.
+CALLER_COLORS = ['#0078D4', '#008272', '#8764B8', '#498205', '#B146C2', '#8E562E', '#005B70', '#986F0B']
 
 
 def zone_style(fill, stroke, font):
@@ -170,6 +190,8 @@ def zone_style(fill, stroke, font):
 ZONES = {
     'external': zone_style('#FBF3EA', '#C19C77', '#8A5A2B'),
     'paas': zone_style('#F7F7F7', '#8A8886', '#323130'),
+    # the zone lines arrive in: its title is at the bottom, out of their way
+    'paas_in': zone_style('#F7F7F7', '#8A8886', '#323130').replace('verticalAlign=top', 'verticalAlign=bottom').replace('spacingTop=6', 'spacingBottom=4'),
     'platform': zone_style('#F5F0FA', '#8661C5', '#5C2D91'),
     'monitoring': zone_style('#F1F8F2', '#5BA55B', '#107C10'),
     'compute': zone_style('#F3F9FD', '#0078D4', '#005A9E'),
@@ -273,7 +295,7 @@ def has_question_set(key):
 
 
 def pitch_of(label):
-    return max(100, 8 + ICON + 4 + 16 * label_lines(label) + 8)
+    return max(92, 8 + ICON + 4 + 16 * label_lines(label) + 4)
 
 
 def main():
@@ -322,9 +344,11 @@ def main():
     draw_vnet = has_vnet_res or net_ownership in ('create', 'reference')
     vnet_existing = (not has_vnet_res) and net_ownership == 'reference'
 
-    compute = [k for k in res_keys if k in COMPUTE_KINDS]
-    paas = [k for k in res_keys if k not in COMPUTE_KINDS and k not in MONITOR_KINDS and k != 'virtual-network']
-    drawn = compute + paas
+    compute = [k for k in res_keys if base(k) in COMPUTE_KINDS]
+    paas = [k for k in res_keys if base(k) not in COMPUTE_KINDS and base(k) not in MONITOR_KINDS
+            and base(k) not in SUPPORT_KINDS and k != 'virtual-network']
+    support = [k for k in res_keys if base(k) in SUPPORT_KINDS]
+    drawn = compute + paas + support
 
     def pna(k):
         v = s(get_decision(resources[k], ['networking', 'public_network_access']))
@@ -335,8 +359,8 @@ def main():
 
     # Which resources get a private endpoint: a private posture or an explicit subnet,
     # and not a public-access departure.
-    with_pe = [k for k in drawn
-               if (is_private or pe_subnet_of(k) is not None) and (pna(k) == 'disabled' or pe_subnet_of(k) is not None)]
+    with_pe = [k for k in drawn if base(k) not in SUPPORT_KINDS
+               and (is_private or pe_subnet_of(k) is not None) and (pna(k) == 'disabled' or pe_subnet_of(k) is not None)]
 
     pe_subnet_name = subnet_name(get_decision(dep, ['private_endpoint_subnet']), res_keys)
     pe_subnet_prefix = get_decision(dep, ['private_endpoint_subnet_prefix'])
@@ -456,9 +480,9 @@ def main():
             role_lines.setdefault(s(ra.get('to')), []).append(f"{s(ra.get('from'))}: {s(ra.get('role'))}")
 
     def resource_label(k):
-        kind_title = TYPE_NAMES.get(k, k.replace('-', ' ').title())
-        sub = s(purposes.get(k)) or k
-        note = ' · '.join(n for n in (T['noSet'] if not has_question_set(k) else '', T['optional'] if k in optional else '') if n)
+        kind_title = TYPE_NAMES.get(base(k), base(k).replace('-', ' ').title())
+        sub = s(purposes.get(k)) or (k.partition('__')[2] or k)
+        note = ' · '.join(n for n in (T['noSet'] if not has_question_set(base(k)) else '', T['optional'] if k in optional else '') if n)
         label = format_label(kind_title, sub, note)
         for line in role_lines.get(k, []):
             label += f"<br><font style='font-size:10px' color='#5C2D91'>&#8592; {esc(line)}</font>"
@@ -469,7 +493,8 @@ def main():
 
     # --- Geometry, phase A: sizes ------------------------------------------
     def compute_subnet(k):
-        n = subnet_name(get_decision(resources[k], ['networking', 'integration_subnet']), res_keys)
+        n = subnet_name(get_decision(resources[k], ['networking', 'integration_subnet'])
+                        or get_decision(resources[k], ['environment', 'infrastructure_subnet']), res_keys)
         if n:
             return n
         for sn in other_subnets:
@@ -490,19 +515,28 @@ def main():
         return sum(max(pitch[k] for k in r) for r in rows_of(keys, cols))
 
     cols_c = min(max([len(v) for v in groups.values()] or [1]), 4)
-    cols_p = min(max(len(paas), 1), 5)
-    w_main = max(cols_c * SLOT_W + 4 * PAD, cols_p * SLOT_W + 2 * PAD, 2 * SLOT_W + 4 * PAD)
+    # One row where it fits: a line to a service in a second row would run through the first row's icons.
+    cols_p = min(max(len(paas), 1), 8)
+    w_main = max(cols_c * SLOT_W + 4 * PAD, cols_p * SLOT_W + 2 * PAD, min(len(support), 5) * SLOT_W + 2 * PAD, 2 * SLOT_W + 4 * PAD)
 
-    def delegation(keys):
+    # What the spec says each subnet is delegated to wins; the kind's usual delegation is the
+    # fallback for a spec that does not say.
+    spec_deleg = {s(d.get('subnet')): s(d.get('service'))
+                  for d in as_list(get_decision(resources.get('virtual-network'), ['subnet_policy', 'subnet_delegations']))
+                  if isinstance(d, dict)}
+
+    def delegation(keys, name=''):
+        if name in spec_deleg:
+            return f"{T['delegated']} {spec_deleg[name]}"
         for k in keys:
-            if k in DELEGATIONS:
-                return f"{T['delegated']} {DELEGATIONS[k]}"
+            if base(k) in DELEGATIONS:
+                return f"{T['delegated']} {DELEGATIONS[base(k)]}"
         return ''
 
     group_boxes = []   # (name, keys, header_h, h)
     for name, keys in groups.items():
-        hh = 34 + (16 if delegation(keys) else 0)
-        group_boxes.append((name, keys, hh, hh + rows_height(keys, cols_c) + 10))
+        hh = 28 + (14 if delegation(keys, name) else 0)
+        group_boxes.append((name, keys, hh, hh + rows_height(keys, cols_c) + 6))
 
     show_pe = draw_vnet and bool(with_pe)
     pe_box_h = ZHEAD + SLOT_H + 10
@@ -517,7 +551,10 @@ def main():
         vn_h += PAD - (10 if strips else 0)
     elif compute:
         vn_h = ZHEAD + rows_height(compute, cols_c) + PAD
-    paas_h = (ZHEAD + rows_height(paas, cols_p) + PAD) if paas else 0
+    PAAS_TOP, PAAS_TITLE = 14, 26
+    paas_h = (PAAS_TOP + rows_height(paas, cols_p) + PAAS_TITLE) if paas else 0
+    cols_s = min(max(len(support), 1), 5)
+    support_h = (ZHEAD + rows_height(support, cols_s) + PAD) if support else 0
 
     # One bus lane per compute resource that calls PaaS, between the network and the PaaS zone.
     callers = []
@@ -525,7 +562,7 @@ def main():
         if a['from'] in compute and a['to'] in paas and a['from'] not in callers:
             callers.append(a['from'])
     gap = 30 + 10 * len(callers)
-    main_h = vn_h + (gap if (vn_h and paas_h) else 0) + paas_h
+    main_h = vn_h + (gap if (vn_h and paas_h) else 0) + paas_h + (support_h + PAD if support else 0)
 
     # Right column: platform and monitoring zones. Created things belong to the
     # resource group, referenced ones sit outside it.
@@ -592,7 +629,7 @@ def main():
         for row in rows_of(keys, cols):
             rh = max(pitch[k] for k in row)
             for c, k in enumerate(row):
-                add_icon(f"res-{k}", parent, gx + c * SLOT_W, y, k, labels[k], flagged(k), k in optional, slot_h=rh)
+                add_icon(f"res-{k}", parent, gx + c * SLOT_W, y, base(k), labels[k], flagged(k), k in optional, slot_h=rh)
             y += rh
 
     def add_text(cid, parent, x, y, w, h, value, style):
@@ -655,7 +692,7 @@ def main():
         sn_style = SUBNET_STYLE + (EXISTING_STYLE if vnet_existing else '')
         for gi, (name, keys, hh, h) in enumerate(group_boxes):
             prefix = s(meta.get(name, {}).get('prefix'))
-            note = delegation(keys)
+            note = delegation(keys, name)
             lbl = f"<b>{esc(name)}</b>" + (f"  <font style='font-size:10px'>{esc(prefix)}</font>" if prefix else '')
             if note:
                 lbl += f"<br><font style='font-size:10px'><i>{esc(note)}</i></font>"
@@ -665,7 +702,8 @@ def main():
         if show_pe:
             pe_label = f"<b>{esc(pe_subnet_name)}</b>" + (f"  <font style='font-size:10px'>{esc(pe_subnet_prefix)}</font>" if pe_subnet_prefix else '')
             add_container({'id': 'snet-pe', 'parent': 'vnet', 'x': sn_x, 'y': cursor, 'w': sn_w, 'h': pe_box_h, 'style': sn_style, 'value': pe_label})
-            names = ', '.join(with_pe[:2]) + (f" +{len(with_pe) - 2}" if len(with_pe) > 2 else '')
+            kinds = list(dict.fromkeys(TYPE_NAMES.get(base(k), base(k)) for k in with_pe))
+            names = ', '.join(kinds[:2]) + (f" +{len(kinds) - 2}" if len(kinds) > 2 else '')
             add_icon('pe-bundle', 'snet-pe', sn_x + PAD, cursor + ZHEAD, 'private-endpoint',
                      format_label(T['peBundle'], f"{len(with_pe)}× {names}", ''), slot_h=SLOT_H)
             cursor += pe_box_h + PAD
@@ -681,8 +719,12 @@ def main():
     if paas:
         all_private = all(pna(k) == 'disabled' for k in paas)
         title = f"{T['paas']} &#8212; {esc(T['paasPrivate'])}" if all_private else T['paas']
-        add_container({'id': 'z-paas', 'parent': 'rg', 'x': main_x, 'y': paas_y, 'w': w_main, 'h': paas_h, 'style': ZONES['paas'], 'value': title})
-        place_grid(paas, 'z-paas', main_x + PAD, paas_y + ZHEAD, cols_p)
+        add_container({'id': 'z-paas', 'parent': 'rg', 'x': main_x, 'y': paas_y, 'w': w_main, 'h': paas_h, 'style': ZONES['paas_in'], 'value': title})
+        place_grid(paas, 'z-paas', main_x + PAD, paas_y + PAAS_TOP, cols_p)
+    if support:
+        support_y = paas_y + (paas_h + PAD if paas else 0)
+        add_container({'id': 'z-support', 'parent': 'rg', 'x': main_x, 'y': support_y, 'w': w_main, 'h': support_h, 'style': ZONES['paas'], 'value': esc(T['support'])})
+        place_grid(support, 'z-support', main_x + PAD, support_y + ZHEAD, cols_s)
 
     # Platform and monitoring zones
     ry_in, ry_out = main_y, main_y
@@ -779,22 +821,61 @@ def main():
             return True
         return a['to'] in drawn and pna(a['to']) != 'disabled'
 
+    # Routing. A caller leaves its icon to the right and drops on a track of its own in the free
+    # space at the right of the subnets - never through another icon - to its lane below the
+    # network, where it fans out to its targets.
+    #   - Tracks are assigned right to left from the top caller down: a lower caller's horizontal
+    #     run then ends before the track of an upper one, so tracks never cross a run.
+    #   - Lanes are assigned by number of targets, fewest on top: a drop crosses the lanes below
+    #     its own, so the callers with the shortest drops sit lowest.
+    node_of = {k: node_id(k) for k in callers}
+    by_top = sorted(callers, key=lambda k: by_id[node_of[k]]['y'] if node_of[k] in by_id else 0)
+    track_rank = {k: i for i, k in enumerate(by_top)}
+    tgt_count = {k: sum(1 for a in access if a['from'] == k and a['to'] in paas) for k in callers}
+    lane_rank = {k: i for i, k in enumerate(sorted(callers, key=lambda k: (tgt_count[k], track_rank[k])))}
+    dense = len(callers) >= 3
+    caller_color = {k: CALLER_COLORS[i % len(CALLER_COLORS)] for i, k in enumerate(by_top)}
+    vn_cell = by_id.get('vnet') or by_id.get('z-compute')
+    gut0 = (vn_cell['x'] + vn_cell['w'] - 2 * PAD) if vn_cell else sub_x
+    inter = {}   # compute -> compute: tracks left of the callers' own
+    gap_edges = 0  # actors <-> compute: tracks in the gap between the external zone and the group,
+                   # so a vertical run never lies on the resource group's border
     for n, a in enumerate(access):
         src, dst = node_id(a['from']), node_id(a['to'])
         if src not in by_id or dst not in by_id:
             say(f"[warn] access {a['from']} -> {a['to']}: endpoint not drawn", 'yellow')
             continue
-        color = PUBLIC_COLOR if is_public_edge(a) else PRIVATE_COLOR
+        public = is_public_edge(a)
+        color = PUBLIC_COLOR if public else (caller_color.get(a['from'], PRIVATE_COLOR) if dense else PRIVATE_COLOR)
         style = EDGE_BASE + f"strokeColor={color};fontColor={color};fontSize=10;labelBackgroundColor=#FFFFFF;"
         sc, dc = by_id[src], by_id[dst]
         edge = {'id': f"e-{n}", 'source': src, 'target': dst, 'value': a['label']}
         if a['from'] in caller_i and a['to'] in paas:
-            # One track down per caller, shared by all its edges: they split on the bus
-            # lane, like a tree, instead of running side by side.
-            tx = sc['slot']['x'] + SLOT_W - 14
-            bus_y = bus_base + 10 * caller_i[a['from']]
+            tx = gut0 - 16 * track_rank[a['from']]
+            bus_y = bus_base + 10 * lane_rank[a['from']]
             edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0.5;entryY=0;'
             edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': bus_y}, {'x': dc['x'] + dc['w'] / 2, 'y': bus_y}]
+        elif a['from'] in compute and a['to'] in compute:
+            k = inter.setdefault(a['from'] + '>' + a['to'], len(inter))
+            tx = gut0 - 16 * (len(callers) + 1 + k)
+            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=1;entryY=0.5;'
+            edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': dc['y'] + dc['h'] / 2}]
+        elif a['from'] in compute and base(a['to']) in MONITOR_KINDS:
+            # To the monitoring zone: out to the right along the row, up or down in the gap between
+            # the network and the zone, in from the left - not across the picture.
+            tx = (vn_cell['x'] + vn_cell['w'] + 14) if vn_cell else dc['x'] - 20
+            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
+            edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': dc['y'] + dc['h'] / 2}]
+        elif is_actor(a['from']) and a['to'] in compute:
+            gx = 20 + ext_w + 8 + 12 * min(gap_edges, 2)
+            gap_edges += 1
+            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
+            edge['points'] = [{'x': gx, 'y': sc['y'] + sc['h'] / 2}, {'x': gx, 'y': dc['y'] + dc['h'] / 2}]
+        elif is_actor(a['to']) and a['from'] in compute:
+            gx = 20 + ext_w + 8 + 12 * min(gap_edges, 2)
+            gap_edges += 1
+            edge['style'] = style + 'exitX=0;exitY=0.5;entryX=1;entryY=0.5;'
+            edge['points'] = [{'x': gx, 'y': sc['y'] + sc['h'] / 2}, {'x': gx, 'y': dc['y'] + dc['h'] / 2}]
         elif is_actor(a['to']):
             # Outbound to an external service: out of the left side towards the external zone.
             # Up over the row and out along the subnet's left edge, so the line does not
@@ -808,7 +889,12 @@ def main():
 
     # Legend: only what the picture uses.
     legend = [f"<b>{esc(T['legend'])}</b>"]
-    if any(PRIVATE_COLOR in e['style'] for e in edges):
+    if dense:
+        legend.append(f"<i>{esc(T['legCallers'])}</i>")
+        for k in by_top:
+            legend.append(f"<font color='{caller_color[k]}'><b>&#9473;&#9473;&#9654;</b></font> "
+                          f"{esc(TYPE_NAMES.get(base(k), base(k)))} &#183; {esc(s(purposes.get(k)) or (k.partition('__')[2] or k))}")
+    elif any(PRIVATE_COLOR in e['style'] for e in edges):
         legend.append(f"<font color='{PRIVATE_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPrivate'])}")
     if any(PUBLIC_COLOR in e['style'] for e in edges):
         legend.append(f"<font color='{PUBLIC_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPublic'])}")
