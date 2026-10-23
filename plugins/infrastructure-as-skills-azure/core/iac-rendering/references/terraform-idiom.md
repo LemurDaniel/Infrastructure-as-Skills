@@ -144,7 +144,9 @@ modules.network.tf     # module "network" { source = "./modules/network" ... } -
 modules.security.tf
 modules.ai.tf
 providers.tf  variables.tf  locals.tf  outputs.tf  infra-spec.yaml
-environments/  tests/
+environments/
+tests/
+  wiring.tftest.hcl    # the root planned whole: what only the root can see
 modules/
   network/
     avm.storage.tf     # one file per resource: its naming data source, the AVM call, and what
@@ -152,8 +154,10 @@ modules/
     private_endpoints.tf  # the family's endpoint names, when it has endpoints
     roles.tf           # wiring inside the family, when there is some
     variables.tf       # what the root hands over - names, ids, subnet ids, decisions
-    outputs.tf         # what other families and the tests read
+    outputs.tf         # what other families and the root read
     versions.tf        # required_providers only, no provider block
+    tests/
+      network.tftest.hcl  # this family's decisions, one `run` per question-set group
 ```
 
 A family has no `main.tf`: the file is named after the resource it holds, `avm.<resource>.tf`
@@ -179,20 +183,15 @@ Rules:
   the call they name); the root passes `workload`, `environment` and the instance index.
 - **Providers are configured in the root only.** The submodule's `versions.tf` declares
   `required_providers` and nothing else; a provider alias comes in through `providers =`.
-- **Outputs are the contract with the tests.** A family exposes the AVM module's
-  `resource` / `resource_id` it holds (`output "foundry" { value = module.foundry.resource }`,
-  `sensitive` where the module's is), so a test asserts on `module.ai.foundry` instead of
-  reaching into the nesting. A decision a test needs and no output carries is an output
-  to add, not a reason to mark it not-testable.
+- **Outputs are what the root needs, not what the tests need.** A family exposes ids, URIs,
+  principal ids and the subnet map; the tests live in the family (see Tests) and read the AVM
+  module by its own name, so no output exists for them. An output that carries a whole module
+  object is `sensitive` and makes everything read from it sensitive: expose single values.
 - **Never `depends_on` a family module to order it behind another.** A module-level
   `depends_on` defers every `data` source in it to apply time, so the rendered names are
   unknown at plan and the naming tests cannot assert. Pass the ids that must exist as an
   input and use them where the wait happens (`triggers = { scopes = join(",", var.role_scope_ids) }`
   on a `time_sleep`).
-- **A whole-module output is sensitive.** `output "foundry" { value = module.foundry }` carries
-  the module's sensitive values and is marked `sensitive = true`; the root then cannot
-  output a field of it unmarked. Give the root's own outputs (an id, a URI) their own
-  non-sensitive output in the family.
 - **`_target_overrides` that replace an AVM call** (an authored resource in its place) live
   in the same submodule and keep their comment.
 
@@ -377,18 +376,43 @@ Generate the tests alongside, asserting the decisions the question set recorded.
 Plan-only (`command = plan`) so it needs no credentials.
 
 **Always several files, one per concern — never one `.tftest.hcl` for the whole render.**
-The file is named after the question-set group it covers, in `tests/`:
-`naming.tftest.hcl` (with the non-production stage run), `networking.tftest.hcl`,
-`security.tftest.hcl`, `data_protection.tftest.hcl`, `observability.tftest.hcl`,
-`identity.tftest.hcl`, … A resource with several groups gets one file per group; a group
-with a single decision still gets its own file. The reason is the one that splits the
-`.tf` files: a failing networking test is read apart from a security one, and a change to
-one group touches one test file. For a render with more than one resource, prefix the
-resource (`storage.security.tftest.hcl`). Terraform has no include, so **every file
-repeats** the `mock_provider` blocks and the `variables { }` header it needs — keep that
-header to what the file's `run` blocks use and copy it unchanged, so the files differ only
-in their asserts. `terraform test` runs all of them; `check_render_coverage.py` reads the
-whole directory, so a decision is asserted in exactly one file.
+Flat render (`granularity: single`): the file is named after the question-set group it
+covers, in `tests/` - `naming.tftest.hcl` (with the non-production stage run),
+`networking.tftest.hcl`, `security.tftest.hcl`, `data_protection.tftest.hcl`,
+`observability.tftest.hcl`, `identity.tftest.hcl`, … A resource with several groups gets one
+file per group. The reason is the one that splits the `.tf` files: a failing networking test is
+read apart from a security one, and a change to one group touches one test file. For a
+render with more than one resource, prefix the resource (`storage.security.tftest.hcl`).
+
+**Per-family render (`granularity: per-family`): the tests move into the family.** Each
+`modules/<family>/tests/<family>.tftest.hcl` tests that family module alone, run with
+`terraform -chdir=modules/<family> test`. The file holds one `run` per question-set group
+(`networking`, `security`, …), each asserting the decisions of that family's resources in that
+group; a decision is asserted where its resource is rendered, found by the resource key.
+Because the family is the unit under test, an assert reads the AVM module by its own name
+(`module.foundry.resource.…`, `module.storage["uploads"]`) and a rendered name from the data
+source beside it (`data.naming_name.key_vault.name`) - no output exists for a test. The root
+keeps one `tests/wiring.tftest.hcl`: the whole root planned, with a few asserts on what only it
+can see, so a family output that does not fit the input it feeds fails there.
+
+Terraform has no include, so **every file repeats** the `mock_provider` blocks, the
+`provider "naming"` block and the `variables { }` header it needs. Three things differ from the
+root's test:
+
+- **The naming provider is configured in the test file**, because a module takes no provider
+  block: `convention`, `naming = "../../naming.yaml"` (relative to the module directory the
+  test runs in), `random_seed` as the root builds it (`<subscription_id>/<resource_group_name>`,
+  written out) and the `parameters`. A seed that differs gives a different suffix on a
+  vault name.
+- **Every provider a mock covers is declared in the family's `versions.tf`** - the union of
+  its AVM modules' requirements (`azurerm`, `azapi`, `modtm`, `random`, `naming`, and `time`
+  where used). `mock_provider "azapi"` resolves to `hashicorp/azapi` unless the module declares
+  the source, and fails with `unknown provider`.
+- **Inputs are mock values that parse**: resource ids shaped like real ones for the workspace,
+  the subnets and the identities, an empty role map. The family never reads the platform.
+
+`terraform test` in each family runs its file; `check_render_coverage.py` reads `tests/` and
+every `modules/*/tests/`, so a decision is asserted in exactly one file.
 
 **Coverage is the contract, not the example.** Every decision under `resources:` in the
 spec gets exactly one `assert`, and the assert names it in a comment on the line above:
@@ -414,7 +438,7 @@ sentence rather than a silence:
 ```
 
 `core/iac-rendering/scripts/check_render_coverage.py <spec>` reads the spec and the
-`tests/` beside it and fails on a decision that is neither asserted nor marked, and on a
+`tests/` beside it (and `modules/*/tests/`) and fails on a decision that is neither asserted nor marked, and on a
 marker naming a decision the spec no longer has. Run it with `terraform test`; a render
 that passes one and not the other is half done.
 

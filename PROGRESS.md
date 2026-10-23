@@ -277,6 +277,20 @@ Verified Modules first, authored resources second.
   as a case. Still open: no icon for Foundry and Container Apps in draw.io's library (nearest
   used); PaaS-to-PaaS lines are not routed (said in `wiring.purposes`); the Entra app
   registration, the shared private link from search to storage and the model quota are `open:`.
+- **The chatbot example was regrouped 2026-10-23 into one submodule per family** (owner's call:
+  the flat root of 16 AVM calls was hard to read). `granularity: per-family` is in `spec.md` and
+  `terraform-idiom.md` (Grouped AVM calls): the root is `modules.<family>.tf` calls only,
+  `modules/<family>/` holds `avm.<resource>.tf`, `private_endpoints.tf`, `roles.tf`, variables,
+  outputs and `versions.tf`. **The tests moved with it**: `modules/<family>/tests/<family>.tftest.hcl`
+  (identity, observability, network, security, ai, data, compute: 7 files, all pass, run with
+  `terraform -chdir=modules/<family> test`) plus `tests/wiring.tftest.hcl` for the root;
+  `check_render_coverage.py` reads both, 284/284. **Found by doing it:** a module-level `depends_on`
+  defers the module's `data` lookups to apply, so names are unknown at plan (the wait is now an input,
+  `role_scope_ids`, on the `time_sleep`); a whole-module output is sensitive and infects the root;
+  `mock_provider "azapi"` needs the provider declared in the family's `versions.tf`; the naming
+  provider is configured in each test file with the root's seed. Not done: Bicep has no equivalent
+  yet (`bicep-idiom.md` unchanged), and the generator for the layout is the Python scratch of this
+  session - the idiom is the contract, the example the proof.
 - **Next:** the same case rendered to Bicep from the one spec (the cross-backend diff is what
   tests the sets), a deploy pipeline once the owner names the system, and `patterns/` - the
   wiring in this example (roles between resources, the private link, the order identity -> vault

@@ -65,6 +65,10 @@ terraform -chdir=examples/private-storage-on-platform init && terraform -chdir=e
 # Every decision in the spec asserted by those tests, or marked not-testable with a reason.
 python3 plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_render_coverage.py examples/private-storage-on-platform/infra-spec.yaml
 bicep build --stdout examples/private-storage-on-platform/bicep/main.bicep > $null && bicep lint examples/private-storage-on-platform/bicep/main.bicep
+# A per-family render (examples/chatbot): each family module carries its own tests, the root one wiring test.
+terraform -chdir=examples/chatbot/modules/ai init -backend=false && terraform -chdir=examples/chatbot/modules/ai test
+terraform -chdir=examples/chatbot init -backend=false && terraform -chdir=examples/chatbot test
+python plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_render_coverage.py examples/chatbot/infra-spec.yaml
 # The Bicep example: its tests run against the compiled ARM, then the same coverage check.
 python3 plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/run_arm_tests.py examples/greenfield-telemetry/infra-spec.yaml
 python3 plugins/infrastructure-as-skills-azure/core/iac-rendering/scripts/check_render_coverage.py examples/greenfield-telemetry/infra-spec.yaml

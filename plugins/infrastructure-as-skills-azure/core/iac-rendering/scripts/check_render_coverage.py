@@ -45,6 +45,7 @@ Exit 0 every decision covered, 1 gaps or stale markers, 2 could not check.
 """
 
 import argparse
+import glob
 import os
 import re
 import sys
@@ -82,16 +83,31 @@ def main():
         bad(f"no such file: {args.spec}")
         return 2
     spec_path = os.path.abspath(args.spec)
-    tests_dir = args.tests or os.path.join(os.path.dirname(spec_path), 'tests')
-    if not os.path.isdir(tests_dir):
-        bad(f"no tests directory at {tests_dir} - a render without tests is not finished")
+    base = os.path.dirname(spec_path)
+    # Tests sit in tests/ beside the spec and, for a render grouped into family modules, in
+    # modules/<family>/tests/ - one unit per family. --tests names one directory instead.
+    if args.tests:
+        tests_dirs = [os.path.abspath(args.tests)]
+    else:
+        tests_dirs = [os.path.join(base, 'tests')]
+        tests_dirs += sorted(glob.glob(os.path.join(base, 'modules', '*', 'tests')))
+    tests_dirs = [d for d in tests_dirs if os.path.isdir(d)]
+    if not tests_dirs:
+        bad(f"no tests directory at {os.path.join(base, 'tests')} - a render without tests is not finished")
         return 1
-    tf_files = sorted(f for f in os.listdir(tests_dir)
-                      if f.endswith('.tftest.hcl') and os.path.isfile(os.path.join(tests_dir, f)))
-    arm_files = sorted(f for f in os.listdir(tests_dir)
-                       if f.endswith('.armtest.yaml') and os.path.isfile(os.path.join(tests_dir, f)))
+
+    def listing(suffix):
+        found = []
+        for d in tests_dirs:
+            for f in sorted(os.listdir(d)):
+                if f.endswith(suffix) and os.path.isfile(os.path.join(d, f)):
+                    found.append(os.path.relpath(os.path.join(d, f), base).replace(os.sep, '/'))
+        return found
+
+    tf_files = listing('.tftest.hcl')
+    arm_files = listing('.armtest.yaml')
     if not tf_files and not arm_files:
-        bad(f"no .tftest.hcl or .armtest.yaml in {tests_dir} - a render without tests is not finished")
+        bad(f"no .tftest.hcl or .armtest.yaml in {', '.join(tests_dirs)} - a render without tests is not finished")
         return 1
 
     # --- read the spec -----------------------------------------------------
@@ -135,7 +151,7 @@ def main():
     def read_tf(files):
         errors, asserted, marked = [], {}, {}
         for name in files:
-            with open(os.path.join(tests_dir, name), encoding='utf-8') as f:
+            with open(os.path.join(base, name), encoding='utf-8') as f:
                 lines = f.read().splitlines()
             for i, line in enumerate(lines):
                 where = f"{name}:{i + 1}"
@@ -176,7 +192,7 @@ def main():
     def read_arm(files):
         errors, asserted, marked = [], {}, {}
         for name in files:
-            with open(os.path.join(tests_dir, name), encoding='utf-8') as f:
+            with open(os.path.join(base, name), encoding='utf-8') as f:
                 try:
                     entries = yaml.safe_load(f) or []
                 except yaml.YAMLError as e:
