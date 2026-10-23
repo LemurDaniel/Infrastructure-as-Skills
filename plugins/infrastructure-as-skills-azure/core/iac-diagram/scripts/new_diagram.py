@@ -851,9 +851,9 @@ def main():
         for a in assumed:
             lines.append(f"<font color='#D13438'>• {esc(a)}</font>")
     panel_w = 340
-    # Rough wrap estimate: ~48 characters per line at 12px in 340px.
-    panel_lines = sum(max(1, math.ceil(plain_len(line) / 48)) for line in lines)
-    panel_h = max(80, panel_lines * 18 + 24)
+    # Wrap estimate measured on the export: ~54 characters per line at 12px in 340px, 15px a line.
+    panel_lines = sum(max(1, math.ceil(plain_len(line) / 54)) for line in lines)
+    panel_h = max(80, panel_lines * 15 + 30)
     add_container({'id': 'panel', 'parent': '1', 'x': panel_x, 'y': sub_y, 'w': panel_w, 'h': panel_h,
                    'style': 'rounded=1;arcSize=3;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=12;fillColor=#F3F2F1;strokeColor=#C8C6C4;',
                    'value': '<br>'.join(lines)})
@@ -1005,7 +1005,7 @@ def main():
     if open_items or assumed:
         legend.append(f"<font color='#D13438'>&#9679;</font> {esc(T['legOpen'])}")
     if len(legend) > 1:
-        add_container({'id': 'legend', 'parent': '1', 'x': sub_x, 'y': sub_y + sub_h + 30, 'w': min(max(sub_w, 420), 560), 'h': len(legend) * 20 + 16,
+        add_container({'id': 'legend', 'parent': '1', 'x': sub_x, 'y': sub_y + sub_h + 30, 'w': min(max(sub_w, 420), 560), 'h': len(legend) * 15 + 26,
                        'style': 'rounded=1;arcSize=4;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#FFFFFF;strokeColor=#C8C6C4;fontSize=11;',
                        'value': '<br>'.join(legend)})
 
