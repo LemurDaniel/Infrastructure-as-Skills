@@ -44,7 +44,7 @@ modules in the deployment.
 | `backup_storage_redundancy` | `backup.storage_redundancy` | Module default **`Geo`**; written |
 | `analytical_storage` | `analytical_storage_enabled` | Default `false`; written |
 | `databases` | `sql_databases = { <db> = { name, containers = { <c> = { name, partition_key_paths, default_ttl, autoscale_settings } } } }` | |
-| `diagnostic_*`, `metrics_enabled` | `diagnostic_settings = { workspace = { workspace_resource_id, logs = [{ category }], metrics = [{ category = "AllMetrics" }] } }` | Per category |
+| `diagnostic_*`, `metrics_enabled` | `diagnostic_settings = { workspace = { workspace_resource_id, log_categories = [...], log_groups = [], metric_categories = ["Requests"] } }` | **Not the interface of the other modules**: plain sets, and the module's validation allows only `Requests` and `SLI` as metric categories - its own default `AllMetrics` fails it |
 | `deployment.module_telemetry` | `enable_telemetry` | |
 | `context.tags` | `tags = local.tags` | |
 
@@ -113,11 +113,9 @@ module "cosmos" {
   diagnostic_settings = {
     workspace = {
       workspace_resource_id = var.diagnostic_workspace_id
-      logs = [
-        { category = "ControlPlaneRequests" },
-        { category = "DataPlaneRequests" },
-      ]
-      metrics = [{ category = "AllMetrics" }]
+      log_categories        = ["ControlPlaneRequests", "DataPlaneRequests"]
+      log_groups            = []
+      metric_categories     = ["Requests"]
     }
   }
 

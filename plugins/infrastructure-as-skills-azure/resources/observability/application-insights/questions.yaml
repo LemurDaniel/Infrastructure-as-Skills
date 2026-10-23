@@ -165,7 +165,7 @@ groups:
           module does not (`disableIpMasking: true`, which stores them), so it is written on
           both. The decision belongs in the decision document, because a data-protection
           review will ask.
-        renders: disable_ip_masking (inverse) / disableIpMasking
+        renders: disable_ip_masking / disableIpMasking
 
   # --------------------------------------------------------------- networking
   - id: networking

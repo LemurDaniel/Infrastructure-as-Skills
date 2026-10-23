@@ -24,7 +24,7 @@ union with the other modules.
 | `application_type` | `application_type` | Default `web`; written |
 | `sampling_percentage` | `sampling_percentage` | Default 100; written |
 | `daily_cap_gb` | `daily_data_cap_in_gb` | Module default **100**; `0` is unlimited; written |
-| `store_client_ip` | `disable_ip_masking` | **Inverse**: not storing is `false`; default `false`; written |
+| `store_client_ip` | `disable_ip_masking` | Same polarity: storing the address is disabling the masking (`true`); not storing is `false`, the default; written |
 | `public_network_access` | `internet_ingestion_enabled`, `internet_query_enabled` | **Bools**; module defaults **`true`** for both; written |
 | `private_link_scope` | `monitor_private_link_scope = { scope = { resource_id } }` | Adds the component to the platform's scope; member names from the README |
 | `local_authentication_disabled` | `local_authentication_disabled` | Module default **`false`**; written |
@@ -49,7 +49,7 @@ module "insights" {
   # decision: application-insights.component.sampling_percentage / daily_cap_gb
   sampling_percentage  = 100
   daily_data_cap_in_gb = 0
-  # decision: application-insights.component.store_client_ip - inverse input
+  # decision: application-insights.component.store_client_ip - disabling the masking stores the address
   disable_ip_masking = false
 
   # decision: application-insights.networking.public_network_access - both bools, module default true
@@ -104,7 +104,7 @@ The fallback. Targets `azurerm` **5.x**; check against `terraform providers sche
 | `workspace` | `workspace_id` (always; the classic form is not offered) |
 | `application_type` | `application_type` |
 | `sampling_percentage`, `daily_cap_gb` | `sampling_percentage`; `daily_data_cap_in_gb` |
-| `store_client_ip` | `disable_ip_masking` (inverse) |
+| `store_client_ip` | `disable_ip_masking` |
 | `public_network_access` | `internet_ingestion_enabled`, `internet_query_enabled` |
 | `local_authentication_disabled` | `local_authentication_disabled` |
 | `private_link_scope` | `azurerm_monitor_private_link_scoped_service` |

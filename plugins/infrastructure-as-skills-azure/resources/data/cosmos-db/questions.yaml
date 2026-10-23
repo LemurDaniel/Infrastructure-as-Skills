@@ -525,7 +525,7 @@ groups:
         audience: engineer
         plain:
           en: "Backups allow going back {value}."
-          de: "Backups erlauben den Rückgang um {value}."
+          de: "Backups erlauben den Rückgang {value}."
         plain_values:
           periodic: { en: "to one of a few snapshots taken a few hours apart, kept for a day or two", de: "auf einen von wenigen Schnappschüssen im Abstand von Stunden, ein bis zwei Tage aufbewahrt" }
           continuous_7_days: { en: "to any second of the last seven days", de: "auf jede Sekunde der letzten sieben Tage" }
@@ -672,4 +672,6 @@ groups:
         why: >
           Normalised RU consumption and the throttled-request counter are what decide
           whether `max_throughput` was right, and they are cheap.
-        renders: metrics[].category = "AllMetrics" / metricCategories[].category
+        renders: >
+          terraform: metric_categories = ["Requests"] - the module allows only Requests and SLI,
+          there is no AllMetrics; bicep: metricCategories[].category = "AllMetrics"

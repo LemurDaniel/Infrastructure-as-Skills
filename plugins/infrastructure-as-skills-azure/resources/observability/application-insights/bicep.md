@@ -24,7 +24,7 @@ Resolve the current version and re-read the README parameters before rendering, 
 | `application_type` | `applicationType` | Default `'web'`; written |
 | `sampling_percentage` | `samplingPercentage` | Default 100; written |
 | `daily_cap_gb` | not a module parameter | The cap is a billing feature of the component (`Microsoft.Insights/components/pricingPlans/current`), rendered beside the module if wanted |
-| `store_client_ip` | `disableIpMasking` | **Inverse**; module default **`true`** (stores IPs); written |
+| `store_client_ip` | `disableIpMasking` | Same polarity; module default **`true`** (stores IPs); written |
 | `public_network_access` | `publicNetworkAccessForIngestion`, `publicNetworkAccessForQuery` | Strings `'Enabled'`/`'Disabled'`; module defaults **`'Enabled'`**; written |
 | `private_link_scope` | not a module parameter | A scoped resource on the scope (`Microsoft.Insights/privateLinkScopes/scopedResources`), in the scope's resource group - the platform's |
 | `local_authentication_disabled` | `disableLocalAuth` | Module default **`false`**; written |
