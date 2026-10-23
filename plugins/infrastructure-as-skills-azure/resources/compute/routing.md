@@ -6,8 +6,9 @@ skill. Routing table - the request picks the question set:
 | Request mentions | Question set | Notes |
 |---|---|---|
 | App Service, web app, App Service plan, webapp, azurewebsites | `app-service/questions.yaml` | [notes](app-service/notes.md) |
-| function app, Azure Functions | *not yet written* | A different `kind` of site with its own decisions |
-| Container Apps, container app environment | *not yet written* | — |
+| function app, Azure Functions, Flex Consumption | `function-app/questions.yaml` | [notes](function-app/notes.md) - same module as App Service, `kind: functionapp` |
+| Container Apps, container app environment, containerapp | `container-apps/questions.yaml` | [notes](container-apps/notes.md) - environment and one app |
+| Container Registry, ACR, image registry | `container-registry/questions.yaml` | [notes](container-registry/notes.md) |
 | AKS, Kubernetes | *not yet written* | — |
 | virtual machine, VM, scale set | *not yet written* | — |
 | deployment slot, autoscale, custom domain | *not yet written* | Decisions of an existing app; listed as boundaries of the App Service set |

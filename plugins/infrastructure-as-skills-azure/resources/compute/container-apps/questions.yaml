@@ -1,0 +1,524 @@
+schema_version: 1
+
+resource: Microsoft.App/containerApps
+title: Azure Container Apps (environment and one container app)
+
+# The app is the resource; the managed environment it runs in (Microsoft.App/managedEnvironments,
+# abbreviation `cae`, identifier `Azure::Microsoft.App/managedEnvironments`) is created with it
+# and decided in the `environment` group. One app per environment here: an environment shared
+# by several apps is a pattern's wiring, not this set's.
+naming:
+  terraform: "Azure::Microsoft.App/containerApps"
+  bicep: "Microsoft.App/containerApps"
+  # Bicep assembles the name from vars - this is the prefix it renders.
+  abbreviation: "ca"
+
+boundaries:
+  - "Does not create the resource group. Expects one from the spec's context."
+  - "Does not create the infrastructure subnet when the network is referenced; under network_ownership: create the virtual-network set carries it, with the delegation."
+  - "Does not create private DNS zones - shared infrastructure, owned by a pattern or the platform. An internal environment needs a zone for its default domain, which is the platform's."
+  - "Does not create the container registry, the Log Analytics workspace or the Key Vault it refers to."
+  - "Does not grant the app's identity its roles (`AcrPull` on the registry, secret access on a vault) - wiring between resources, owned by a pattern; the app's identity must hold the pull role before the first revision, which is why the identity is user-assigned."
+  - "Does not render secret values. A secret is a Key Vault reference resolved with the app's identity."
+  - "Does not render Dapr, KEDA scale rules, jobs, session pools (dynamic sessions, as used for sandboxed code execution), custom domains, certificates, Easy Auth or health probes. Each is a separate concern and has no question set yet."
+  - "Does not render several apps per environment, sidecars or init containers."
+
+groups:
+
+  # ---------------------------------------------------------------- placement
+  - id: placement
+    title: Placement
+    questions:
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
+        audience: engineer
+        plain:
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
+        values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
+        required: true
+        from_context: true
+        why: >
+          Drives the rendered name and the strictness of several defaults below.
+          Nothing sensible can be guessed.
+        renders: naming parameter `environment`, and the tag of that name where the repository uses one
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
+        required: true
+        from_context: true
+        why: >
+          Part of the rendered name. Zone redundancy and the dedicated workload profiles
+          are not available in every region, so the region constrains the environment
+          group below.
+        renders: location (environment and app)
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
+        ref: resource_group
+        required: true
+        from_context: true
+        per_environment: true
+        why: >
+          The environment and the app are placed into an existing group. The platform also
+          creates a second, managed group for the environment's infrastructure; it is not
+          this one and nothing is deployed into it.
+        renders: parent_id / resource_group_name / implicit in Bicep scope
+
+  # -------------------------------------------------------------- environment
+  - id: environment
+    title: Environment
+    questions:
+      - id: workload_profile
+        ask: Which compute should the app run on?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The app runs on {value}."
+          de: "Die App läuft auf {value}."
+        plain_values:
+          Consumption: { en: "shared capacity that is billed per use and scales to nothing", de: "geteilter Kapazität, nach Nutzung abgerechnet und bis auf null skalierbar" }
+          D4: { en: "reserved capacity of 4 cores, billed by the hour whether used or not", de: "reservierter Kapazität mit 4 Kernen, stundenweise abgerechnet, genutzt oder nicht" }
+          D8: { en: "reserved capacity of 8 cores", de: "reservierter Kapazität mit 8 Kernen" }
+          E4: { en: "reserved capacity of 4 cores with extra memory", de: "reservierter Kapazität mit 4 Kernen und mehr Arbeitsspeicher" }
+        values: [Consumption, D4, D8, E4]
+        default: Consumption
+        why: >
+          The environment is the workload-profiles kind, which the Bicep module asks for
+          when zone redundancy is on (its README calls profiles required to be WAF compliant);
+          the legacy consumption-only kind is not offered. `Consumption` is a profile of it: pay for the
+          replicas that run, nothing idle. A dedicated profile (D, E) is for a steady load
+          that wants reserved cores or more than the consumption sizes allow, and is billed
+          for its instances whether the app is busy or not. GPU and the larger sizes are not
+          offered. The profile is fixed per app but a profile can be added or removed from the
+          environment.
+        renders: workload_profiles / workloadProfiles and workload_profile_name / workloadProfileName on the app
+
+      - id: zone_redundant
+        ask: Should the environment survive the loss of an availability zone?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The environment {value} survive the loss of one datacenter of the region."
+          de: "Die Umgebung {value} den Ausfall eines Rechenzentrums der Region."
+        plain_values:
+          true: { en: "does", de: "übersteht" }
+          false: { en: "does not", de: "übersteht nicht" }
+        derived_from:
+          question: outage_impact
+          map: { tolerable: false, disruptive: true, critical: true }
+        confirm_in: [production]
+        non_production_default: false
+        why: >
+          Derived from how bad an outage is. Zone redundancy spreads the environment's
+          infrastructure and the replicas over three zones; it needs a virtual network
+          (the infrastructure subnet below), a region with zones and - for the replicas to be
+          spread - **at least two replicas**, and **it is set when the environment is created**
+          (it forces a new environment). Both AVM modules default it to true, so the
+          derivation for `tolerable` is written as `false`. `critical` has the same value as
+          `disruptive` because an environment is regional: a second region is a second
+          deployment behind a global front door, a pattern. The non-production stages take
+          `false` while non_production_savings is enabled.
+        forced_when: >
+          `true` forces `min_replicas` to at least 2 and requires `infrastructure_subnet`
+        renders: zone_redundant / zoneRedundant
+
+      - id: internal
+        ask: Should the environment be reachable only from inside the network?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The environment is {value}."
+          de: "Die Umgebung ist {value}."
+        plain_values:
+          true: { en: "reachable only from inside the company network, through an internal load balancer", de: "nur aus dem Firmennetz erreichbar, über einen internen Lastverteiler" }
+          false: { en: "given a public address of its own", de: "mit einer eigenen öffentlichen Adresse versehen" }
+        from_deployment: network_exposure
+        confirm_in: [production]
+        why: >
+          Inherited: `private` renders as `true`, `public` as `false`. An internal environment
+          has no public IP at all and is reached through an address in the infrastructure
+          subnet; its default domain needs a private DNS zone, which is the platform's. It
+          forces public network access off. **It is fixed at creation**: an environment is not
+          switched between internal and external, it is rebuilt.
+        renders: vnet_configuration.internal / internal
+
+      - id: infrastructure_subnet
+        ask: Which subnet should the environment's infrastructure live in?
+        type: ref
+        audience: platform
+        plain:
+          en: "The environment's infrastructure lives in subnet {value}."
+          de: "Die Infrastruktur der Umgebung liegt im Subnetz {value}."
+        ref: subnet
+        required: true
+        per_environment: true
+        why: >
+          The subnet must be **delegated to `Microsoft.App/environments`**, used by nothing
+          else and at least a /27 for a workload-profiles environment (more where replicas
+          scale far: each takes an address). It is the platform's subnet when the network is
+          referenced and a subnet of the created network otherwise, where the virtual-network
+          set carries it with the delegation and this question is answered by that wiring.
+          Required, because zone redundancy, internal exposure and routing through the
+          platform's firewall all need a virtual network.
+        forced_when: >
+          network_ownership: create - the created network's subnet, recorded as forced with
+          the network as forced_by
+        renders: vnet_configuration.infrastructure_subnet_id / infrastructureSubnetResourceId
+
+      - id: public_network_access
+        ask: Should the environment depart from the deployment's exposure posture?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The environment is {value}."
+          de: "Die Umgebung ist {value}."
+        plain_values:
+          disabled: { en: "closed to all public traffic", de: "für jeden öffentlichen Verkehr gesperrt" }
+          enabled: { en: "open to public traffic", de: "für öffentlichen Verkehr geöffnet" }
+        values: [disabled, enabled]
+        from_deployment: network_exposure
+        confirm_in: [production]
+        why: >
+          The platform switch for all public traffic to the environment, beside `internal`.
+          `private` is `disabled`, `public` is `enabled`; the firewalling of a public app is
+          the app's ingress, not an account-level allowlist as on a storage account, so
+          there is no `enabled_with_firewall` here. The AVM Bicep module defaults to
+          `Disabled`, the Terraform module leaves it unset - written either way. With
+          `internal: true` it is forced off by the Terraform module regardless.
+        renders: public_network_access / publicNetworkAccess
+
+      - id: peer_traffic_encryption
+        ask: Should traffic between the apps of the environment be encrypted?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Traffic between the apps inside the environment is {value}."
+          de: "Der Verkehr zwischen den Apps innerhalb der Umgebung wird {value}."
+        plain_values:
+          true: { en: "encrypted", de: "verschlüsselt" }
+          false: { en: "sent in the clear", de: "unverschlüsselt gesendet" }
+        default: true
+        why: >
+          Inside an environment apps talk to each other over the environment's network;
+          peer-to-peer encryption wraps that traffic, and mutual TLS authenticates the peers
+          on top. A network that is shared with other workloads is where an unencrypted hop is
+          sniffed. It costs a little latency. The Bicep module defaults to on, the Terraform
+          module leaves it unset, so it is written.
+        renders: peer_traffic_configuration.encryption.enabled / peerTrafficEncryption
+
+  # ---------------------------------------------------------------------- app
+  - id: app
+    title: The app
+    questions:
+      - id: container_image
+        ask: Which container image should run?
+        type: string
+        audience: engineer
+        plain:
+          en: "The app runs the container image {value}."
+          de: "Die App führt das Container-Image {value} aus."
+        required: true
+        why: >
+          Registry, repository and a **tag or digest that is not `latest`**: the first revision
+          is created with this image, and a tag that moves under an unchanged template means
+          the template no longer says what runs. The registry is expected to exist - and to be
+          pulled from with the app's managed identity (`AcrPull`), not an admin user, which is
+          wiring this set does not own. A private registry is pulled over the network the
+          environment is in, so a registry with a private endpoint needs a route and its DNS.
+          With no answer the decision is an `open:` entry owned by the workload owner.
+        renders: template.containers[].image / containers[].image
+
+      - id: container_size
+        ask: How large should each replica be?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Each copy of the app gets {value}."
+          de: "Jede Kopie der App bekommt {value}."
+        plain_values:
+          "0.25-0.5Gi": { en: "a quarter core and half a gigabyte", de: "einen Viertelkern und ein halbes Gigabyte" }
+          "0.5-1Gi": { en: "half a core and one gigabyte", de: "einen halben Kern und ein Gigabyte" }
+          "1-2Gi": { en: "one core and two gigabytes", de: "einen Kern und zwei Gigabyte" }
+          "2-4Gi": { en: "two cores and four gigabytes", de: "zwei Kerne und vier Gigabyte" }
+        values: ["0.25-0.5Gi", "0.5-1Gi", "1-2Gi", "2-4Gi"]
+        default: "0.5-1Gi"
+        why: >
+          CPU and memory come in fixed pairs on the consumption profile. Half a core and a
+          gigabyte is a start that a measured workload moves: replicas are billed for what they
+          reserve while they run, so too large is paid every second and too small is an
+          out-of-memory restart. A dedicated profile takes any combination up to the instance
+          size, which this set does not model.
+        renders: template.containers[].resources (cpu, memory) / containers[].resources
+
+      - id: min_replicas
+        ask: How many copies of the app must always be running?
+        type: int
+        audience: engineer
+        plain:
+          en: "At least {value} copies of the app are always running."
+          de: "Mindestens {value} Kopien der App laufen immer."
+        derived_from:
+          question: outage_impact
+          map: { tolerable: 0, disruptive: 2, critical: 3 }
+        non_production_default: 1
+        confirm_in: [production]
+        why: >
+          Derived from how bad an outage is. Zero scales the app to nothing when idle - the
+          cheapest answer, and the first request after idle pays a cold start; two is the
+          minimum that keeps answering during a revision change or the loss of an instance and
+          for zone redundancy to spread; three puts one in each zone. A non-production stage
+          keeps one, because an app that scales to zero in development is not rehearsing the
+          cold start production does not have. Billed per replica per second.
+        forced_when: >
+          `zone_redundant: true` forces at least 2
+        renders: template.min_replicas / scale.minReplicas
+
+      - id: max_replicas
+        ask: How many copies may the app scale out to?
+        type: int
+        audience: engineer
+        plain:
+          en: "The app may scale out to at most {value} copies."
+          de: "Die App darf auf höchstens {value} Kopien skalieren."
+        default: 10
+        why: >
+          A ceiling on cost and on the downstream systems: an app that scales out without limit
+          under a flood takes the database it calls with it. Ten is a guard, not a measurement,
+          and the scale rule that drives it (HTTP concurrency by default) is the workload's.
+          Custom scale rules are not rendered.
+        renders: template.max_replicas / scale.maxReplicas
+
+      - id: revision_mode
+        ask: Should several versions of the app run at once?
+        type: enum
+        audience: engineer
+        plain:
+          en: "{value}."
+          de: "{value}."
+        plain_values:
+          Single: { en: "Only the newest version of the app runs; a new one replaces it", de: "Nur die neueste Version der App läuft; eine neue ersetzt sie" }
+          Multiple: { en: "Several versions run side by side and traffic is split between them by hand", de: "Mehrere Versionen laufen nebeneinander, der Verkehr wird von Hand verteilt" }
+        values: [Single, Multiple]
+        default: Single
+        why: >
+          `Single` is a rolling replacement and what a pipeline that deploys on every merge
+          wants. `Multiple` is for blue-green and canary releases, and needs the traffic
+          weights a pipeline sets; left on with no weights it keeps every old revision running
+          and billed. Not an infrastructure default to turn on speculatively.
+        renders: revision_mode / activeRevisionsMode
+
+  # ------------------------------------------------------------------ ingress
+  - id: ingress
+    title: Ingress
+    questions:
+      - id: ingress
+        ask: Who may call the app over HTTP?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The app is {value}."
+          de: "Die App ist {value}."
+        plain_values:
+          none: { en: "not callable at all - it works on its own, as a worker", de: "gar nicht aufrufbar - sie arbeitet für sich, als Worker" }
+          environment: { en: "callable only by other apps in its environment", de: "nur von anderen Apps ihrer Umgebung aufrufbar" }
+          external: { en: "callable from outside its environment, as far as the environment itself is reachable", de: "von außerhalb ihrer Umgebung aufrufbar, soweit die Umgebung selbst erreichbar ist" }
+        values: [none, environment, external]
+        default: environment
+        confirm_in: [production]
+        why: >
+          The app's own front door, separate from the environment's. `environment` is the
+          answer for an internal service - a code runner, an MCP server, a back-end called by
+          the web app - and is the default because an app that nothing outside has to reach
+          should not be. `external` means callable from outside the environment: on a public
+          environment that is the internet, on an internal one the virtual network.
+          **The modules disagree and Bicep's default is the open one**: `ingressExternal` is
+          true, HTTP is allowed and the port is 80, where Terraform defaults to internal,
+          HTTPS-only. Every ingress decision is written. `none` is for a worker that only
+          pulls from a queue.
+        forced_when: >
+          `deployment.network_exposure: private` forbids `external` on a public environment;
+          `external` is a recorded departure, the same rule as a bare `enabled` elsewhere
+        renders: ingress.external_enabled / ingressExternal and disableIngress
+
+      - id: target_port
+        ask: Which port does the app listen on?
+        type: int
+        audience: engineer
+        plain:
+          en: "The app listens on port {value}."
+          de: "Die App lauscht auf Port {value}."
+        required: true
+        depends_on: { question: ingress, not_equals: none }
+        why: >
+          The port the container binds, and the one thing the platform cannot find out from the
+          image: a mismatch deploys cleanly and fails every health probe. With no answer it is
+          an `open:` entry owned by the workload owner.
+        renders: ingress.target_port / ingressTargetPort
+
+      - id: allow_insecure
+        ask: Should the app accept plain HTTP?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Unencrypted connections to the app are {value}."
+          de: "Unverschlüsselte Verbindungen zur App werden {value}."
+        plain_values:
+          true: { en: "accepted", de: "akzeptiert" }
+          false: { en: "redirected to the encrypted address", de: "auf die verschlüsselte Adresse umgeleitet" }
+        default: false
+        depends_on: { question: ingress, not_equals: none }
+        why: >
+          No current reason to serve HTTP, and the redirect is free. **The Bicep module's
+          default is `true`**, so an unwritten value is the insecure one; Terraform's is
+          `false`. Both are written. A departure - a probe from an appliance that cannot do
+          TLS - is named at this app.
+        renders: ingress.allow_insecure_connections / ingressAllowInsecure
+
+  # ----------------------------------------------------------------- identity
+  - id: identity
+    title: Identity and access
+    questions:
+      - id: managed_identity
+        ask: Which managed identity should the app carry?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The app has {value} for reaching other services."
+          de: "Die App hat {value}, um andere Dienste zu erreichen."
+        plain_values:
+          system_assigned: { en: "its own identity", de: "eine eigene Identität" }
+          user_assigned: { en: "a shared, separately managed identity", de: "eine gemeinsame, separat verwaltete Identität" }
+          none: { en: "no identity of its own", de: "keine eigene Identität" }
+        values: [system_assigned, user_assigned, none]
+        default: user_assigned
+        why: >
+          **Differs from App Service's default, for one concrete reason.** The first revision
+          pulls its image from a private registry and reads its secrets from a vault *while it
+          is being created*, so the identity must hold `AcrPull` and the secret role **before
+          the app exists** - which a system-assigned identity, created with the app, cannot.
+          Creating the app first fails the pull, and the failure looks like a bad image. A
+          user-assigned identity with the roles granted first is the order that works. `none`
+          is for an app that pulls from a public registry and calls nothing.
+        renders: managed_identities / managedIdentities (identity.type on the app)
+
+      - id: user_assigned_identity_ids
+        ask: Which user-assigned identity?
+        type: list
+        audience: engineer
+        plain:
+          en: "It uses the identity {value}."
+          de: "Es nutzt die Identität {value}."
+        ref: user_assigned_identity
+        required: true
+        depends_on: { question: managed_identity, equals: user_assigned }
+        per_environment: true
+        why: >
+          The identity must already exist and hold its roles; this set does not create it or
+          grant them. It is the one the registry entry and the secret references name.
+        renders: managed_identities.user_assigned_resource_ids / managedIdentities.userAssignedResourceIds
+
+      - id: secret_references
+        ask: Which secrets should the app read from a key vault?
+        type: list
+        audience: engineer
+        plain:
+          en: "The app reads the secrets {value} from the key vault."
+          de: "Die App liest die Geheimnisse {value} aus dem Schlüsseltresor."
+        default: []
+        per_environment: true
+        why: >
+          Each entry is a name and the **URL of a Key Vault secret**, resolved with the app's
+          identity, and the app takes it as an environment variable. Never a value: an app
+          secret in a template is in the deployment history. The URL is versionless where the
+          app should follow a rotation. The identity needs the vault's secret-reader role
+          before the first revision (see `managed_identity`).
+        renders: secrets[].key_vault_secret_id and identity / secrets[].keyVaultUrl and identity
+
+      - id: role_assignments
+        ask: Who may manage the app?
+        type: list
+        audience: engineer
+        plain:
+          en: "Management rights on the app granted to: {value}."
+          de: "Verwaltungsrechte an der App vergeben an: {value}."
+        default: []
+        per_environment: true
+        why: >
+          Azure RBAC on the app - the control plane. Usually the deploying principal's alone,
+          so empty is a normal answer.
+        renders: role_assignments / roleAssignments
+
+  # ------------------------------------------------------------ observability
+  - id: observability
+    title: Observability
+    questions:
+      - id: diagnostic_workspace
+        ask: Which Log Analytics workspace should receive the environment's logs?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its logs go to {value}."
+          de: "Seine Protokolle gehen in {value}."
+        ref: log_analytics_workspace
+        from_deployment: diagnostics_destination
+        per_environment: true
+        why: >
+          Inherited: one deployment, one destination. **The environment sends its logs through
+          a diagnostic setting (`azure-monitor` destination), not through the workspace's
+          shared key.** The other destination, `log-analytics`, stores the workspace's primary
+          shared key in the environment - a long-lived secret that contradicts the keyless
+          guardrail and the deployment's `local_auth`, and one the Terraform module reads by
+          needing `sharedkeys/read` on the workspace. Without either, an app's console output
+          is gone with the replica.
+        renders: >
+          app_logs_configuration.destination = azure-monitor and diagnostic_settings /
+          appLogsConfiguration.destination = azure-monitor and diagnosticSettings
+
+      - id: diagnostic_categories
+        ask: Which log categories should be collected?
+        type: list
+        audience: engineer
+        plain:
+          en: "Logged: {value}."
+          de: "Protokolliert wird: {value}."
+        plain_values:
+          ContainerAppConsoleLogs: { en: "what the app writes to its console", de: "was die App auf ihre Konsole schreibt" }
+          ContainerAppSystemLogs: { en: "the platform's own messages about the app and its revisions", de: "die eigenen Meldungen der Plattform zur App und ihren Revisionen" }
+        values: [ContainerAppConsoleLogs, ContainerAppSystemLogs]
+        default: [ContainerAppConsoleLogs, ContainerAppSystemLogs]
+        why: >
+          Console output is the only way to see what an app did, and the system log is the
+          only way to see why a revision did not start - an image that could not be pulled, a
+          probe that failed. Console logs are the volume line on a chatty app and the reason to
+          watch the workspace's daily cap. The category names are the platform's and are checked
+          against `az monitor diagnostic-settings categories list --resource <environment id>`
+          before a render, not remembered.
+        renders: diagnostic_settings.<key>.logs[].category / diagnosticSettings[].logCategoriesAndGroups[].category
+
+      - id: metrics_enabled
+        ask: Should all metrics be collected?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Usage and performance figures are {value}."
+          de: "Nutzungs- und Leistungswerte werden {value}."
+        plain_values:
+          true: { en: "collected", de: "erfasst" }
+          false: { en: "not collected", de: "nicht erfasst" }
+        default: true
+        why: >
+          Replica count, CPU, memory and request counts are what decide whether the size and
+          the replica bounds above were right, and they are cheap.
+        renders: metrics[].category = "AllMetrics" / metricCategories[].category

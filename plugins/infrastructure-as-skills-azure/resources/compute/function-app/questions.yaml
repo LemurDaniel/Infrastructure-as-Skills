@@ -1,0 +1,613 @@
+schema_version: 1
+
+resource: Microsoft.Web/sites
+title: Azure Functions (function app on Flex Consumption or Elastic Premium)
+
+# A function app is a `Microsoft.Web/sites` of `kind: functionapp`, the same ARM type as an
+# App Service web app and the same AVM module (`web/site`). What differs is the plan it runs on,
+# the storage account the host needs, and how it is deployed - which is why it has a set of its
+# own. The plan (Microsoft.Web/serverFarms, abbreviation `plan`) is created with it and decided
+# in the `hosting` group. One function app per plan.
+naming:
+  terraform: "Azure::Microsoft.Web/sites"
+  bicep: "Microsoft.Web/sites"
+  # Bicep assembles the name from vars - this is the prefix it renders (the `function` kind).
+  abbreviation: "func"
+
+boundaries:
+  - "Does not create the resource group. Expects one from the spec's context."
+  - "Does not create the storage account the Functions host needs; it expects one (the storage set creates it) and refers to it in `host_storage_account`."
+  - "Does not create private DNS zones - shared infrastructure, owned by a pattern or the platform."
+  - "Does not create the Log Analytics workspace or the Application Insights component it refers to."
+  - "Does not create the integration subnet when the network is referenced; under network_ownership: create the virtual-network set carries it, with the delegation."
+  - "Does not grant the app's identity its roles on the host storage, the vault or the services it calls - wiring between resources, owned by a pattern."
+  - "Does not set application settings or connection strings. They are deployment configuration, and a secret is a Key Vault reference resolved with the app's identity, never a value."
+  - "Does not render triggers, bindings, function code, deployment slots, custom domains, Easy Auth or Logic Apps (Standard), which is the same module with another `kind` and different decisions."
+  - "Does not render the Consumption (Y1) plan or Functions on a dedicated App Service plan shared with web apps."
+
+groups:
+
+  # ---------------------------------------------------------------- placement
+  - id: placement
+    title: Placement
+    questions:
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
+        audience: engineer
+        plain:
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
+        values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
+        required: true
+        from_context: true
+        why: >
+          Drives the rendered name and the strictness of several defaults below.
+          Nothing sensible can be guessed.
+        renders: naming parameter `environment`, and the tag of that name where the repository uses one
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
+        required: true
+        from_context: true
+        why: >
+          Part of the rendered name. **Flex Consumption is not offered in every region**, and
+          neither are zone redundancy and the larger instance sizes, so the region constrains
+          the hosting group below - check the region before the interview ends.
+        renders: location (plan and site)
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
+        ref: resource_group
+        required: true
+        from_context: true
+        per_environment: true
+        why: >
+          The plan and the app are placed into an existing group. Creating one here would make
+          this set own a lifecycle wider than the resources it describes.
+        renders: parent_id (AVM Terraform) / resource_group_name / implicit in Bicep scope
+
+  # ------------------------------------------------------------------ hosting
+  - id: hosting
+    title: Hosting plan
+    questions:
+      - id: plan_type
+        ask: How should the function app be hosted?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The function app runs on {value}."
+          de: "Die Function App läuft auf {value}."
+        plain_values:
+          flex_consumption: { en: "capacity that scales from zero and is billed by use, with a private network and optional warm instances", de: "Kapazität, die von null aus skaliert und nach Nutzung abgerechnet wird, mit privatem Netz und optional vorgewärmten Instanzen" }
+          elastic_premium: { en: "reserved warm instances that also scale out, billed for what is reserved", de: "reservierten, vorgewärmten Instanzen, die zusätzlich skalieren, abgerechnet wird die Reservierung" }
+        values: [flex_consumption, elastic_premium]
+        default: flex_consumption
+        why: >
+          Flex Consumption is the current serverless plan and the one that fits a private
+          deployment: it integrates with a virtual network, takes private endpoints, scales to
+          zero and bills per execution, and has no content share, so no storage file share to
+          secure. Elastic Premium is for a function that needs Windows, a runtime or a
+          feature Flex does not have, or reserved capacity at all times, and is billed for its
+          warm instances whether used or not. The classic Consumption plan (Y1) is left out: it
+          has no private networking worth the name. **The plan type is fixed at creation** -
+          Linux for Flex, and an app does not move between plan types, it is redeployed.
+        renders: kind and sku (FC1 / EP1..EP3) on the plan, `function_app_uses_fc1` on the module
+
+      - id: runtime_stack
+        ask: Which language or runtime does the function app run?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The function app is written for {value}."
+          de: "Die Function App ist geschrieben für {value}."
+        plain_values:
+          dotnet-isolated: { en: ".NET (isolated worker)", de: ".NET (isolierter Worker)" }
+          node: { en: "Node.js", de: "Node.js" }
+          python: { en: "Python", de: "Python" }
+          java: { en: "Java", de: "Java" }
+          powershell: { en: "PowerShell", de: "PowerShell" }
+        values: [dotnet-isolated, node, python, java, powershell]
+        required: true
+        why: >
+          The one decision here nothing can default: the plan does not care, the app does, and
+          a wrong stack deploys cleanly and fails at the first trigger. The in-process .NET model
+          is not offered - it is retired. An engineer's question that becomes an `open:` entry
+          when nobody can answer, owned by the workload owner, blocking apply.
+        renders: fc1_runtime_name / functionAppConfig.runtime.name (and linuxFxVersion for Premium)
+
+      - id: runtime_version
+        ask: Which version of the runtime?
+        type: string
+        audience: engineer
+        plain:
+          en: "Runtime version {value}."
+          de: "Laufzeit-Version {value}."
+        required: true
+        why: >
+          Pinned, never `latest`: a runtime moves under an app only when someone chooses, and
+          the choice is a deployment. A version the platform still supports - it retires
+          runtimes, and a retired one stops receiving security patches before it stops running.
+          The spelling differs by stack and plan and is looked up in the platform's current
+          list at render time, not remembered.
+        renders: fc1_runtime_version / functionAppConfig.runtime.version
+
+      - id: zone_redundant
+        ask: Should the plan survive the loss of an availability zone?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The function app {value} survive the loss of one datacenter of the region."
+          de: "Die Function App {value} den Ausfall eines Rechenzentrums der Region."
+        plain_values:
+          true: { en: "does", de: "übersteht" }
+          false: { en: "does not", de: "übersteht nicht" }
+        derived_from:
+          question: outage_impact
+          map: { tolerable: false, disruptive: true, critical: true }
+        confirm_in: [production]
+        non_production_default: false
+        why: >
+          Derived from how bad an outage is. Zone redundancy spreads the instances over zones;
+          it is set when the plan is created, needs a region with zones and, on Elastic
+          Premium, at least two instances. Whether Flex Consumption offers it in the chosen
+          region is checked against the platform before a render, not assumed. `critical` has
+          the same value as `disruptive` because a function app is regional: a second region is
+          a second deployment, a pattern. The derivation is production's; the non-production
+          stages take `false` while non_production_savings is enabled.
+        forced_when: >
+          `true` on Elastic Premium forces at least 2 always-ready instances
+        renders: zone_redundant on the plan (zone_balancing_enabled / zoneRedundant)
+
+      - id: max_instance_count
+        ask: How many instances may the function app scale out to?
+        type: int
+        audience: engineer
+        plain:
+          en: "The function app may scale out to at most {value} instances."
+          de: "Die Function App darf auf höchstens {value} Instanzen skalieren."
+        default: 20
+        why: >
+          A ceiling on cost and on the systems the function calls: a trigger that fans out
+          under a flood takes the database or the API behind it with it. Twenty is a guard, not
+          a measurement, and the real ceiling is the downstream system's. The platform's own
+          maximum is far higher, and Flex bills per execution, so an unbounded function is an
+          unbounded bill.
+        renders: maximum_instance_count / scaleAndConcurrency.maximumInstanceCount
+
+      - id: always_ready_instances
+        ask: How many instances should stay warm?
+        type: int
+        audience: engineer
+        plain:
+          en: "{value} instance(s) are kept warm so the first call does not wait."
+          de: "{value} Instanz(en) werden vorgewärmt gehalten, damit der erste Aufruf nicht wartet."
+        derived_from:
+          question: outage_impact
+          map: { tolerable: 0, disruptive: 1, critical: 2 }
+        non_production_default: 0
+        why: >
+          Derived from the same answer. Zero scales to nothing when idle: cheapest, and the
+          first call after idle pays a cold start. One keeps the HTTP trigger answering at once;
+          two keeps answering while an instance is replaced. Always-ready instances are billed
+          for their baseline whether or not they run work. The count is for the HTTP trigger;
+          other triggers are the application's.
+        forced_when: >
+          On Elastic Premium this is the plan's minimum instance count, and zone redundancy
+          forces at least 2
+        renders: always_ready / scaleAndConcurrency.alwaysReady (Flex), worker_count / skuCapacity (Premium)
+
+      - id: instance_memory_mb
+        ask: How much memory should each instance get?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Each instance gets {value} MB of memory."
+          de: "Jede Instanz bekommt {value} MB Arbeitsspeicher."
+        values: [2048, 4096]
+        default: 2048
+        depends_on: { question: plan_type, equals: flex_consumption }
+        why: >
+          Flex Consumption bills memory-seconds, so the size is the cost per execution: 2 GB is
+          the smaller and cheaper, and the module default. 4 GB for a function that holds data in
+          memory. An instance that runs out restarts, which looks like a flaky trigger.
+        renders: instance_memory_in_mb / scaleAndConcurrency.instanceMemoryMB
+
+  # ------------------------------------------------------------------ storage
+  - id: storage
+    title: Host storage
+    questions:
+      - id: host_storage_account
+        ask: Which storage account does the Functions host use?
+        type: ref
+        audience: engineer
+        plain:
+          en: "The function app keeps its own state in the storage account {value}."
+          de: "Die Function App hält ihren eigenen Zustand im Speicherkonto {value}."
+        ref: storage_account
+        required: true
+        per_environment: true
+        why: >
+          Every plan needs one: it holds the host's function keys, timer-trigger singleton locks
+          and trigger metadata (`AzureWebJobsStorage`), and, on Flex, the blob container with the
+          deployment package. It is not the workload's data store and must not be - the host
+          writes to it constantly and a lifecycle rule or a firewall made for data can break the
+          app. A storage account of its own for the host is the usual answer; the storage set
+          decides it, with shared-key access off and the account reachable from the app's network.
+          The account must exist and be reachable before the app is created.
+        renders: storage_account_name / AzureWebJobsStorage__accountName and the deployment storage
+
+      - id: host_storage_auth
+        ask: How does the function app sign in to its storage account?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The function app signs in to its storage with {value}."
+          de: "Die Function App meldet sich an ihrem Speicher an mit {value}."
+        plain_values:
+          identity: { en: "its managed identity, with no secret stored", de: "ihrer verwalteten Identität, ohne gespeichertes Geheimnis" }
+          connection_string: { en: "a connection string holding the storage key", de: "einer Verbindungszeichenfolge mit dem Speicherschlüssel" }
+        values: [identity, connection_string]
+        from_deployment: local_auth
+        confirm_in: [production]
+        why: >
+          Inherited: `local_auth: disabled` renders as `identity`. A storage key in an app
+          setting is a long-lived secret with full access to the account, visible to anyone with
+          read on the app, and it cannot work against an account whose shared-key access is
+          off - which the storage set turns off by default. **There are two connections on
+          Flex and both are set**: the host's own (`storage_uses_managed_identity`) and the one
+          that reads the deployment package (`storage_authentication_type`). The identity needs
+          `Storage Blob Data Owner` on the account, and `Storage Table Data Contributor` if the
+          host is to write diagnostic events, before the app starts.
+        renders: >
+          terraform: storage_uses_managed_identity and storage_authentication_type;
+          bicep: AzureWebJobsStorage__accountName and functionAppConfig.deployment.storage.authentication
+
+      - id: deployment_container
+        ask: In which container is the deployment package kept?
+        type: string
+        audience: engineer
+        plain:
+          en: "The deployed code is kept in the container {value}."
+          de: "Der ausgerollte Code liegt im Container {value}."
+        default: app-package
+        depends_on: { question: plan_type, equals: flex_consumption }
+        why: >
+          Flex runs the code from a zip in a blob container of the host storage account, not
+          from a file share. The container is created by the storage set, and the app's
+          identity needs blob data rights on it. The default is the platform's naming; a second
+          function app on the same account takes a different name.
+        renders: storage_container_endpoint / functionAppConfig.deployment.storage.value
+
+  # --------------------------------------------------------------- networking
+  - id: networking
+    title: Networking
+    questions:
+      - id: public_network_access
+        ask: Should this function app depart from the deployment's exposure posture?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The function app is {value}."
+          de: "Die Function App ist {value}."
+        plain_values:
+          disabled: { en: "not reachable from the internet at all", de: "aus dem Internet überhaupt nicht erreichbar" }
+          enabled_with_firewall: { en: "reachable from the internet only from listed addresses", de: "aus dem Internet nur von gelisteten Adressen erreichbar" }
+          enabled: { en: "reachable from the internet", de: "aus dem Internet erreichbar" }
+        values: [disabled, enabled_with_firewall, enabled]
+        from_deployment: network_exposure
+        confirm_in: [production]
+        why: >
+          Asked only as a departure: exposure is a property of the system. `private` is
+          `disabled`, `public` is `enabled_with_firewall`. A function with an HTTP trigger is
+          reachable by design only if it is meant to be; a bare `enabled` is a recorded departure
+          and means no access restrictions at all. With `disabled` the app answers only through
+          its private endpoint - which also closes the Kudu/SCM site - and **non-HTTP triggers
+          still work**, because they pull from their sources instead of being called.
+        renders: >
+          terraform: public_network_access_enabled and site_config.ip_restriction_default_action;
+          bicep: publicNetworkAccess and siteConfig.ipSecurityRestrictionsDefaultAction
+
+      - id: private_endpoint_subnet
+        ask: Which subnet should this function app's private endpoint live in?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its private connection lands in subnet {value}."
+          de: "Seine private Anbindung landet im Subnetz {value}."
+        ref: subnet
+        from_deployment: private_endpoint_subnet
+        per_environment: true
+        why: >
+          One subnet carries the deployment's private endpoints, so this is inherited. The app
+          has exactly one sub-resource, `sites`.
+        renders: private_endpoints.<key>.subnet_resource_id / privateEndpoints[].subnetResourceId
+
+      - id: vnet_integration
+        ask: Does the function call services that are only reachable privately?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The function app's own outgoing traffic {value}."
+          de: "Der ausgehende Verkehr der Function App {value}."
+        plain_values:
+          true: { en: "goes through the company network, so it can reach private services", de: "läuft durch das Firmennetz, so erreicht sie private Dienste" }
+          false: { en: "goes out over the public internet", de: "geht über das öffentliche Internet raus" }
+        default: true
+        why: >
+          The private endpoint is for traffic *into* the app; calls *out* of it - to the host
+          storage, a database, a vault behind their own private endpoints - need regional VNet
+          integration. **The host storage is the one that is forgotten**: with its firewall
+          closed, an app without integration cannot start, and the failure is a host error and not
+          a configuration one. False is for an app that calls only public services and uses no
+          private storage, and `network_ownership: none` forces it.
+        forced_when: >
+          network_ownership: none (deployment) forces `false` - there is no subnet to integrate into
+        renders: >
+          terraform: virtual_network_subnet_id; bicep: virtualNetworkSubnetResourceId
+
+      - id: integration_subnet
+        ask: Which subnet does the function app's outgoing traffic leave through?
+        type: ref
+        audience: platform
+        plain:
+          en: "Outgoing traffic leaves through the subnet {value}."
+          de: "Ausgehender Verkehr verlässt das Netz über das Subnetz {value}."
+        ref: subnet
+        required: true
+        depends_on: { question: vnet_integration, equals: true }
+        per_environment: true
+        why: >
+          The subnet must be delegated, and **the delegation differs by plan**: Flex Consumption
+          delegates to `Microsoft.App/environments`, Elastic Premium to
+          `Microsoft.Web/serverFarms`; the right one for the platform is confirmed against its
+          documentation before a render. Exclusive to one plan either way, and sized with
+          headroom for scale-out. The platform's subnet when the network is referenced, a subnet
+          of the created network otherwise, where the virtual-network set carries it with the
+          delegation.
+        forced_when: >
+          network_ownership: create - the created network's subnet, recorded as forced with the
+          network as forced_by
+        renders: >
+          terraform: virtual_network_subnet_id; bicep: virtualNetworkSubnetResourceId
+
+      - id: vnet_route_all
+        ask: Should all outgoing traffic go through the network, or only traffic to private addresses?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Outgoing traffic is routed {value}."
+          de: "Ausgehender Verkehr wird {value} geleitet."
+        plain_values:
+          true: { en: "entirely through the company network, including to the internet", de: "komplett durch das Firmennetz geleitet, auch ins Internet" }
+          false: { en: "through the company network only to private addresses", de: "nur für private Adressen durch das Firmennetz geleitet" }
+        default: true
+        depends_on: { question: vnet_integration, equals: true }
+        why: >
+          Without it only traffic to private addresses enters the VNet; the rest leaves from the
+          platform's shared addresses, past the firewall and route table the landing zone built
+          for exactly this. It also decides whose DNS the app uses - the VNet's, which resolves
+          private endpoints. True means the egress goes through whatever the subnet's route table
+          says, and a function that calls a public API needs that path allowed.
+        renders: >
+          terraform: vnet_route_all_traffic; bicep: outboundVnetRouting.allTraffic
+
+      - id: ip_restrictions
+        ask: Which public IP ranges may reach the function app?
+        type: list
+        audience: engineer
+        plain:
+          en: "Public addresses allowed to reach the function app: {value}."
+          de: "Öffentliche Adressen, die die Function App erreichen dürfen: {value}."
+        default: []
+        depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        per_environment: true
+        why: >
+          An enumerated allowlist with a default action of Deny, applied to the Kudu/SCM site as
+          well. `0.0.0.0/0` is not an allowlist and is rejected by the guardrails.
+        renders: >
+          site_config.ip_restriction / siteConfig.ipSecurityRestrictions and the SCM equivalents
+
+  # ----------------------------------------------------------------- identity
+  - id: identity
+    title: Identity and access
+    questions:
+      - id: managed_identity
+        ask: Which managed identity should the function app carry?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The function app has {value} for reaching other services."
+          de: "Die Function App hat {value}, um andere Dienste zu erreichen."
+        plain_values:
+          system_assigned: { en: "its own identity", de: "eine eigene Identität" }
+          user_assigned: { en: "a shared, separately managed identity", de: "eine gemeinsame, separat verwaltete Identität" }
+        values: [system_assigned, user_assigned]
+        default: user_assigned
+        why: >
+          **Differs from App Service's default, and for the same reason as Container Apps.** The
+          host reads and writes its storage account as it starts, and the deployment package is
+          read before the first instance runs, so the identity must hold its blob roles *before
+          the app exists* - which a system-assigned identity, created with the app, cannot.
+          Creating the app first yields a host that cannot start, and the error says storage, not
+          identity. A user-assigned identity with its roles granted first is the order that works,
+          and the one that gives a Key Vault reference its role. `none` is not offered: an app
+          with identity-based storage has one by definition.
+        renders: managed_identities / managedIdentities, and key_vault_reference_identity
+
+      - id: user_assigned_identity_ids
+        ask: Which user-assigned identity?
+        type: list
+        audience: engineer
+        plain:
+          en: "It uses the identity {value}."
+          de: "Es nutzt die Identität {value}."
+        ref: user_assigned_identity
+        required: true
+        depends_on: { question: managed_identity, equals: user_assigned }
+        per_environment: true
+        why: >
+          The identity must already exist and hold its roles on the host storage; this set does
+          not create it or grant them.
+        renders: managed_identities.user_assigned_resource_ids / managedIdentities.userAssignedResourceIds
+
+      - id: role_assignments
+        ask: Who may manage the function app?
+        type: list
+        audience: engineer
+        plain:
+          en: "Management rights on the function app granted to: {value}."
+          de: "Verwaltungsrechte an der Function App vergeben an: {value}."
+        default: []
+        per_environment: true
+        why: >
+          Azure RBAC on the app - the control plane. Usually the deploying principal's alone, so
+          empty is a normal answer.
+        renders: role_assignments / roleAssignments
+
+  # ----------------------------------------------------------------- security
+  - id: security
+    title: Security
+    questions:
+      - id: https_only
+        ask: Should the function app refuse plain HTTP?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Unencrypted connections are {value}."
+          de: "Unverschlüsselte Verbindungen werden {value}."
+        plain_values:
+          true: { en: "redirected to the encrypted address", de: "auf die verschlüsselte Adresse umgeleitet" }
+          false: { en: "accepted", de: "akzeptiert" }
+        default: true
+        why: >
+          No current reason to serve HTTP, and the redirect is free. A question only so that a
+          departure is recorded rather than silently impossible. The module default is already
+          true; written anyway.
+        renders: https_only / httpsOnly
+
+      - id: min_tls_version
+        ask: What is the minimum TLS version?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Connections must use at least {value} encryption."
+          de: "Verbindungen müssen mindestens {value}-Verschlüsselung nutzen."
+        plain_values:
+          "1.2": { en: "TLS 1.2", de: "TLS 1.2" }
+          "1.3": { en: "TLS 1.3", de: "TLS 1.3" }
+        values: ["1.2", "1.3"]
+        default: "1.2"
+        why: >
+          1.2 is the floor and non-negotiable; 1.3 is preferable where every client supports it,
+          but an unsupported floor fails as an opaque connection reset, so raise it deliberately.
+          The AVM Terraform module's default is 1.3, which is why it is written on the call.
+        renders: site_config.minimum_tls_version / siteConfig.minTlsVersion
+
+      - id: basic_auth_enabled
+        ask: Should publishing with a username and password stay possible?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Deploying with a user name and password is {value}; deployments run through company accounts."
+          de: "Das Ausrollen mit Benutzername und Passwort ist {value}; Rollouts laufen über Firmenkonten."
+        plain_values:
+          true: { en: "possible", de: "möglich" }
+          false: { en: "not possible", de: "nicht möglich" }
+        from_deployment: local_auth
+        confirm_in: [production]
+        why: >
+          Inherited: `local_auth: disabled` renders as `false`. The publishing profile is a
+          shared password for the Kudu site and FTP, does not expire and is not attributable.
+          Two switches (FTP and SCM) and both are written; the AVM Terraform module's SCM default
+          is true. Flex Consumption deploys through the storage container and has no
+          publishing profile to switch, which the render confirms against the platform.
+        renders: >
+          terraform: ftp_publish_basic_authentication_enabled and
+          scm_publish_basic_authentication_enabled; bicep: basicPublishingCredentialsPolicies
+
+      - id: application_insights
+        ask: Which Application Insights component should receive the function app's telemetry?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Its application telemetry goes to {value} (empty: none)."
+          de: "Seine Anwendungstelemetrie geht an {value} (leer: keine)."
+        ref: application_insights
+        default: ""
+        per_environment: true
+        why: >
+          Application Insights is where a function's invocations, failures and dependencies are
+          read; without it the host's own log is the only trace. Empty by default because the
+          component is another resource with its own set and the wiring is a pattern's; a
+          function app with no component still logs to the diagnostic setting below. The
+          component is workspace-based, and the connection string - not the instrumentation key -
+          is the setting, because the key is being retired.
+        renders: application_insights_connection_string / the APPLICATIONINSIGHTS_CONNECTION_STRING setting
+
+  # ------------------------------------------------------------ observability
+  - id: observability
+    title: Observability
+    questions:
+      - id: diagnostic_workspace
+        ask: Which Log Analytics workspace should receive diagnostics?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its logs go to {value}."
+          de: "Seine Protokolle gehen in {value}."
+        ref: log_analytics_workspace
+        from_deployment: diagnostics_destination
+        per_environment: true
+        why: >
+          Inherited: one deployment, one destination. A function with no diagnostic setting
+          writes its logs to a file on the instance, which is gone when the instance is
+          replaced - and on Flex, instances are replaced all the time.
+        renders: diagnostic_settings / diagnosticSettings (site and plan)
+
+      - id: diagnostic_categories
+        ask: Which log categories should be collected?
+        type: list
+        audience: engineer
+        plain:
+          en: "Logged: {value}."
+          de: "Protokolliert wird: {value}."
+        plain_values:
+          FunctionAppLogs: { en: "what the functions write to their log", de: "was die Funktionen in ihr Protokoll schreiben" }
+          AppServiceAuditLogs: { en: "who signed in to deploy or manage the app", de: "wer sich zum Ausrollen oder Verwalten angemeldet hat" }
+          AppServiceHTTPLogs: { en: "every web request", de: "jede Web-Anfrage" }
+        values: [FunctionAppLogs, AppServiceAuditLogs, AppServiceHTTPLogs]
+        default: [FunctionAppLogs, AppServiceAuditLogs]
+        why: >
+          The function log is the only way to see what a function did and why it failed. The
+          audit log says who deployed. HTTP logs are the volume line on a busy HTTP trigger and
+          are a choice, not a default. The category names are the platform's and are checked
+          against `az monitor diagnostic-settings categories list --resource <app id>` before a
+          render, not remembered; on Flex they can differ from Premium.
+        renders: diagnostic_settings.<key>.logs[].category / diagnosticSettings[].logCategoriesAndGroups[].category
+
+      - id: metrics_enabled
+        ask: Should all metrics be collected?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Usage and performance figures are {value}."
+          de: "Nutzungs- und Leistungswerte werden {value}."
+        plain_values:
+          true: { en: "collected", de: "erfasst" }
+          false: { en: "not collected", de: "nicht erfasst" }
+        default: true
+        why: >
+          Execution count, units and instance count are what the cost of a function is read from,
+          and what decides whether the instance bounds above were right.
+        renders: metrics[].category = "AllMetrics" / metricCategories[].category

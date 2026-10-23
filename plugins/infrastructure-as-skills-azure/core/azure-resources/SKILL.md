@@ -1,6 +1,6 @@
 ---
 name: azure-resources
-description: Routes a request for an Azure resource to the question set that decides it, for Terraform or Bicep. Storage (storage account, blob, ADLS Gen2, data lake, file share, queue), network (vnet, subnet, address space, private endpoint), observability (Log Analytics workspace, log retention, diagnostics), compute (App Service, web app, App Service plan), security (Key Vault, secrets, managed identity), data (Cosmos DB, NoSQL), ai (AI Foundry, Azure OpenAI, AI Search). Renders Azure Verified Modules (AVM) first, authored resources as fallback. Use whenever one of these is created, changed, reviewed or ported between targets.
+description: Routes a request for an Azure resource to the question set that decides it, for Terraform or Bicep. Storage (storage account, blob, ADLS Gen2, data lake, file share, queue), network (vnet, subnet, address space, private endpoint), observability (Log Analytics workspace, log retention, diagnostics), compute (App Service, web app, App Service plan, function app, Container Apps, container registry), security (Key Vault, secrets, managed identity), data (Cosmos DB, NoSQL), ai (AI Foundry, Azure OpenAI, AI Search). Renders Azure Verified Modules (AVM) first, authored resources as fallback. Use whenever one of these is created, changed, reviewed or ported between targets.
 ---
 
 # Azure resources
@@ -24,7 +24,7 @@ here never crowds out the description of how the protocol works.
 | storage | storage accounts; containers, shares and queues planned | [resources/storage/routing.md](../../resources/storage/routing.md) |
 | network | virtual networks and subnets; NSGs, peering, route tables planned | [resources/network/routing.md](../../resources/network/routing.md) |
 | observability | Log Analytics workspaces; Application Insights and alerts planned | [resources/observability/routing.md](../../resources/observability/routing.md) |
-| compute | App Service (plan and web app); function apps, Container Apps planned | [resources/compute/routing.md](../../resources/compute/routing.md) |
+| compute | App Service (plan and web app); function apps; Container Apps; Container Registry | [resources/compute/routing.md](../../resources/compute/routing.md) |
 | security | Key Vault; user-assigned managed identity | [resources/security/routing.md](../../resources/security/routing.md) |
 | data | Cosmos DB (API for NoSQL); SQL, PostgreSQL planned | [resources/data/routing.md](../../resources/data/routing.md) |
 | ai | AI Foundry / Azure OpenAI with model deployments; AI Search | [resources/ai/routing.md](../../resources/ai/routing.md) |

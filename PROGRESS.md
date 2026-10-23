@@ -233,11 +233,24 @@ Verified Modules first, authored resources second.
   regional (quota, versions) - looked up at render time, never recalled. Not done: no example,
   no tests, the diagnostic category names (`Audit`, `RequestResponse`, `AzureOpenAIRequestUsage`,
   `OperationLogs`) are from memory, the project API version is a placeholder.
-- **Remaining families for the adessoGPT case**, in order: `compute` (Container Registry,
-  Container Apps environment, Function App), `observability/application-insights`,
-  `network/network-security-group`. Private endpoints and DNS zones are the platform's and
-  stay referenced. Then `ROADMAP.md` C1's `data` (Azure SQL, PostgreSQL) and `integration`
-  (Service Bus).
+- **`compute` extended 2026-10-23** (`container-registry` 22, `container-apps` 24, `function-app`
+  29 questions; both checks green). Registry: TF 0.8.0 (`azurerm < 5.0`) / Bicep 0.13.1; Container
+  Apps: env TF 0.5.1 (`azurerm ~> 4.0`, many deprecated inputs) + app TF 0.9.0 (AzAPI) / Bicep
+  0.16.0 + 0.23.0; Function App reuses `web-site` (TF 0.24.1 / Bicep 0.24.0) with `kind` function.
+  **Found by doing it:** Bicep's Container App module defaults to external ingress, HTTP allowed,
+  port 80 (Terraform the opposite); the registry modules disagree on retention, bypass and export;
+  Container Apps and Function Apps default to a **user-assigned identity**, unlike App Service,
+  because the first revision/start needs its roles before the app exists; the environment logs
+  through a diagnostic setting, not the workspace's shared key. Not done: no examples, no tests;
+  the Function App's per-plan subnet delegation (`Microsoft.App/environments` for Flex,
+  `Microsoft.Web/serverFarms` for Premium) is from memory and to be confirmed; Container Apps
+  session pools (the "code interpreter" of the adessoGPT diagram) have no set; the `app-service`
+  boundary "no function apps / Container Apps" is now stale.
+- **Remaining families for the adessoGPT case**, in order: `observability/application-insights`,
+  `network/network-security-group`. Private endpoints and DNS zones are the platform's and stay
+  referenced; the Entra app registration stays an `open:` entry. Then the case itself: an
+  `infra-spec.yaml` and diagram for adessoGPT from these sets, which is what tests whether they
+  compose. Then `ROADMAP.md` C1's `data` (Azure SQL, PostgreSQL) and `integration` (Service Bus).
 - **A sandbox subscription for real plans, applies and the deploy agent** (`ROADMAP.md`
   A5, E): the owner sets it up — subscription, federated credential for OIDC, a fenced
   resource group. Not available yet (2026-10-18).

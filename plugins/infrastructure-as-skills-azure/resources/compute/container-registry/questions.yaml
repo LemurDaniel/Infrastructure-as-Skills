@@ -1,0 +1,463 @@
+schema_version: 1
+
+resource: Microsoft.ContainerRegistry/registries
+title: Azure Container Registry
+
+naming:
+  terraform: "Azure::Microsoft.ContainerRegistry/registries"
+  bicep: "Microsoft.ContainerRegistry/registries"
+  # Bicep assembles the name from vars - this is the prefix it renders. The name is
+  # global, 5-50 characters, **alphanumeric only - no hyphens**.
+  abbreviation: "cr"
+
+boundaries:
+  - "Does not create the resource group. Expects one from the spec's context."
+  - "Does not create private DNS zones - shared infrastructure, owned by a pattern or the platform."
+  - "Does not create the Log Analytics workspace it routes diagnostics to."
+  - "Does not push, build or sign images. Tasks, webhooks, tokens, scope maps and cache rules are content and automation of the registry, not its configuration."
+  - "Does not grant the pulling identities their role. `role_assignments` records who may use this registry; a consumer's pull role (`AcrPull` for its identity) is wiring, owned by a pattern."
+  - "Does not create the Key Vault key for a customer-managed key, nor the identity that unwraps it."
+
+groups:
+
+  # ---------------------------------------------------------------- placement
+  - id: placement
+    title: Placement
+    questions:
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
+        audience: engineer
+        plain:
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
+        values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
+        required: true
+        from_context: true
+        why: >
+          Drives the rendered name and the strictness of several defaults below.
+          Nothing sensible can be guessed. A registry is often one for all stages of a
+          workload, in which case the deployment is the shared one - recorded, not assumed.
+        renders: naming parameter `environment`, and the tag of that name where the repository uses one
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
+        required: true
+        from_context: true
+        why: >
+          Part of the rendered name, and the home region of the registry. Zone redundancy is
+          not offered in every region, and an image pull from a distant region pays for it in
+          latency - a registry sits next to what pulls from it.
+        renders: location
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
+        ref: resource_group
+        required: true
+        from_context: true
+        per_environment: true
+        why: >
+          The registry is placed into an existing group. Creating one here would make this
+          set own a lifecycle wider than the resource it describes.
+        renders: resource_group_name (AVM Terraform, azurerm-based) / implicit in Bicep scope
+
+  # ----------------------------------------------------------------- registry
+  - id: registry
+    title: The registry
+    questions:
+      - id: sku
+        ask: Which registry tier?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The registry is the {value} tier."
+          de: "Die Registry hat die Stufe {value}."
+        plain_values:
+          Basic: { en: "basic, small and cheap, reachable from the internet only", de: "Basic, klein und günstig, nur aus dem Internet erreichbar" }
+          Standard: { en: "standard, more storage and throughput, reachable from the internet only", de: "Standard, mehr Speicher und Durchsatz, nur aus dem Internet erreichbar" }
+          Premium: { en: "premium, which alone can be closed off with a private connection and spread over several regions", de: "Premium, die als einzige per privater Anbindung abgeschottet und auf mehrere Regionen verteilt werden kann" }
+        values: [Basic, Standard, Premium]
+        default: Premium
+        why: >
+          **Private endpoints, network rules, zone redundancy, geo-replication, the retention
+          policy and customer-managed keys are Premium-only.** Anything but a deliberately
+          public registry is therefore Premium, which is also the default of both AVM
+          modules. Basic and Standard are for a registry that is public by design - a
+          throwaway sandbox - and cannot be closed afterwards without a tier change, which is
+          why a security-shaped decision does not get a `non_production_default`: a
+          development stage on Basic would be the stage that cannot take the private
+          endpoint production needs.
+        forced_when: >
+          `deployment.network_exposure: private` forces `Premium`, recorded as forced with
+          `network_exposure` as forced_by
+        renders: sku / acrSku
+
+      - id: zone_redundant
+        ask: Should the registry survive the loss of an availability zone?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The registry {value} survive the loss of one datacenter of the region."
+          de: "Die Registry {value} den Ausfall eines Rechenzentrums der Region."
+        plain_values:
+          true: { en: "does", de: "übersteht" }
+          false: { en: "does not", de: "übersteht nicht" }
+        derived_from:
+          question: outage_impact
+          map: { tolerable: false, disruptive: true, critical: true }
+        confirm_in: [production]
+        non_production_default: false
+        depends_on: { question: sku, equals: Premium }
+        why: >
+          Derived from how bad an outage is: a registry that is down is an application that
+          cannot start or scale - the images are the dependency of every new instance. It is
+          Premium-only, costs nothing extra, and **is set when the registry is created**
+          (modifying it forces a new registry). The modules default it to on, so the derivation
+          for `tolerable` is written as `false`. The non-production stages take `false` while
+          non_production_savings is enabled.
+        renders: zone_redundancy_enabled / zoneRedundancy (`Enabled`, `Disabled`)
+
+      - id: geo_replicas
+        ask: In which further regions should the images be kept?
+        type: list
+        audience: engineer
+        plain:
+          en: "The images are also kept in {value} (empty: only in the main region)."
+          de: "Die Images liegen zusätzlich in {value} (leer: nur in der Hauptregion)."
+        default: []
+        per_environment: true
+        depends_on: { question: sku, equals: Premium }
+        why: >
+          A replica serves pulls from its own region and survives the loss of the home region
+          for pulls (pushes go to the home region until failover). It is billed like another
+          registry per region, so it is not defaulted. `critical` from `outage_impact` means one
+          is wanted: with no region named the decision is an `open:` entry owned by the
+          workload owner, naming the paired region as the usual answer.
+        forced_when: >
+          `outage_impact: critical` requires at least one entry here, or an `open:` entry
+        renders: georeplications / replications
+
+      - id: retention_untagged_days
+        ask: After how many days should untagged images be deleted?
+        type: int
+        audience: engineer
+        plain:
+          en: "Untagged images are deleted after {value} days."
+          de: "Images ohne Tag werden nach {value} Tagen gelöscht."
+        default: 7
+        depends_on: { question: sku, equals: Premium }
+        why: >
+          Every push of a tag that already exists leaves the previous image untagged and still
+          billed; without a retention policy a registry grows forever. Seven days is long
+          enough to roll back a release that was just replaced. **The modules disagree**:
+          Terraform defaults to 7 days, Bicep to 15, so it is written. Applies to untagged
+          manifests only - a tagged image is never deleted by it, which is what protects a
+          release.
+        renders: retention_policy_in_days / retentionPolicyDays and retentionPolicyStatus
+
+  # --------------------------------------------------------------- networking
+  - id: networking
+    title: Networking
+    questions:
+      - id: public_network_access
+        ask: Should this registry depart from the deployment's exposure posture?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The registry is {value}."
+          de: "Die Registry ist {value}."
+        plain_values:
+          disabled: { en: "not reachable from the internet at all", de: "aus dem Internet überhaupt nicht erreichbar" }
+          enabled_with_firewall: { en: "reachable from the internet only from listed addresses", de: "aus dem Internet nur von gelisteten Adressen erreichbar" }
+          enabled: { en: "reachable from the internet", de: "aus dem Internet erreichbar" }
+        values: [disabled, enabled_with_firewall, enabled]
+        from_deployment: network_exposure
+        confirm_in: [production]
+        why: >
+          Asked only as a departure: exposure is a property of the system. `private` is
+          `disabled`, `public` is `enabled_with_firewall`. **Terraform's module defaults to
+          public access on**; Bicep unset. With `disabled` a pull works only from inside the
+          network - which also means the pipeline that pushes the image must run inside it, or
+          push through a task, or the registry is open while images are pushed. That is the
+          usual snag and a decision for the pipeline, not for this set.
+        renders: >
+          terraform: public_network_access_enabled (bool) and network_rule_set;
+          bicep: publicNetworkAccess and networkRuleSetIpRules
+
+      - id: private_endpoint_subnet
+        ask: Which subnet should this registry's private endpoint live in?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its private connection lands in subnet {value}."
+          de: "Seine private Anbindung landet im Subnetz {value}."
+        ref: subnet
+        from_deployment: private_endpoint_subnet
+        per_environment: true
+        why: >
+          One subnet carries the deployment's private endpoints, so this is inherited. The
+          registry has one sub-resource, `registry`, and the endpoint writes DNS records for
+          the registry's login server and for each region's data endpoint - the platform's
+          `privatelink.azurecr.io` zone must hold them, and a geo-replica adds one per region.
+        renders: private_endpoints.<key>.subnet_resource_id / privateEndpoints[].subnetResourceId (service `registry`)
+
+      - id: ip_rules
+        ask: Which public IP ranges may reach the registry?
+        type: list
+        audience: engineer
+        plain:
+          en: "Public addresses allowed to reach the registry: {value}."
+          de: "Öffentliche Adressen, die die Registry erreichen dürfen: {value}."
+        default: []
+        depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        per_environment: true
+        why: >
+          An enumerated allowlist with a default action of `Deny`, in CIDR form. An empty list
+          denies every public caller, which is valid and deliberate. Needs Premium.
+        renders: network_rule_set.ip_rule / networkRuleSetIpRules
+
+      - id: network_rule_bypass
+        ask: May trusted Azure services reach the registry past its firewall?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Trusted Azure services {value} past the registry's firewall."
+          de: "Vertrauenswürdige Azure-Dienste {value} an der Firewall der Registry vorbei."
+        plain_values:
+          None: { en: "may not pass", de: "dürfen nicht" }
+          AzureServices: { en: "may pass", de: "dürfen" }
+        values: [None, AzureServices]
+        default: None
+        why: >
+          Lets Microsoft services such as Defender scanning and Azure Container Instances pull
+          past the firewall. **The modules disagree**: Terraform defaults to `None`, Bicep to
+          `AzureServices` - a Bicep render that leaves it unset opens a hole the Terraform one
+          does not. Closed by default; a consumer that needs it is named at this registry.
+        renders: network_rule_bypass_option / networkRuleBypassOptions
+
+      - id: export_policy_enabled
+        ask: May images be exported out of the registry's network?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Copying images out of the registry to elsewhere is {value}."
+          de: "Das Herauskopieren von Images aus der Registry ist {value}."
+        plain_values:
+          true: { en: "possible", de: "möglich" }
+          false: { en: "blocked", de: "gesperrt" }
+        default: false
+        depends_on: { question: public_network_access, equals: disabled }
+        why: >
+          With public access off, an export policy of `disabled` stops images leaving the
+          registry by import or export - the exfiltration path that a closed network does not
+          close by itself. Pulls by clients with a role are unaffected. It can only be turned
+          off while public access is off (Terraform enforces it), so it is asked only then.
+          **The modules disagree**: Terraform defaults to enabled, Bicep to disabled.
+        renders: export_policy_enabled / exportPolicyStatus
+
+  # ----------------------------------------------------------------- identity
+  - id: identity
+    title: Identity and access
+    questions:
+      - id: managed_identity
+        ask: Which managed identity should the registry carry?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The registry has {value}."
+          de: "Die Registry hat {value}."
+        plain_values:
+          none: { en: "no identity of its own", de: "keine eigene Identität" }
+          system_assigned: { en: "its own identity", de: "eine eigene Identität" }
+          user_assigned: { en: "a separately managed identity", de: "eine separat verwaltete Identität" }
+        values: [none, system_assigned, user_assigned]
+        default: none
+        why: >
+          The registry's own identity is used for a customer-managed key and for tasks that
+          reach other resources. Pullers use their own identities, not the registry's, so a
+          registry without either carries none. A customer-managed key needs the identity to
+          hold its role on the key before the key is set, which is why that case is
+          `user_assigned`.
+        forced_when: >
+          `key_management: customer_managed` forces `user_assigned`, recorded as forced with
+          `key_management` as forced_by
+        renders: managed_identities / managedIdentities
+
+      - id: user_assigned_identity_ids
+        ask: Which user-assigned identity?
+        type: list
+        audience: engineer
+        plain:
+          en: "It uses the identity {value}."
+          de: "Es nutzt die Identität {value}."
+        ref: user_assigned_identity
+        required: true
+        depends_on: { question: managed_identity, equals: user_assigned }
+        per_environment: true
+        why: The identity must already exist; this set does not create it.
+        renders: managed_identities.user_assigned_resource_ids / managedIdentities.userAssignedResourceIds
+
+      - id: role_assignments
+        ask: Who needs which role on this registry?
+        type: list
+        audience: engineer
+        plain:
+          en: "Access rights on the registry granted to: {value}."
+          de: "Zugriffsrechte auf die Registry vergeben an: {value}."
+        default: []
+        per_environment: true
+        why: >
+          With the admin user off, nothing pulls or pushes until a role is assigned: `AcrPull`
+          for whatever runs the images, `AcrPush` for the pipeline that builds them - and
+          never both on the same principal. An empty list is a working registry nobody can use,
+          and not an answer: with no consumer named it is an `open:` entry owned by the
+          workload owner, blocking apply. Scope to the registry (or, with attribute-based
+          access, to a repository), never to the subscription. A pattern fills this from the
+          consumers it knows; the puller's role is granted there, because the puller's
+          identity exists only after the registry does.
+        renders: role_assignments / roleAssignments
+
+  # ----------------------------------------------------------------- security
+  - id: security
+    title: Security
+    questions:
+      - id: admin_enabled
+        ask: May clients sign in with the registry's shared admin account?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The shared admin account is {value}; access goes through company accounts."
+          de: "Das gemeinsame Admin-Konto ist {value}; der Zugriff läuft über Firmenkonten."
+        plain_values:
+          true: { en: "switched on", de: "eingeschaltet" }
+          false: { en: "switched off", de: "abgeschaltet" }
+        from_deployment: local_auth
+        confirm_in: [production]
+        why: >
+          Inherited, inverted: `local_auth: disabled` renders as `false`. The admin user is
+          one username and password with push and pull on the whole registry, shared by
+          whoever has it and not attributable. It is what a tutorial uses for `docker login`;
+          a managed identity with `AcrPull` is what a deployment uses. Both modules default to
+          off; written anyway.
+        renders: admin_enabled / acrAdminUserEnabled
+
+      - id: anonymous_pull_enabled
+        ask: May anyone pull images without signing in?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Pulling images without signing in is {value}."
+          de: "Das Herunterladen von Images ohne Anmeldung ist {value}."
+        plain_values:
+          true: { en: "allowed", de: "erlaubt" }
+          false: { en: "not allowed", de: "nicht erlaubt" }
+        default: false
+        why: >
+          Registry-wide anonymous pull makes every image public to anyone who can reach the
+          registry. It is for a registry that publishes open-source images on purpose and is a
+          preview feature; a departure that names the registry, never a default. Needs
+          Standard or Premium.
+        renders: anonymous_pull_enabled / anonymousPullEnabled
+
+      - id: key_management
+        ask: Are the registry's encryption keys platform-managed or customer-managed?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          platform_managed: { en: "managed by Azure - encrypted, rotated, no effort on your side", de: "von Azure verwaltet: verschlüsselt, rotiert, kein Aufwand bei euch" }
+          customer_managed: { en: "your own, held in your key vault, so you can revoke them", de: "eure eigenen in eurem Schlüsseltresor, damit ihr sie zurückziehen könnt" }
+        values: [platform_managed, customer_managed]
+        from_deployment: key_management
+        confirm_in: [production]
+        why: >
+          Inherited. Images are encrypted at rest with a platform key either way;
+          `customer_managed` (Premium) adds the customer's key in a Key Vault with purge
+          protection, an identity that can wrap and unwrap, and a rotation story. **It is set
+          at creation**; a registry that loses its key cannot serve a single layer.
+        renders: customer_managed_key / customerManagedKey
+
+      - id: cmk_key_vault_key_id
+        ask: Which Key Vault key should encrypt the registry?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Encrypted with your key {value}."
+          de: "Verschlüsselt mit eurem Schlüssel {value}."
+        ref: key_vault_key
+        required: true
+        depends_on: { question: key_management, equals: customer_managed }
+        per_environment: true
+        why: >
+          The key must exist, the vault must have soft delete and purge protection, and the
+          registry's user-assigned identity must hold wrap and unwrap on it before the
+          registry is created. The reference is the unversioned key, so a rotation reaches the
+          registry without a change here.
+        renders: customer_managed_key.key_vault_resource_id and key_name / customerManagedKey.keyVaultResourceId and keyName
+
+  # ------------------------------------------------------------ observability
+  - id: observability
+    title: Observability
+    questions:
+      - id: diagnostic_workspace
+        ask: Which Log Analytics workspace should receive diagnostics?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its logs go to {value}."
+          de: "Seine Protokolle gehen in {value}."
+        ref: log_analytics_workspace
+        from_deployment: diagnostics_destination
+        per_environment: true
+        why: >
+          Inherited: one deployment, one destination. The registry's logs are the record of who
+          pulled and pushed which image - the supply-chain audit.
+        renders: diagnostic_settings / diagnosticSettings
+
+      - id: diagnostic_categories
+        ask: Which log categories should be collected?
+        type: list
+        audience: engineer
+        plain:
+          en: "Logged: {value}."
+          de: "Protokolliert wird: {value}."
+        plain_values:
+          ContainerRegistryRepositoryEvents: { en: "every push, pull and delete of an image", de: "jedes Hochladen, Herunterladen und Löschen eines Images" }
+          ContainerRegistryLoginEvents: { en: "every sign-in to the registry", de: "jede Anmeldung an der Registry" }
+        values: [ContainerRegistryRepositoryEvents, ContainerRegistryLoginEvents]
+        default: [ContainerRegistryRepositoryEvents, ContainerRegistryLoginEvents]
+        why: >
+          Both are the audit: who signed in, and what they did to which repository. The volume
+          is the pull count, which for a registry feeding autoscaling instances can be high,
+          and is why the sign-in log is not an afterthought. The names are the platform's and
+          are checked against `az monitor diagnostic-settings categories list --resource
+          <registry id>` before a render, not remembered.
+        renders: diagnostic_settings.<key>.logs[].category / diagnosticSettings[].logCategoriesAndGroups[].category
+
+      - id: metrics_enabled
+        ask: Should all metrics be collected?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Usage and performance figures are {value}."
+          de: "Nutzungs- und Leistungswerte werden {value}."
+        plain_values:
+          true: { en: "collected", de: "erfasst" }
+          false: { en: "not collected", de: "nicht erfasst" }
+        default: true
+        why: >
+          Storage used, pull and push counts and the successful-pull latency are the inputs to
+          the retention and tier decisions above, and they are cheap.
+        renders: metrics[].category = "AllMetrics" / metricCategories[].category
