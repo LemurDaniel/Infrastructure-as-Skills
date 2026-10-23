@@ -1,0 +1,540 @@
+schema_version: 1
+
+resource: Microsoft.CognitiveServices/accounts
+title: Azure AI Foundry (AI Services account with projects and model deployments)
+
+# The Foundry resource is an account of kind `AIServices`; Azure OpenAI models are deployed
+# into it. A classic `OpenAI` account is the same resource type with a narrower surface and
+# is offered through `kind`. Abbreviation per kind in naming.default.yaml: `aif` for
+# AIServices, `oai` for OpenAI.
+naming:
+  terraform: "Azure::Microsoft.CognitiveServices/accounts"
+  bicep: "Microsoft.CognitiveServices/accounts"
+  # Bicep assembles the name from vars - this is the prefix it renders. The name doubles
+  # as the custom subdomain (`<name>.cognitiveservices.azure.com`), so it is global.
+  abbreviation: "aif"
+
+boundaries:
+  - "Does not create the resource group. Expects one from the spec's context."
+  - "Does not create private DNS zones - shared infrastructure, owned by a pattern or the platform. An AI Services account needs several privatelink zones (cognitiveservices, openai, services.ai); the platform owns all of them."
+  - "Does not create the Log Analytics workspace it routes diagnostics to."
+  - "Does not create the storage account, search service or Cosmos DB that a Foundry project connects to - connections and the roles behind them are wiring between resources, owned by a pattern."
+  - "Does not render agents, prompt flows, evaluations or fine-tuning jobs - application content, not infrastructure."
+  - "Does not render a custom content-filter policy. `content_filter` names a built-in policy; defining one is a decision with its own question set."
+  - "Does not cover other Cognitive Services kinds (Speech, Vision, Language, Document Intelligence). They decide differently and have no question set."
+  - "Does not create an Azure Machine Learning hub or workspace; the account-based Foundry resource needs none."
+
+groups:
+
+  # ---------------------------------------------------------------- placement
+  - id: placement
+    title: Placement
+    questions:
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
+        audience: engineer
+        plain:
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
+        values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
+        required: true
+        from_context: true
+        why: >
+          Drives the rendered name and the strictness of several defaults below.
+          Nothing sensible can be guessed.
+        renders: naming parameter `environment`, and the tag of that name where the repository uses one
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
+        required: true
+        from_context: true
+        why: >
+          **Which models exist depends on the region**, and so does their quota: a model, a
+          version and a deployment type are offered per region, and the region is the one
+          decision that can make the model list in `model_deployments` impossible. Check the
+          region's offer before the interview ends, not at apply.
+        renders: location
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
+        ref: resource_group
+        required: true
+        from_context: true
+        per_environment: true
+        why: >
+          The account is placed into an existing group. Creating one here would make this set
+          own a lifecycle wider than the resource it describes.
+        renders: parent_id (AVM Terraform, AzAPI) / implicit in Bicep scope
+
+  # ------------------------------------------------------------------ account
+  - id: account
+    title: Account and projects
+    questions:
+      - id: kind
+        ask: Which kind of AI account?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The account is {value}."
+          de: "Das Konto ist {value}."
+        plain_values:
+          AIServices: { en: "an AI Foundry resource, which also offers projects, agents and the other AI services", de: "eine AI-Foundry-Ressource, die auch Projekte, Agenten und die weiteren KI-Dienste bietet" }
+          OpenAI: { en: "a classic Azure OpenAI resource, models only", de: "eine klassische Azure-OpenAI-Ressource, nur Modelle" }
+        values: [AIServices, OpenAI]
+        default: AIServices
+        why: >
+          `AIServices` is the current resource: it carries the OpenAI models and the other
+          model catalogue, and the projects that Foundry's agents and evaluations live in.
+          `OpenAI` is the older, narrower account and stays for a deployment that must match
+          one that exists. **The kind is fixed at creation**; changing it is a new account.
+        renders: kind
+
+      - id: sku_name
+        ask: Which pricing tier?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The account uses the pricing tier {value}."
+          de: "Das Konto nutzt die Preisstufe {value}."
+        plain_values:
+          S0: { en: "S0, the standard paid tier - the only one that has projects and private endpoints in production", de: "S0, die bezahlte Standardstufe" }
+        values: [S0]
+        default: S0
+        why: >
+          S0 is the only tier a Foundry or OpenAI account takes for real work; the free
+          tiers have no private endpoints, no deployments of the large models and a hard
+          monthly cap. What an account costs comes from the model deployments, not from the
+          account, which is why the tier is a constant and the capacity is a question.
+        renders: sku_name / sku
+
+      - id: project_management
+        ask: Should the account hold projects?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The account {value}."
+          de: "Das Konto {value}."
+        plain_values:
+          true: { en: "holds Foundry projects, as containers for access, data and cost", de: "enthält Foundry-Projekte als Behälter für Zugriff, Daten und Kosten" }
+          false: { en: "holds no projects and serves only its model deployments", de: "enthält keine Projekte und stellt nur seine Modell-Bereitstellungen bereit" }
+        default: true
+        depends_on: { question: kind, equals: AIServices }
+        why: >
+          A project is the unit Foundry's agents, files and evaluations are scoped to, and
+          the thing access can be granted on without granting the whole account. It is off
+          by default in both modules; a Foundry workload wants it, an application that only
+          calls a model does not. Whether it can be turned on for an existing account is
+          checked against the platform before a render, not assumed; it needs the custom
+          subdomain the render sets.
+        renders: allow_project_management / allowProjectManagement
+
+      - id: projects
+        ask: Which projects should the account hold?
+        type: list
+        audience: engineer
+        plain:
+          en: "The account holds the projects {value}."
+          de: "Das Konto enthält die Projekte {value}."
+        default: []
+        depends_on: { question: project_management, equals: true }
+        why: >
+          One project per workload that needs its own data isolation or cost line; the
+          workload's name is the usual one. **Neither AVM module creates a project** - the
+          Terraform module takes project *names* to associate and the Bicep module has none -
+          so projects are rendered next to the module as child resources
+          (`Microsoft.CognitiveServices/accounts/projects`), each with its own managed
+          identity, which is the identity a project's connections use. An empty list is a
+          valid answer for an account that only hosts models.
+        renders: >
+          terraform: azapi_resource `Microsoft.CognitiveServices/accounts/projects` (module
+          input `default_project` names one); bicep: child resource `accounts/projects`
+
+  # ------------------------------------------------------------------- models
+  - id: models
+    title: Model deployments
+    questions:
+      - id: model_deployments
+        ask: Which models should be deployed?
+        type: list
+        audience: engineer
+        plain:
+          en: "The account serves the models {value}."
+          de: "Das Konto stellt die Modelle {value} bereit."
+        required: true
+        why: >
+          Each entry is a deployment name, a **model, an exact model version** and the
+          capacity in the next question - for example a chat model and an embedding model
+          for a retrieval workload. The plugin cannot choose: the model is the application's
+          design, the available versions move every few months and are looked up against the
+          region's catalogue at render time (`az cognitiveservices model list`), never
+          remembered. A version is pinned, never left to a default, for the reason a runtime
+          version is. With no answer the decision is an `open:` entry owned by the workload
+          owner, blocking apply.
+        renders: cognitive_deployments / deployments[]
+
+      - id: deployment_sku
+        ask: Where may the models process the data?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Requests to the models are processed {value}."
+          de: "Anfragen an die Modelle werden {value} verarbeitet."
+        plain_values:
+          Standard: { en: "in the region only, with the smallest quota and the fewest models", de: "nur in der Region, mit dem kleinsten Kontingent und den wenigsten Modellen" }
+          DataZoneStandard: { en: "anywhere inside the same data zone (for example the EU)", de: "überall innerhalb derselben Datenzone (zum Beispiel der EU)" }
+          GlobalStandard: { en: "anywhere in the world, with the largest quota and the newest models", de: "irgendwo auf der Welt, mit dem größten Kontingent und den neuesten Modellen" }
+        values: [Standard, DataZoneStandard, GlobalStandard]
+        default: DataZoneStandard
+        confirm_in: [production]
+        why: >
+          **This is a data-residency decision, and it is the one the portal makes for you**:
+          the portal's default is `GlobalStandard`, which may process a prompt in any region.
+          Data at rest stays in the account's geography either way, but processing does not,
+          and a prompt is data. `DataZoneStandard` keeps processing inside the data zone, which
+          is what a mandate that names the EU needs, at the price of a smaller catalogue
+          and quota. A customer's `mandates` that name a residency force `Standard` or
+          `DataZoneStandard`; `GlobalStandard` is a recorded departure. Provisioned
+          (reserved) throughput is a different, billed-by-the-hour purchase and is not offered.
+          The default is the guardrails' conservative reading; it is a judgement, written
+          down so a reviewer can disagree.
+        forced_when: >
+          A mandate naming data residency forbids `GlobalStandard`, recorded as forced with
+          the mandate as forced_by
+        renders: cognitive_deployments.<key>.scale.type / deployments[].sku.name
+
+      - id: deployment_capacity
+        ask: How many tokens per minute may each model use?
+        type: int
+        audience: engineer
+        plain:
+          en: "Each model may process up to {value} thousand tokens per minute."
+          de: "Jedes Modell darf bis zu {value} Tausend Token pro Minute verarbeiten."
+        default: 10
+        why: >
+          The unit is thousands of tokens per minute, and for the pay-per-token deployment
+          types it is a **rate limit, not a cost**: nothing is billed for unused capacity,
+          and a deployment that is too low answers 429. It is, however, counted against a
+          per-subscription, per-region, per-model **quota**, and a number the quota does not
+          cover fails the deployment at apply - so a total across all deployments that exceeds
+          the quota is the failure to check, and a quota increase is a request to Microsoft,
+          not a template change. 10 (10,000 tokens a minute) is a start that a real workload
+          raises once measured; it applies to every deployment unless an entry says otherwise.
+        renders: cognitive_deployments.<key>.scale.capacity / deployments[].sku.capacity
+
+      - id: version_upgrade_option
+        ask: What should happen when a model version is retired?
+        type: enum
+        audience: engineer
+        plain:
+          en: "When the model version expires, {value}."
+          de: "Läuft die Modellversion aus, {value}."
+        plain_values:
+          NoAutoUpgrade: { en: "the deployment stops, and someone upgrades it", de: "stoppt die Bereitstellung, und jemand stellt sie um" }
+          OnceCurrentVersionExpired: { en: "it moves to the new default version on that day", de: "wechselt sie an diesem Tag auf die neue Standardversion" }
+          OnceNewDefaultVersionAvailable: { en: "it moves to every new default version as soon as it appears", de: "wechselt sie auf jede neue Standardversion, sobald sie erscheint" }
+        values: [NoAutoUpgrade, OnceCurrentVersionExpired, OnceNewDefaultVersionAvailable]
+        default: OnceCurrentVersionExpired
+        why: >
+          A new model version answers differently, so an upgrade is a change of behaviour that
+          the application did not choose. The pinned version holds until the platform retires
+          it, and only then moves - which is the moment the alternative is an outage.
+          `OnceNewDefaultVersionAvailable` is the Terraform module's default and moves on
+          Microsoft's schedule; `NoAutoUpgrade` is the strict form and turns a retirement into
+          an outage until someone acts. Written on every deployment.
+        renders: cognitive_deployments.<key>.version_upgrade_option / deployments[].versionUpgradeOption
+
+      - id: content_filter
+        ask: Which content filter should the models run behind?
+        type: string
+        audience: engineer
+        plain:
+          en: "Prompts and answers are checked by the content filter {value}."
+          de: "Anfragen und Antworten werden vom Inhaltsfilter {value} geprüft."
+        default: Microsoft.DefaultV2
+        why: >
+          Every deployment runs behind a content-safety policy, and the built-in
+          `Microsoft.DefaultV2` is the standard one: it filters hate, sexual content, violence
+          and self-harm at the medium severity; what else it covers (prompt attacks,
+          protected material) is read from the policy, not assumed. It is named
+          explicitly so that the choice is on the call and not whatever the platform
+          attaches. A less strict filter needs Microsoft's approval, and a custom policy is a
+          separate resource this set does not render. The policy name is looked up in the
+          account's policies before a render.
+        renders: cognitive_deployments.<key>.rai_policy_name / deployments[].raiPolicyName
+
+  # --------------------------------------------------------------- networking
+  - id: networking
+    title: Networking
+    questions:
+      - id: public_network_access
+        ask: Should this account depart from the deployment's exposure posture?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The account is {value}."
+          de: "Das Konto ist {value}."
+        plain_values:
+          disabled: { en: "not reachable from the internet at all", de: "aus dem Internet überhaupt nicht erreichbar" }
+          enabled_with_firewall: { en: "reachable from the internet only from listed addresses", de: "aus dem Internet nur von gelisteten Adressen erreichbar" }
+          enabled: { en: "reachable from the internet", de: "aus dem Internet erreichbar" }
+        values: [disabled, enabled_with_firewall, enabled]
+        from_deployment: network_exposure
+        confirm_in: [production]
+        why: >
+          Asked only as a departure: exposure is a property of the system. `private` is
+          `disabled`, `public` is `enabled_with_firewall`. **Terraform's module defaults to
+          public access on**; Bicep leaves it unset and disables it only when private endpoints
+          are given. A model endpoint reachable from the internet with a key is a billable
+          surface, so the posture is always written. With `disabled` the account answers only
+          through its private endpoint, which is also how the Foundry portal's playground
+          reaches it - from inside the network.
+        renders: >
+          terraform: public_network_access_enabled (bool) and network_acls;
+          bicep: publicNetworkAccess and networkAcls
+
+      - id: private_endpoint_subnet
+        ask: Which subnet should this account's private endpoint live in?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its private connection lands in subnet {value}."
+          de: "Seine private Anbindung landet im Subnetz {value}."
+        ref: subnet
+        from_deployment: private_endpoint_subnet
+        per_environment: true
+        why: >
+          One subnet carries the deployment's private endpoints, so this is inherited. The
+          account has one sub-resource, `account`, but the endpoint writes **three** DNS
+          records - the account's cognitive services, OpenAI and AI services hostnames - so the
+          platform's zones must cover all three; a missing one fails at the first call, not at
+          apply.
+        renders: private_endpoints.<key>.subnet_resource_id / privateEndpoints[].subnetResourceId (service `account`)
+
+      - id: ip_rules
+        ask: Which public IP ranges may reach the account?
+        type: list
+        audience: engineer
+        plain:
+          en: "Public addresses allowed to reach the account: {value}."
+          de: "Öffentliche Adressen, die das Konto erreichen dürfen: {value}."
+        default: []
+        depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        per_environment: true
+        why: >
+          An enumerated allowlist with a default action of `Deny`. A firewall needs the custom
+          subdomain, which the render sets. An empty list denies every public caller, which is
+          valid and deliberate.
+        renders: network_acls.ip_rules / networkAcls.ipRules
+
+      - id: restrict_outbound
+        ask: Should the account's own outgoing calls be limited to named addresses?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The account {value}."
+          de: "Das Konto {value}."
+        plain_values:
+          true: { en: "may call out only to addresses that are explicitly allowed", de: "darf nur Adressen aufrufen, die ausdrücklich erlaubt sind" }
+          false: { en: "may call any address", de: "darf jede Adresse aufrufen" }
+        default: true
+        why: >
+          Stops a prompt-injected or misconfigured tool from sending data to an address of its
+          choosing - the data-exfiltration path of an AI workload. **The Bicep module defaults
+          it to true; Terraform leaves it unset (off)**, so it is written. The allowed names
+          (`allowed_fqdns`) are the workload's, and the usual blocker is a tool that calls a
+          public API - a named departure, not a reason to leave the account open.
+        renders: outbound_network_access_restricted / restrictOutboundNetworkAccess
+
+  # ----------------------------------------------------------------- identity
+  - id: identity
+    title: Identity and access
+    questions:
+      - id: managed_identity
+        ask: Which managed identity should the account carry?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The account has {value}."
+          de: "Das Konto hat {value}."
+        plain_values:
+          none: { en: "no identity of its own", de: "keine eigene Identität" }
+          system_assigned: { en: "its own identity", de: "eine eigene Identität" }
+          user_assigned: { en: "a separately managed identity", de: "eine separat verwaltete Identität" }
+        values: [none, system_assigned, user_assigned]
+        default: system_assigned
+        why: >
+          The account's identity reaches what the account itself depends on: a Key Vault for a
+          customer-managed key, and the storage and search it connects to. Callers use their
+          own identities, not this one. A customer-managed key needs the identity to hold its
+          role on the key before the key is set, which is why that case is `user_assigned`.
+        forced_when: >
+          `key_management: customer_managed` forces `user_assigned`, recorded as forced with
+          `key_management` as forced_by
+        renders: managed_identities / managedIdentities
+
+      - id: user_assigned_identity_ids
+        ask: Which user-assigned identity?
+        type: list
+        audience: engineer
+        plain:
+          en: "It uses the identity {value}."
+          de: "Es nutzt die Identität {value}."
+        ref: user_assigned_identity
+        required: true
+        depends_on: { question: managed_identity, equals: user_assigned }
+        per_environment: true
+        why: The identity must already exist; this set does not create it.
+        renders: managed_identities.user_assigned_resource_ids / managedIdentities.userAssignedResourceIds
+
+      - id: role_assignments
+        ask: Who needs which role on this account?
+        type: list
+        audience: engineer
+        plain:
+          en: "Access rights on the account granted to: {value}."
+          de: "Zugriffsrechte auf das Konto vergeben an: {value}."
+        default: []
+        per_environment: true
+        why: >
+          With keys off, nothing calls a model until a role is assigned, so an empty list is a
+          working account nobody can use, and not an answer: with no consumer named it is an
+          `open:` entry owned by the workload owner, blocking apply. The roles are the narrow
+          ones - `Cognitive Services OpenAI User` for an application that only calls models,
+          `Azure AI User` for one that also uses projects and agents - and `Cognitive
+          Services Contributor` or an owner role is a departure that names a person. A role
+          that can *list keys* has no business in a keyless account. A pattern fills this
+          from the consumers it knows about.
+        renders: role_assignments / roleAssignments
+
+  # ----------------------------------------------------------------- security
+  - id: security
+    title: Security
+    questions:
+      - id: local_authentication_disabled
+        ask: May clients sign in with the account keys?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Signing in with account keys is {value}; access goes through company accounts."
+          de: "Die Anmeldung mit Kontoschlüsseln ist {value}; der Zugriff läuft über Firmenkonten."
+        plain_values:
+          true: { en: "switched off", de: "abgeschaltet" }
+          false: { en: "possible", de: "möglich" }
+        from_deployment: local_auth
+        confirm_in: [production]
+        why: >
+          Inherited: `local_auth: disabled` renders as `true`. A key is a bearer credential
+          for every model on the account, is not attributable and pays for whatever it
+          is used for. **The modules disagree**: Bicep disables keys by default, Terraform's
+          `local_auth_enabled` defaults on, and the Terraform input is the inverse. The
+          client then needs a token for the `https://cognitiveservices.azure.com` scope and
+          the account's custom subdomain, which is why the subdomain is set.
+        renders: local_auth_enabled (inverse) / disableLocalAuth
+
+      - id: key_management
+        ask: Are the account's encryption keys platform-managed or customer-managed?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          platform_managed: { en: "managed by Azure - encrypted, rotated, no effort on your side", de: "von Azure verwaltet: verschlüsselt, rotiert, kein Aufwand bei euch" }
+          customer_managed: { en: "your own, held in your key vault, so you can revoke them", de: "eure eigenen in eurem Schlüsseltresor, damit ihr sie zurückziehen könnt" }
+        values: [platform_managed, customer_managed]
+        from_deployment: key_management
+        confirm_in: [production]
+        why: >
+          Inherited. It applies to what the account stores - fine-tuned models, uploaded
+          files, project data - not to the prompts passing through, which are not stored.
+          `customer_managed` pulls in a vault with purge protection, an identity that can wrap
+          and unwrap and a rotation story.
+        renders: customer_managed_key / customerManagedKey
+
+      - id: cmk_key_vault_key_id
+        ask: Which Key Vault key should encrypt the account?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Encrypted with your key {value}."
+          de: "Verschlüsselt mit eurem Schlüssel {value}."
+        ref: key_vault_key
+        required: true
+        depends_on: { question: key_management, equals: customer_managed }
+        per_environment: true
+        why: >
+          The key must exist, the vault must have soft delete and purge protection, and the
+          account's user-assigned identity must hold wrap and unwrap on it before the account
+          is created. The reference is the unversioned key, so a rotation reaches the account
+          without a change here.
+        renders: customer_managed_key.key_name and key_vault_resource_id / customerManagedKey.keyName and keyVaultResourceId
+
+  # ------------------------------------------------------------ observability
+  - id: observability
+    title: Observability
+    questions:
+      - id: diagnostic_workspace
+        ask: Which Log Analytics workspace should receive diagnostics?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its logs go to {value}."
+          de: "Seine Protokolle gehen in {value}."
+        ref: log_analytics_workspace
+        from_deployment: diagnostics_destination
+        per_environment: true
+        why: >
+          Inherited: one deployment, one destination. Without a diagnostic setting nobody can
+          say who called a model, how many tokens a caller used or why a call failed.
+        renders: diagnostic_settings / diagnosticSettings
+
+      - id: diagnostic_categories
+        ask: Which log categories should be collected?
+        type: list
+        audience: engineer
+        plain:
+          en: "Logged: {value}."
+          de: "Protokolliert wird: {value}."
+        plain_values:
+          Audit: { en: "changes to the account and who made them", de: "Änderungen am Konto und wer sie gemacht hat" }
+          RequestResponse: { en: "every request to the models, with its caller, size and result (not the text)", de: "jede Anfrage an die Modelle mit Aufrufer, Größe und Ergebnis (nicht der Text)" }
+          AzureOpenAIRequestUsage: { en: "the tokens each call used", de: "die von jedem Aufruf verbrauchten Token" }
+          Trace: { en: "internal platform traces", de: "interne Plattform-Traces" }
+        values: [Audit, RequestResponse, AzureOpenAIRequestUsage, Trace]
+        default: [Audit, RequestResponse, AzureOpenAIRequestUsage]
+        why: >
+          Audit and request logs are the record of who called what and what it cost, and
+          they hold metadata, not prompt or answer text - the text is not logged by this
+          setting, which is the answer to the privacy question that comes first. Usage is the
+          only way to attribute tokens to a caller. `Trace` is for a support case and is the
+          volume line. The category names are the platform's, differ between OpenAI and AI
+          Services accounts, and are checked against `az monitor diagnostic-settings
+          categories list --resource <account id>` before a render, not remembered.
+        renders: diagnostic_settings.<key>.logs[].category / diagnosticSettings[].logCategoriesAndGroups[].category
+
+      - id: metrics_enabled
+        ask: Should all metrics be collected?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Usage and performance figures are {value}."
+          de: "Nutzungs- und Leistungswerte werden {value}."
+        plain_values:
+          true: { en: "collected", de: "erfasst" }
+          false: { en: "not collected", de: "nicht erfasst" }
+        default: true
+        why: >
+          Processed tokens, the throttled-request count and the latency per deployment are
+          what decide whether `deployment_capacity` was right, and they are cheap.
+        renders: metrics[].category = "AllMetrics" / metricCategories[].category

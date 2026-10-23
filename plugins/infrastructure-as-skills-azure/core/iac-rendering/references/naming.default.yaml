@@ -67,6 +67,15 @@ patterns:
     Microsoft.DocumentDB/databaseAccounts:
       default: "<TYPE>-<ENVIRONMENT>-<NAME>-<UNIQUE_ID_4>"
 
+    # Cognitive Services / AI Foundry account: 2-64 chars, alphanumerics and hyphens; the name is the
+    # custom subdomain, so it is global.
+    Microsoft.CognitiveServices/accounts:
+      default: "<TYPE>-<ENVIRONMENT>-<NAME>-<UNIQUE_ID_4>"
+
+    # Azure AI Search: 2-60 chars, lowercase letters, digits, hyphens; global.
+    Microsoft.Search/searchServices:
+      default: "<TYPE>-<ENVIRONMENT>-<NAME>-<UNIQUE_ID_4>"
+
     # ----- Storage ---------------------------------------------------------
     # Storage account: 3-24 chars, alphanumeric only (no hyphens), lowercase.
     Microsoft.Storage/storageAccounts:
@@ -207,6 +216,7 @@ abbreviations:
     #//// AI + machine learning
     Microsoft.CognitiveServices/accounts::CognitiveServices: ais
     Microsoft.CognitiveServices/accounts::AIServices: aif
+    Microsoft.CognitiveServices/accounts::default: aif
     Microsoft.CognitiveServices/accounts/projects::default: proj
     Microsoft.CognitiveServices/accounts::ComputerVision: cv
     Microsoft.CognitiveServices/accounts::ContentModerator: cm

@@ -1,0 +1,415 @@
+schema_version: 1
+
+resource: Microsoft.Search/searchServices
+title: Azure AI Search service
+
+naming:
+  terraform: "Azure::Microsoft.Search/searchServices"
+  bicep: "Microsoft.Search/searchServices"
+  # Bicep assembles the name from vars - this is the prefix it renders. The name is
+  # global, lowercase, 2-60 characters.
+  abbreviation: "srch"
+
+boundaries:
+  - "Does not create the resource group. Expects one from the spec's context."
+  - "Does not create private DNS zones - shared infrastructure, owned by a pattern or the platform."
+  - "Does not create the Log Analytics workspace it routes diagnostics to."
+  - "Does not create indexes, indexers, data sources, skillsets or synonym maps - they are data-plane content of the application, not ARM resources."
+  - "Does not create shared private link resources to the data sources an indexer reads (storage, Cosmos DB, SQL) - that is wiring between resources, owned by a pattern."
+  - "Does not grant the roles on the services an indexer reads from. `role_assignments` is for who may use this service."
+  - "Does not create a customer-managed key; it records whether the service enforces one."
+
+groups:
+
+  # ---------------------------------------------------------------- placement
+  - id: placement
+    title: Placement
+    questions:
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
+        audience: engineer
+        plain:
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
+        values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
+        required: true
+        from_context: true
+        why: >
+          Drives the rendered name and the strictness of several defaults below.
+          Nothing sensible can be guessed.
+        renders: naming parameter `environment`, and the tag of that name where the repository uses one
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
+        required: true
+        from_context: true
+        why: >
+          Part of the rendered name. Availability zones, the higher tiers and semantic
+          ranking are not offered in every region, and a region short of capacity can
+          refuse a new service of a given tier.
+        renders: location
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
+        ref: resource_group
+        required: true
+        from_context: true
+        per_environment: true
+        why: >
+          The service is placed into an existing group. Creating one here would make
+          this set own a lifecycle wider than the resource it describes.
+        renders: resource_group_name (AVM Terraform, azurerm-based) / implicit in Bicep scope
+
+  # ------------------------------------------------------------------ service
+  - id: service
+    title: Service tier and capacity
+    questions:
+      - id: sku
+        ask: Which service tier?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The search service is the {value} tier."
+          de: "Der Suchdienst hat die Stufe {value}."
+        plain_values:
+          basic: { en: "basic, small and cheap, one partition", de: "Basic, klein und günstig, eine Partition" }
+          standard: { en: "standard, the normal production tier", de: "Standard, die übliche Produktionsstufe" }
+          standard2: { en: "standard 2, four times the capacity of standard", de: "Standard 2, die vierfache Kapazität von Standard" }
+          standard3: { en: "standard 3, eight times the capacity of standard", de: "Standard 3, die achtfache Kapazität von Standard" }
+        values: [basic, standard, standard2, standard3]
+        default: standard
+        non_production_default: basic
+        confirm_in: [production]
+        why: >
+          Free is left out on purpose: it has no private endpoint, no replicas and is shared.
+          **The tier is fixed at creation** - a service cannot move between tiers, it is
+          rebuilt and every index reloaded - so the tier is the decision to take slowly.
+          Standard is the production floor: it allows several partitions and the full
+          replica range, and both AVM modules default to it. Basic is a cost knob for a stage
+          nobody depends on (`non_production_default`), at the price that a stage on basic
+          does not rehearse partition scaling. Storage-optimised tiers are for very large,
+          slowly changing indexes and are not offered.
+        renders: sku / sku.name
+
+      - id: replica_count
+        ask: How many copies of the index should serve queries?
+        type: int
+        audience: engineer
+        plain:
+          en: "{value} copies of the index answer queries."
+          de: "{value} Kopien des Index beantworten Anfragen."
+        derived_from:
+          question: outage_impact
+          map: { tolerable: 1, disruptive: 2, critical: 3 }
+        non_production_default: 1
+        confirm_in: [production]
+        why: >
+          Derived from how bad an outage is. One replica is a single point of failure that is
+          also unavailable during platform updates; **two keep queries running, three keep
+          indexing running as well** - those are the numbers the service level is stated for.
+          Replicas are billed per search unit, so this is the cost of the answer. They can
+          be changed in place. The modules disagree on a default: Terraform 1, Bicep 3, so
+          it is always written. `basic` allows at most 3.
+        renders: replica_count / replicaCount
+
+      - id: partition_count
+        ask: How many partitions should the index be spread over?
+        type: int
+        audience: engineer
+        plain:
+          en: "The index data is spread over {value} partition(s)."
+          de: "Die Indexdaten sind auf {value} Partition(en) verteilt."
+        default: 1
+        why: >
+          A partition adds storage and indexing speed, not query availability - that is the
+          replicas' job. One is right until the documents (and their vectors) no longer fit
+          or indexing is too slow; both are measured, not guessed, and the count can be raised
+          in place, never lowered below what the data needs. Only 1, 2, 3, 4, 6 or 12 are valid. Search units are partitions times
+          replicas, which is what is billed. More than one needs a tier above basic.
+        renders: partition_count / partitionCount
+
+      - id: semantic_ranker
+        ask: Should results be re-ranked by meaning?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Re-ranking of results by meaning is {value}."
+          de: "Die Neubewertung der Ergebnisse nach Bedeutung ist {value}."
+        plain_values:
+          disabled: { en: "off", de: "aus" }
+          free: { en: "on, within a small free monthly allowance", de: "an, im Rahmen eines kleinen kostenlosen Monatskontingents" }
+          standard: { en: "on, billed per thousand queries", de: "an, abgerechnet pro tausend Anfragen" }
+        values: [disabled, free, standard]
+        default: free
+        why: >
+          The semantic ranker is what makes retrieval for a chat application noticeably
+          better and costs nothing within the free allowance (1,000 queries a month). Beyond
+          that it is billed per query, so a production system with real traffic says
+          `standard` deliberately. `disabled` for a pure keyword or vector workload.
+        renders: semantic_search_sku / semanticSearch
+
+  # --------------------------------------------------------------- networking
+  - id: networking
+    title: Networking
+    questions:
+      - id: public_network_access
+        ask: Should this service depart from the deployment's exposure posture?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The search service is {value}."
+          de: "Der Suchdienst ist {value}."
+        plain_values:
+          disabled: { en: "not reachable from the internet at all", de: "aus dem Internet überhaupt nicht erreichbar" }
+          enabled_with_firewall: { en: "reachable from the internet only from listed addresses", de: "aus dem Internet nur von gelisteten Adressen erreichbar" }
+          enabled: { en: "reachable from the internet", de: "aus dem Internet erreichbar" }
+        values: [disabled, enabled_with_firewall, enabled]
+        from_deployment: network_exposure
+        confirm_in: [production]
+        why: >
+          Asked only as a departure: exposure is a property of the system. `private` is
+          `disabled`, `public` is `enabled_with_firewall`. **Both modules default to public
+          access on** (Terraform `true`, Bicep `Enabled`), so the posture is always written.
+          With `disabled` the service answers only through its private endpoint, which also
+          closes the portal's index explorer for anyone outside the network.
+        renders: >
+          terraform: public_network_access_enabled (bool) and allowed_ips;
+          bicep: publicNetworkAccess and networkRuleSet.ipRules
+
+      - id: private_endpoint_subnet
+        ask: Which subnet should this service's private endpoint live in?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its private connection lands in subnet {value}."
+          de: "Seine private Anbindung landet im Subnetz {value}."
+        ref: subnet
+        from_deployment: private_endpoint_subnet
+        per_environment: true
+        why: >
+          One subnet carries the deployment's private endpoints, so this is inherited. The
+          service has one sub-resource, `searchService`.
+        renders: private_endpoints.<key>.subnet_resource_id / privateEndpoints[].subnetResourceId (service `searchService`)
+
+      - id: ip_rules
+        ask: Which public IP ranges may reach the service?
+        type: list
+        audience: engineer
+        plain:
+          en: "Public addresses allowed to reach the search service: {value}."
+          de: "Öffentliche Adressen, die den Suchdienst erreichen dürfen: {value}."
+        default: []
+        depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        per_environment: true
+        why: >
+          An enumerated allowlist. An empty list with the firewall on denies every public
+          caller, which is valid and deliberate. `0.0.0.0/0` is not an allowlist and is
+          rejected by the guardrails.
+        renders: allowed_ips / networkRuleSet.ipRules
+
+      - id: network_rule_bypass
+        ask: May trusted Azure services reach the service past its firewall?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Trusted Azure services {value} past the search service's firewall."
+          de: "Vertrauenswürdige Azure-Dienste {value} an der Firewall des Suchdienstes vorbei."
+        plain_values:
+          None: { en: "may not pass", de: "dürfen nicht" }
+          AzureServices: { en: "may pass", de: "dürfen" }
+        values: [None, AzureServices]
+        default: None
+        why: >
+          The bypass lets Microsoft services that call the service as themselves (an Azure
+          OpenAI "on your data" connection, for one) past the firewall. Closed by default; a
+          consumer that needs it is named here. It is not how an indexer reaches a private
+          data source - that is a shared private link, the pattern's wiring.
+        renders: network_rule_bypass_option / networkRuleSet.bypass
+
+  # ----------------------------------------------------------------- identity
+  - id: identity
+    title: Identity and access
+    questions:
+      - id: managed_identity
+        ask: Which managed identity should the service carry?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The search service has {value}."
+          de: "Der Suchdienst hat {value}."
+        plain_values:
+          none: { en: "no identity of its own", de: "keine eigene Identität" }
+          system_assigned: { en: "its own identity", de: "eine eigene Identität" }
+          user_assigned: { en: "a separately managed identity", de: "eine separat verwaltete Identität" }
+        values: [none, system_assigned, user_assigned]
+        default: system_assigned
+        why: >
+          With keys off, an indexer reads its data source - storage, Cosmos DB - and a skillset
+          calls its model through the service's own identity, so it has one by default. It is
+          the identity the data source's role (`Storage Blob Data Reader`, a Cosmos DB data
+          role) is granted to, which the pattern wires. `user_assigned` for an identity that
+          must hold those roles before the service exists.
+        renders: managed_identities / managedIdentities
+
+      - id: user_assigned_identity_ids
+        ask: Which user-assigned identity?
+        type: list
+        audience: engineer
+        plain:
+          en: "It uses the identity {value}."
+          de: "Es nutzt die Identität {value}."
+        ref: user_assigned_identity
+        required: true
+        depends_on: { question: managed_identity, equals: user_assigned }
+        per_environment: true
+        why: The identity must already exist; this set does not create it.
+        renders: managed_identities.user_assigned_resource_ids / managedIdentities.userAssignedResourceIds
+
+      - id: role_assignments
+        ask: Who needs which role on this service?
+        type: list
+        audience: engineer
+        plain:
+          en: "Access rights on the search service granted to: {value}."
+          de: "Zugriffsrechte auf den Suchdienst vergeben an: {value}."
+        default: []
+        per_environment: true
+        why: >
+          With keys off, nothing reads or writes an index until a role is assigned, so an
+          empty list is a working service nobody can use, and not an answer: with no
+          consumer named it is an `open:` entry owned by the workload owner, blocking apply.
+          The roles are the narrow ones - `Search Index Data Reader` for a query client,
+          `Search Index Data Contributor` for whatever loads documents, `Search Service
+          Contributor` for whatever manages indexes and indexers. A pattern fills this from
+          the consumers it knows about.
+        renders: role_assignments / roleAssignments
+
+  # ----------------------------------------------------------------- security
+  - id: security
+    title: Security
+    questions:
+      - id: local_authentication_disabled
+        ask: May clients sign in with API keys?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Signing in with API keys is {value}; access goes through company accounts."
+          de: "Die Anmeldung mit API-Schlüsseln ist {value}; der Zugriff läuft über Firmenkonten."
+        plain_values:
+          true: { en: "switched off", de: "abgeschaltet" }
+          false: { en: "possible", de: "möglich" }
+        from_deployment: local_auth
+        confirm_in: [production]
+        why: >
+          Inherited: `local_auth: disabled` renders as `true`. An admin key can read, change
+          and delete every index and cannot be attributed. **The modules disagree**: the Bicep
+          module disables keys by default, the Terraform module leaves them on, and
+          Terraform's input is the inverse (`local_authentication_enabled`). A client then
+          authenticates with a role (`Search Index Data Reader`).
+        renders: local_authentication_enabled (inverse) / disableLocalAuth
+
+      - id: key_management
+        ask: Are the service's encryption keys platform-managed or customer-managed?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          platform_managed: { en: "managed by Azure - encrypted, rotated, no effort on your side", de: "von Azure verwaltet: verschlüsselt, rotiert, kein Aufwand bei euch" }
+          customer_managed: { en: "your own, held in your key vault, so you can revoke them", de: "eure eigenen in eurem Schlüsseltresor, damit ihr sie zurückziehen könnt" }
+        values: [platform_managed, customer_managed]
+        from_deployment: key_management
+        confirm_in: [production]
+        why: >
+          Inherited. Search encrypts per object (each index, synonym map, indexer with its own
+          key from the application), not per service, so `customer_managed` is expressed here
+          as the **enforcement policy** only: the service reports or rejects objects that are
+          not encrypted with a customer key. The keys themselves are the application's, created
+          with the index, and the service identity needs wrap and unwrap on them.
+        renders: whether `cmk_enforcement` is asked at all
+
+      - id: cmk_enforcement
+        ask: Should the service refuse objects that are not encrypted with a customer key?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Objects not encrypted with your own key are {value}."
+          de: "Objekte, die nicht mit eurem eigenen Schlüssel verschlüsselt sind, werden {value}."
+        plain_values:
+          true: { en: "flagged as non-compliant", de: "als nicht konform markiert" }
+          false: { en: "accepted without comment", de: "kommentarlos akzeptiert" }
+        default: false
+        depends_on: { question: key_management, equals: customer_managed }
+        why: >
+          The enforcement setting reports a non-compliant object; it does not stop its
+          creation. The compliance state is what an auditor reads, and it needs a policy to act
+          on it. Default false, because turning it on before the application creates its
+          indexes with a key marks all of them. Raised once the indexes carry a key.
+        renders: customer_managed_key_enforcement_enabled / cmkEnforcement (`Enabled`, `Disabled`)
+
+  # ------------------------------------------------------------ observability
+  - id: observability
+    title: Observability
+    questions:
+      - id: diagnostic_workspace
+        ask: Which Log Analytics workspace should receive diagnostics?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its logs go to {value}."
+          de: "Seine Protokolle gehen in {value}."
+        ref: log_analytics_workspace
+        from_deployment: diagnostics_destination
+        per_environment: true
+        why: >
+          Inherited: one deployment, one destination. Without a diagnostic setting a failed
+          query or a throttled indexer leaves no trace beyond the client's own log.
+        renders: diagnostic_settings / diagnosticSettings
+
+      - id: diagnostic_categories
+        ask: Which log categories should be collected?
+        type: list
+        audience: engineer
+        plain:
+          en: "Logged: {value}."
+          de: "Protokolliert wird: {value}."
+        plain_values:
+          OperationLogs: { en: "every query and every change to indexes and indexers", de: "jede Abfrage und jede Änderung an Indizes und Indexern" }
+        values: [OperationLogs]
+        default: [OperationLogs]
+        why: >
+          The service has one log category and it is the audit and the query log in one: who
+          queried which index, who changed a key, which indexer failed. The query text is
+          logged, so it can hold what a user typed. The name is the platform's and is checked
+          against `az monitor diagnostic-settings categories list --resource <service id>`
+          before a render, not remembered.
+        renders: diagnostic_settings.<key>.logs[].category / diagnosticSettings[].logCategoriesAndGroups[].category
+
+      - id: metrics_enabled
+        ask: Should all metrics be collected?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Usage and performance figures are {value}."
+          de: "Nutzungs- und Leistungswerte werden {value}."
+        plain_values:
+          true: { en: "collected", de: "erfasst" }
+          false: { en: "not collected", de: "nicht erfasst" }
+        default: true
+        why: >
+          Search latency, queries per second and the throttled-query percentage are what
+          decide whether the replica and partition counts above were right, and they are
+          cheap.
+        renders: metrics[].category = "AllMetrics" / metricCategories[].category

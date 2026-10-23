@@ -1,6 +1,6 @@
 ---
 name: azure-resources
-description: Routes a request for an Azure resource to the question set that decides it, for Terraform or Bicep. Storage (storage account, blob, ADLS Gen2, data lake, file share, queue), network (vnet, subnet, address space, private endpoint), observability (Log Analytics workspace, log retention, diagnostics), compute (App Service, web app, App Service plan), security (Key Vault, secrets, managed identity), data (Cosmos DB, NoSQL). Renders Azure Verified Modules (AVM) first, authored resources as fallback. Use whenever one of these is created, changed, reviewed or ported between targets.
+description: Routes a request for an Azure resource to the question set that decides it, for Terraform or Bicep. Storage (storage account, blob, ADLS Gen2, data lake, file share, queue), network (vnet, subnet, address space, private endpoint), observability (Log Analytics workspace, log retention, diagnostics), compute (App Service, web app, App Service plan), security (Key Vault, secrets, managed identity), data (Cosmos DB, NoSQL), ai (AI Foundry, Azure OpenAI, AI Search). Renders Azure Verified Modules (AVM) first, authored resources as fallback. Use whenever one of these is created, changed, reviewed or ported between targets.
 ---
 
 # Azure resources
@@ -27,6 +27,7 @@ here never crowds out the description of how the protocol works.
 | compute | App Service (plan and web app); function apps, Container Apps planned | [resources/compute/routing.md](../../resources/compute/routing.md) |
 | security | Key Vault; user-assigned managed identity | [resources/security/routing.md](../../resources/security/routing.md) |
 | data | Cosmos DB (API for NoSQL); SQL, PostgreSQL planned | [resources/data/routing.md](../../resources/data/routing.md) |
+| ai | AI Foundry / Azure OpenAI with model deployments; AI Search | [resources/ai/routing.md](../../resources/ai/routing.md) |
 
 Read the family's `routing.md`. It names the question set for the request, or says plainly
 that none exists yet.

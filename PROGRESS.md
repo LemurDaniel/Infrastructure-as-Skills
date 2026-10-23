@@ -223,9 +223,18 @@ Verified Modules first, authored resources second.
   disagree on consistency and backup-redundancy defaults. The partition key is an `open:`
   entry when nobody answers. Not done: no example, no tests, the throughput of a container is
   one value for all of them, and the diagnostic category names are from memory.
-- **Remaining families for the adessoGPT case**, in order: `ai` (AI
-  Search, Foundry/Azure OpenAI with deployments), `compute` (Container Registry, Container
-  Apps environment, Function App), `observability/application-insights`,
+- **`ai` landed 2026-10-23** (`foundry` 26 questions, `search-service` 20; both checks green;
+  AVM TF cognitiveservices 0.11.1 AzAPI but `azurerm < 5.0`, search 0.3.0 `azurerm ~> 4.0` /
+  Bicep 0.19.1 and 0.13.0). **Found by doing it:** neither Foundry module creates a project
+  (rendered beside the module as `accounts/projects`); the modules disagree on local auth,
+  outbound restriction, replica count. **A judgement to review:** `deployment_sku` defaults to
+  `DataZoneStandard` - the portal's default `GlobalStandard` processes prompts in any region;
+  the owner may want it the other way. The model list is `open:` when nobody answers and is
+  regional (quota, versions) - looked up at render time, never recalled. Not done: no example,
+  no tests, the diagnostic category names (`Audit`, `RequestResponse`, `AzureOpenAIRequestUsage`,
+  `OperationLogs`) are from memory, the project API version is a placeholder.
+- **Remaining families for the adessoGPT case**, in order: `compute` (Container Registry,
+  Container Apps environment, Function App), `observability/application-insights`,
   `network/network-security-group`. Private endpoints and DNS zones are the platform's and
   stay referenced. Then `ROADMAP.md` C1's `data` (Azure SQL, PostgreSQL) and `integration`
   (Service Bus).
