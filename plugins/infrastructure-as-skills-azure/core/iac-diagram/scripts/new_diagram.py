@@ -515,9 +515,13 @@ def main():
         return sum(max(pitch[k] for k in r) for r in rows_of(keys, cols))
 
     cols_c = min(max([len(v) for v in groups.values()] or [1]), 4)
-    # One row where it fits: a line to a service in a second row would run through the first row's icons.
-    cols_p = min(max(len(paas), 1), 8)
-    w_main = max(cols_c * SLOT_W + 4 * PAD, cols_p * SLOT_W + 2 * PAD, min(len(support), 5) * SLOT_W + 2 * PAD, 2 * SLOT_W + 4 * PAD)
+    # Up to five services in one row; more wrap into two, the second row shifted by half a slot, so
+    # that the line to a second-row icon comes down in the gap between two first-row icons and not
+    # through one. A narrower row means a narrower network and less empty space in it.
+    cols_p = len(paas) if len(paas) <= 5 else math.ceil(len(paas) / 2)
+    cols_p = min(max(cols_p, 1), 8)
+    stagger = SLOT_W // 2 if len(paas) > cols_p else 0
+    w_main = max(cols_c * SLOT_W + 4 * PAD, cols_p * SLOT_W + stagger + 2 * PAD, min(len(support), cols_p) * SLOT_W + 2 * PAD, 2 * SLOT_W + 4 * PAD)
 
     # What the spec says each subnet is delegated to wins; the kind's usual delegation is the
     # fallback for a spec that does not say.
@@ -553,7 +557,7 @@ def main():
         vn_h = ZHEAD + rows_height(compute, cols_c) + PAD
     PAAS_TOP, PAAS_TITLE = 14, 26
     paas_h = (PAAS_TOP + rows_height(paas, cols_p) + PAAS_TITLE) if paas else 0
-    cols_s = min(max(len(support), 1), 5)
+    cols_s = min(max(len(support), 1), max(cols_p, 3))
     support_h = (ZHEAD + rows_height(support, cols_s) + PAD) if support else 0
 
     # One bus lane per compute resource that calls PaaS, between the network and the PaaS zone.
@@ -624,12 +628,12 @@ def main():
         icons.append({'id': cid, 'parent': parent, 'x': x, 'y': y, 'w': w, 'h': h, 'style': style, 'value': label,
                       'slot': {'x': slot_x, 'y': slot_y, 'w': SLOT_W, 'h': slot_h}, 'labelBelow': bool(img)})
 
-    def place_grid(keys, parent, gx, gy, cols):
+    def place_grid(keys, parent, gx, gy, cols, stagger=0):
         y = gy
-        for row in rows_of(keys, cols):
+        for r, row in enumerate(rows_of(keys, cols)):
             rh = max(pitch[k] for k in row)
             for c, k in enumerate(row):
-                add_icon(f"res-{k}", parent, gx + c * SLOT_W, y, base(k), labels[k], flagged(k), k in optional, slot_h=rh)
+                add_icon(f"res-{k}", parent, gx + c * SLOT_W + (stagger if r % 2 else 0), y, base(k), labels[k], flagged(k), k in optional, slot_h=rh)
             y += rh
 
     def add_text(cid, parent, x, y, w, h, value, style):
@@ -720,7 +724,7 @@ def main():
         all_private = all(pna(k) == 'disabled' for k in paas)
         title = f"{T['paas']} &#8212; {esc(T['paasPrivate'])}" if all_private else T['paas']
         add_container({'id': 'z-paas', 'parent': 'rg', 'x': main_x, 'y': paas_y, 'w': w_main, 'h': paas_h, 'style': ZONES['paas_in'], 'value': title})
-        place_grid(paas, 'z-paas', main_x + PAD, paas_y + PAAS_TOP, cols_p)
+        place_grid(paas, 'z-paas', main_x + PAD, paas_y + PAAS_TOP, cols_p, stagger)
     if support:
         support_y = paas_y + (paas_h + PAD if paas else 0)
         add_container({'id': 'z-support', 'parent': 'rg', 'x': main_x, 'y': support_y, 'w': w_main, 'h': support_h, 'style': ZONES['paas'], 'value': esc(T['support'])})
