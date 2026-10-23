@@ -1,0 +1,149 @@
+# Rendering a Key Vault as Bicep
+
+Mapping from the question set to the vault. General layout, parameters and naming are in
+[../../../core/iac-rendering/references/bicep-idiom.md](../../../core/iac-rendering/references/bicep-idiom.md).
+
+```bash
+bicep build --stdout modules/key-vault.bicep
+```
+
+## With the AVM module
+
+| Module | Documented against | Resolved |
+|---|---|---|
+| `br/public:avm/res/key-vault/vault:<version>` | **0.14.2** | 2026-10-23 |
+
+Resolve the current version and re-read the README parameters before rendering, as
+[avm.md](../../../core/iac-rendering/references/avm.md) says. Pin the exact version. The Bicep
+module is `Available`, unlike the Terraform one.
+
+### Decision -> module parameter
+
+| Decision | Parameter | Note |
+|---|---|---|
+| `sku` | `sku` | Module default **`premium`**; written |
+| `purge_protection` | `enablePurgeProtection` | Default `true`; written |
+| `soft_delete_retention_days` | `softDeleteRetentionInDays` | Default 90; written. `enableSoftDelete` stays `true` |
+| `rbac_authorization` | `enableRbacAuthorization` | Default `true`; written |
+| `public_network_access` | `publicNetworkAccess: 'Disabled'` / `'Enabled'` | Unset, it is disabled only when private endpoints are set |
+| `public_network_access`, `ip_rules`, `network_acl_bypass` | `networkAcls: { defaultAction, bypass, ipRules: [ { value } ] }` | `defaultAction: 'Deny'` unless `enabled` |
+| `private_endpoint_subnet` | `privateEndpoints: [ { subnetResourceId, service: 'vault' } ]` | |
+| `deployment.private_dns_records: policy` | no `privateDnsZoneGroup` on the endpoint | |
+| `role_assignments` | `roleAssignments: [ { principalId, roleDefinitionIdOrName, principalType } ]` | |
+| `enabled_for_services` | `enableVaultForDeployment`, `enableVaultForDiskEncryption`, `enableVaultForTemplateDeployment` | **`enableVaultForDeployment` defaults to `true`** - written |
+| `customer_managed_keys`, `key_type`, `key_size`, rotation | `keys: [ { name, kty, keySize, rotationPolicy, attributes } ]` | Read member names from the README |
+| `secret_placeholders` | not `secrets` - **see below** | The module requires a `value` |
+| diagnostics | `diagnosticSettings: [ { workspaceResourceId, logCategoriesAndGroups: [ { category } ], metricCategories: [ { category: 'AllMetrics' } ] } ]` | |
+| `deployment.module_telemetry` | `enableTelemetry` | |
+| `context.tags` | `tags` | |
+
+### The call
+
+```bicep
+module vault 'br/public:avm/res/key-vault/vault:0.14.2' = {
+  name: 'key-vault'
+  params: {
+    name: vaultName
+    location: location
+    tags: tags
+
+    // decision: key-vault.vault.sku - the module default is premium
+    sku: 'standard'
+    enablePurgeProtection: true
+    softDeleteRetentionInDays: 90
+    enableRbacAuthorization: true
+
+    // decision: key-vault.networking.public_network_access
+    publicNetworkAccess: 'Disabled'
+    networkAcls: {
+      defaultAction: 'Deny'
+      bypass: 'None'
+      ipRules: []
+    }
+    privateEndpoints: [
+      {
+        name: privateEndpointName
+        service: 'vault'
+        subnetResourceId: privateEndpointSubnetId
+        // private_dns_records: policy - no zone group, the platform policy writes the record
+      }
+    ]
+
+    // decision: key-vault.security.enabled_for_services - the module default for
+    // deployment is true
+    enableVaultForDeployment: false
+    enableVaultForDiskEncryption: false
+    enableVaultForTemplateDeployment: false
+
+    roleAssignments: roleAssignments
+
+    diagnosticSettings: [
+      {
+        workspaceResourceId: diagnosticWorkspaceId
+        logCategoriesAndGroups: [
+          { category: 'AuditEvent' }
+          { category: 'AzurePolicyEvaluationDetails' }
+        ]
+        metricCategories: [ { category: 'AllMetrics' } ]
+      }
+    ]
+    enableTelemetry: true
+  }
+}
+
+output id string = vault.outputs.resourceId
+output uri string = vault.outputs.uri
+```
+
+### Secret placeholders
+
+The module requires a `value` for every secret, and a redeploy writes it as a **new version**,
+so a placeholder passed through `secrets` replaces the real value on every deployment. The
+render keeps placeholders out of the module and creates each one only when it does not exist:
+
+```bicep
+@description('Placeholder secrets that already hold a real value; set by the pipeline from a lookup.')
+param existingSecretNames array = []
+
+resource vaultRef 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
+  name: vaultName
+  dependsOn: [ vault ]
+}
+
+resource placeholder 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = [for name in secretPlaceholders: if (!contains(existingSecretNames, name)) {
+  parent: vaultRef
+  name: name
+  properties: {
+    value: 'placeholder - replace after deployment'
+    contentType: 'placeholder'
+  }
+}]
+```
+
+The pipeline fills `existingSecretNames` from `az keyvault secret list --vault-name ...`
+before the deployment. Without that lookup the safe form is to create placeholders once,
+outside the recurring deployment. The API version is looked up against the compiled module
+rather than recalled.
+
+### Tests
+
+A module call compiles to a nested deployment whose `properties.parameters.<param>.value` is
+the decision, so every decision above is observable in `tests/*.armtest.yaml`
+([bicep-idiom.md](../../../core/iac-rendering/references/bicep-idiom.md#tests)). The
+placeholder resources are matched by their `condition` expression text.
+
+## Authored rendering
+
+The fallback. A single `Microsoft.KeyVault/vaults` with `properties`:
+
+| Decision | Property |
+|---|---|
+| `sku` | `properties.sku: { family: 'A', name }` |
+| `purge_protection` | `properties.enablePurgeProtection` |
+| `soft_delete_retention_days` | `properties.softDeleteRetentionInDays` |
+| `rbac_authorization` | `properties.enableRbacAuthorization` |
+| `public_network_access` | `properties.publicNetworkAccess` (`'Disabled'`, `'Enabled'`) |
+| `network_acl_bypass`, `ip_rules` | `properties.networkAcls: { bypass, defaultAction, ipRules }` |
+| `enabled_for_services` | `properties.enabledForDeployment`, `enabledForDiskEncryption`, `enabledForTemplateDeployment` |
+
+`enablePurgeProtection` may only be `true` or omitted; ARM rejects an explicit `false`.

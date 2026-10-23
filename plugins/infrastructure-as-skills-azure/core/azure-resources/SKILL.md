@@ -1,6 +1,6 @@
 ---
 name: azure-resources
-description: Routes a request for an Azure resource to the question set that decides it, for Terraform or Bicep. Storage (storage account, blob, ADLS Gen2, data lake, file share, queue), network (vnet, subnet, address space, private endpoint), observability (Log Analytics workspace, log retention, diagnostics), compute (App Service, web app, App Service plan). Renders Azure Verified Modules (AVM) first, authored resources as fallback. Use whenever one of these is created, changed, reviewed or ported between targets.
+description: Routes a request for an Azure resource to the question set that decides it, for Terraform or Bicep. Storage (storage account, blob, ADLS Gen2, data lake, file share, queue), network (vnet, subnet, address space, private endpoint), observability (Log Analytics workspace, log retention, diagnostics), compute (App Service, web app, App Service plan), security (Key Vault, secrets, managed identity). Renders Azure Verified Modules (AVM) first, authored resources as fallback. Use whenever one of these is created, changed, reviewed or ported between targets.
 ---
 
 # Azure resources
@@ -25,11 +25,12 @@ here never crowds out the description of how the protocol works.
 | network | virtual networks and subnets; NSGs, peering, route tables planned | [resources/network/routing.md](../../resources/network/routing.md) |
 | observability | Log Analytics workspaces; Application Insights and alerts planned | [resources/observability/routing.md](../../resources/observability/routing.md) |
 | compute | App Service (plan and web app); function apps, Container Apps planned | [resources/compute/routing.md](../../resources/compute/routing.md) |
+| security | Key Vault; user-assigned managed identity | [resources/security/routing.md](../../resources/security/routing.md) |
 
 Read the family's `routing.md`. It names the question set for the request, or says plainly
 that none exists yet.
 
-**A request for a family that is not in this table is said out loud.** Key Vault, SQL,
+**A request for a family that is not in this table is said out loud.** SQL,
 Container Apps, Service Bus — none have a family yet. Generating one from the guardrails
 while this table implies coverage removes the one property that makes this plugin worth
 using, and does it silently. Say that no question set backs it, offer to generate from

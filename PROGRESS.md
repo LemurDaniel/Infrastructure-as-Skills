@@ -199,10 +199,28 @@ Verified Modules first, authored resources second.
   diagram does not draw the pipeline, by the owner's call (not needed). Not yet done: no
   eval case for the delivery questions, and `deploy_mechanism` is a customer question on top
   of an interview already over its six-question budget.
-- Remaining families, in the order `ROADMAP.md` C1 sets: `security` (Key Vault,
-  user-assigned identity), `compute` (Container Apps, function apps), `data` (Azure SQL,
-  PostgreSQL Flexible), `integration` (Service Bus). Key Vault's Terraform AVM module is
-  `Orphaned` in the index — usable, flagged in the handover.
+- **`security` landed 2026-10-23** (`key-vault` 23 questions, `user-assigned-identity` 5; both checks green):
+  taken from the adessoGPT architecture diagram (`adessoGPT-architektur.drawio.png`), a
+  complex case that needs ~10 more resource sets. Owner's call: all Azure resources, family
+  by family, one commit each; the Entra app registration is **not** a resource set - an
+  `open:` entry owned by the identity team. Versions looked up 2026-10-23: Key Vault TF
+  0.12.0 (**Orphaned**, `azurerm`-based, `< 5.0`) / Bicep 0.14.2, identity TF 0.5.3
+  (`azurerm`, `< 5.0`) / Bicep 0.6.0. **Found by doing it:** module defaults diverge from the
+  guardrails again (SKU `premium` in both, `enableVaultForDeployment` true in Bicep, public
+  access true in TF). Owner's addition: `secret_placeholders` - a dummy secret filled in
+  later; **neither module protects the real value from the next deployment**, so the render
+  creates placeholders outside the module (TF `ignore_changes = [value]`; Bicep only when
+  the secret does not exist). Not done: no rendered example, no tests, the diagram has no
+  icons for the two, the diagnostic category names are from memory, and the `keys` member
+  names of both modules are to be read from the README at render time.
+  `check_repo_consistency.py` crashes on Windows (cp1252 decoding of the `claude plugin
+  validate` output) unless run with `PYTHONUTF8=1`.
+- **Remaining families for the adessoGPT case**, in order: `data` (Cosmos DB), `ai` (AI
+  Search, Foundry/Azure OpenAI with deployments), `compute` (Container Registry, Container
+  Apps environment, Function App), `observability/application-insights`,
+  `network/network-security-group`. Private endpoints and DNS zones are the platform's and
+  stay referenced. Then `ROADMAP.md` C1's `data` (Azure SQL, PostgreSQL) and `integration`
+  (Service Bus).
 - **A sandbox subscription for real plans, applies and the deploy agent** (`ROADMAP.md`
   A5, E): the owner sets it up — subscription, federated credential for OIDC, a fenced
   resource group. Not available yet (2026-10-18).
@@ -251,7 +269,7 @@ Verified Modules first, authored resources second.
 Widen the plugin-vs-plain measurement (3 runs per arm, cases on the small decisions, ~$15-25)
 before trusting the pilot. Re-run the eval suite (full, ~$5) against the two rules written after the baseline and
 accept the run if `vague-public-dev` rises without the other two dropping. Then
-`ROADMAP.md` C1: the `security` family (Key Vault, user-assigned identity) and the rest of
+the remaining adessoGPT families (Open, above), and
 `compute` (Container Apps), plus a rendered App Service example with its tests; each with `audience`, `plain`, `per_environment` where it
 applies, both rendering references and a diagram icon. B6's two graders and the
 extension run that writes a further stage's file once its open entries are answered stay
