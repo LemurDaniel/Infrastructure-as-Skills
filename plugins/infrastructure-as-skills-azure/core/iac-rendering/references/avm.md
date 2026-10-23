@@ -80,6 +80,7 @@ current one before rendering (next section).
 | Private endpoint | `avm-res-network-privateendpoint` v0.2.0 | `avm/res/network/private-endpoint` 0.12.1 | Rarely called directly — every resource module carries the interface |
 | Key Vault | `avm-res-keyvault-vault` v0.12.0, **Orphaned** | `avm/res/key-vault/vault` 0.14.2 | Terraform module is **`azurerm`-based** (`>= 4.81, < 5.0`, plus `azapi`, `modtm`, `random`, `time`), takes `resource_group_name`. Module defaults diverge from the guardrails: SKU `premium` in both, `enableVaultForDeployment` true in Bicep, public access true in Terraform. Looked up 2026-10-23 |
 | User-assigned identity | `avm-res-managedidentity-userassignedidentity` v0.5.3 | `avm/res/managed-identity/user-assigned-identity` 0.6.0 | Terraform module `azurerm`-based (`>= 4.60.0, < 5.0.0`). Looked up 2026-10-23 |
+| Cosmos DB account | `avm-res-documentdb-databaseaccount` v0.11.0 | `avm/res/document-db/database-account` 0.21.1 | Terraform module `azurerm`-based (`~> 4.0`); **no input for data-plane role assignments**. The modules disagree on defaults: consistency (`BoundedStaleness` / `Session`), periodic backup redundancy (`Geo` / `Local`). Looked up 2026-10-23 |
 | Resource group | `avm-res-resources-resourcegroup` v0.4.0 | `avm/res/resources/resource-group` 0.4.4 | Not rendered — the deployment set expects the group to exist |
 
 Pattern modules worth knowing when `patterns/` fills: `avm-ptn-network-private-link-private-dns-zones`

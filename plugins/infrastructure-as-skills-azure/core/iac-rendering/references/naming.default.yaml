@@ -63,6 +63,10 @@ patterns:
     Microsoft.KeyVault/vaults:
       default: "<TYPE>-<ENVIRONMENT>-<NAME>-<UNIQUE_ID_4>"
 
+    # Cosmos DB account (NoSQL): 3-44 chars, lowercase letters, digits, hyphens; global.
+    Microsoft.DocumentDB/databaseAccounts:
+      default: "<TYPE>-<ENVIRONMENT>-<NAME>-<UNIQUE_ID_4>"
+
     # ----- Storage ---------------------------------------------------------
     # Storage account: 3-24 chars, alphanumeric only (no hyphens), lowercase.
     Microsoft.Storage/storageAccounts:
@@ -340,6 +344,7 @@ abbreviations:
     Microsoft.Sql/servers/elasticpool::default: sqlep
 
     Microsoft.DocumentDB/databaseAccounts/sqlDatabases::default: cosmos
+    Microsoft.DocumentDB/databaseAccounts::default: cosno
     # DocumentDB/databaseAccounts::default: coscas
     # DocumentDB/databaseAccounts::default: cosmon
     # DocumentDb/databaseAccounts::default: cosno

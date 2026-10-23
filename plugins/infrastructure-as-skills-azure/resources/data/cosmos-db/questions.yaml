@@ -1,0 +1,675 @@
+schema_version: 1
+
+resource: Microsoft.DocumentDB/databaseAccounts
+title: Azure Cosmos DB account (API for NoSQL)
+
+naming:
+  terraform: "Azure::Microsoft.DocumentDB/databaseAccounts"
+  bicep: "Microsoft.DocumentDB/databaseAccounts"
+  # Bicep assembles the name from vars - this is the prefix it renders. The name is
+  # global, lowercase, 3-44 characters.
+  abbreviation: "cosno"
+
+boundaries:
+  - "Covers the API for NoSQL only. MongoDB, Cassandra, Gremlin and Table accounts decide differently (local authentication, role model, consistency) and have no question set."
+  - "Does not create the resource group. Expects one from the spec's context."
+  - "Does not create private DNS zones - shared infrastructure, owned by a pattern or the platform."
+  - "Does not create the Log Analytics workspace it routes diagnostics to."
+  - "Does not create the Key Vault or the key a customer-managed key points at, nor the identity that unwraps it - those are the security family's."
+  - "Does not size or tune a container's indexing policy, and does not render stored procedures, triggers or user-defined functions - application code, not infrastructure."
+  - "Does not create Synapse Link, the dedicated gateway or a vCore/MongoDB cluster (`Microsoft.DocumentDB/mongoClusters` is a different resource)."
+
+groups:
+
+  # ---------------------------------------------------------------- placement
+  - id: placement
+    title: Placement
+    questions:
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
+        audience: engineer
+        plain:
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
+        values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
+        required: true
+        from_context: true
+        why: >
+          Drives the rendered name and the strictness of several defaults below.
+          Nothing sensible can be guessed.
+        renders: naming parameter `environment`, and the tag of that name where the repository uses one
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
+        required: true
+        from_context: true
+        why: >
+          The primary (write) region and part of the rendered name. Zone redundancy
+          is not available in every region, and a region that is short of capacity can
+          refuse a new zone-redundant account.
+        renders: location, and the failover location with priority 0
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
+        ref: resource_group
+        required: true
+        from_context: true
+        per_environment: true
+        why: >
+          The account is placed into an existing group. Creating one here would make
+          this set own a lifecycle wider than the resource it describes.
+        renders: resource_group_name (AVM Terraform, azurerm-based) / implicit in Bicep scope
+
+  # ------------------------------------------------------------------ account
+  - id: account
+    title: Account and capacity
+    questions:
+      - id: capacity_mode
+        ask: Is the throughput reserved, or paid per request?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Capacity is {value}."
+          de: "Die Kapazität ist {value}."
+        plain_values:
+          provisioned: { en: "reserved up front and billed by the hour, with a guaranteed rate", de: "vorab reserviert und stundenweise berechnet, mit garantierter Rate" }
+          serverless: { en: "billed per request, nothing when idle, with a lower rate ceiling", de: "pro Anfrage berechnet, nichts im Leerlauf, mit niedrigerer Obergrenze" }
+        values: [provisioned, serverless]
+        default: provisioned
+        non_production_default: serverless
+        confirm_in: [production]
+        why: >
+          Serverless costs nothing while idle and suits a stage that is used in bursts;
+          it has a per-container ceiling, a single region and no autoscale, so it is the
+          wrong shape for a system that has to hold a rate under load. **The mode is
+          fixed at creation**: an account does not convert in place, it is migrated. A
+          cost knob, which is the only reason a stage may differ - but a development
+          stage on serverless does not rehearse the throttling behaviour of the
+          provisioned one, which is the price of the saving and the reason the default is
+          not serverless everywhere.
+        forced_when: >
+          `serverless` forces `geo_replicas` empty, `throughput_mode` out of the
+          question and `zone_redundant` to what the region offers; recorded as forced
+          with `capacity_mode` as forced_by
+        renders: capabilities (`EnableServerless`) / capacityMode
+
+      - id: throughput_mode
+        ask: Should the throughput follow the load, or stay at a fixed rate?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Throughput {value}."
+          de: "Der Durchsatz {value}."
+        plain_values:
+          autoscale: { en: "follows the load between a tenth of the ceiling and the ceiling", de: "folgt der Last zwischen einem Zehntel der Obergrenze und der Obergrenze" }
+          manual: { en: "stays at a fixed rate that is paid for around the clock", de: "bleibt auf einer festen Rate, die rund um die Uhr bezahlt wird" }
+        values: [autoscale, manual]
+        default: autoscale
+        depends_on: { question: capacity_mode, equals: provisioned }
+        why: >
+          Autoscale scales between 10% and 100% of the chosen maximum, bills the highest
+          rate used in each hour, and removes the throttling a fixed rate that is too low
+          produces - at a per-RU price about one and a half times the manual one. Manual
+          is cheaper for a steady load that is measured, and wrong for a new system whose
+          load is a guess. It is set when a database or container is created and cannot
+          be switched by the template afterwards without a replace.
+        renders: autoscale_settings / autoscaleSettings, or throughput
+
+      - id: max_throughput
+        ask: What is the highest throughput the data may use?
+        type: int
+        audience: engineer
+        plain:
+          en: "Throughput is capped at {value} request units per second per container."
+          de: "Der Durchsatz ist auf {value} Anfrageeinheiten pro Sekunde je Container begrenzt."
+        default: 1000
+        depends_on: { question: capacity_mode, equals: provisioned }
+        why: >
+          1,000 RU/s is the lowest autoscale maximum (it scales between 100 and 1,000) and
+          the lowest cost; a container that needs more says so by being throttled (429),
+          and raising the maximum is an in-place edit. Starting low is deliberate: the cost
+          of a number that is too high is paid every hour, the cost of one that is too low
+          is a visible, fixable signal. Multiples of 1,000.
+        renders: autoscale_settings.max_throughput / autoscaleSettings.maxThroughput, or throughput (manual)
+
+      - id: total_throughput_limit
+        ask: Should the whole account have a throughput ceiling?
+        type: int
+        audience: engineer
+        plain:
+          en: "The account as a whole may use at most {value} request units per second (-1: no limit)."
+          de: "Das gesamte Konto darf höchstens {value} Anfrageeinheiten pro Sekunde nutzen (-1: keine Grenze)."
+        default: -1
+        depends_on: { question: capacity_mode, equals: provisioned }
+        why: >
+          A guard against the runaway case: a container created with a huge autoscale
+          maximum by a script or a mistake. `-1` is no limit and is the module default;
+          a number is a budget decision the owner makes, and the plugin cannot guess one.
+          Requests above it fail to create the database or container instead of billing.
+        renders: capacity.total_throughput_limit / totalThroughputLimit
+
+      - id: free_tier
+        ask: Should the account use the free tier?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The monthly free allowance of throughput and storage is {value}."
+          de: "Das monatliche Freikontingent an Durchsatz und Speicher ist {value}."
+        plain_values:
+          true: { en: "used", de: "genutzt" }
+          false: { en: "not used", de: "nicht genutzt" }
+        default: false
+        why: >
+          One account per subscription may take it, and **it is fixed at creation** - an
+          account that did not take it never can. Off, because a template deployed to
+          several stages and subscriptions would fail on the second, and because the
+          allowance is small. A single sandbox subscription is the one place to turn it on.
+        renders: free_tier_enabled / enableFreeTier
+
+  # --------------------------------------------------------------- resilience
+  - id: resilience
+    title: Resilience
+    questions:
+      - id: zone_redundant
+        ask: Should the primary region survive the loss of an availability zone?
+        type: bool
+        audience: engineer
+        plain:
+          en: "The data {value} survive the loss of one datacenter of the region."
+          de: "Die Daten {value} den Ausfall eines Rechenzentrums der Region."
+        plain_values:
+          true: { en: "do", de: "überstehen" }
+          false: { en: "do not", de: "überstehen nicht" }
+        derived_from:
+          question: outage_impact
+          map: { tolerable: false, disruptive: true, critical: true }
+        confirm_in: [production]
+        non_production_default: false
+        why: >
+          Derived from how bad an outage is. Zone redundancy keeps synchronous copies in
+          three zones for roughly a quarter more on the request-unit price, with no change
+          to the application. **It is set per region when the account or the region is
+          added** and cannot be turned on for an existing region - a new region is added
+          and the old one removed. Both AVM modules default it to true; the guardrail
+          answer for `tolerable` is false, so it is written. The derivation is production's;
+          the non-production stages take `false` while non_production_savings is enabled.
+        renders: geo_locations[].zone_redundant / failoverLocations[].isZoneRedundant (zoneRedundant for one region)
+
+      - id: geo_replicas
+        ask: In which further regions should the data be kept?
+        type: list
+        audience: engineer
+        plain:
+          en: "The data is also kept in {value} (empty: only in the main region)."
+          de: "Die Daten liegen zusätzlich in {value} (leer: nur in der Hauptregion)."
+        default: []
+        per_environment: true
+        depends_on: { question: capacity_mode, equals: provisioned }
+        why: >
+          A second region is what survives the loss of a whole region, and it is a cost
+          doubling and a consistency decision, so it is not defaulted. `critical` from the
+          deployment's `outage_impact` means one is wanted: with no region named, the
+          decision is an `open:` entry owned by the workload owner, naming the paired
+          region as the usual answer, and not a silent single region. Each replica adds
+          its region's storage and throughput to the bill, and multi-region writes
+          (a different feature) are not offered here: they need conflict resolution the
+          application has to be written for.
+        forced_when: >
+          `outage_impact: critical` requires at least one entry here, or an `open:` entry
+        renders: geo_locations[] (failover_priority 1..n) / failoverLocations[]
+
+      - id: automatic_failover
+        ask: Should the account fail over to a replica by itself?
+        type: bool
+        audience: engineer
+        plain:
+          en: "If the main region fails, the account {value}."
+          de: "Fällt die Hauptregion aus, {value} das Konto."
+        plain_values:
+          true: { en: "switches to a replica region on its own", de: "wechselt" }
+          false: { en: "waits for someone to switch it by hand", de: "wartet" }
+        default: true
+        why: >
+          Without it a regional outage is an outage until a person fails over. True is the
+          default of both modules and only has an effect with a replica region. It does
+          not apply to manual failover, which stays available for a planned test.
+        renders: automatic_failover_enabled / enableAutomaticFailover
+
+      - id: consistency_level
+        ask: How up to date must a read be after a write?
+        type: enum
+        audience: engineer
+        plain:
+          en: "A read sees {value}."
+          de: "Eine Leseanfrage sieht {value}."
+        plain_values:
+          Strong: { en: "always the latest write, which costs speed and is not possible across distant regions", de: "immer den letzten Schreibvorgang, was Geschwindigkeit kostet" }
+          BoundedStaleness: { en: "data that is at most a set time or count behind", de: "Daten, die höchstens um eine festgelegte Zeit oder Anzahl zurückliegen" }
+          Session: { en: "its own writes at once and, for others, a slightly older state", de: "die eigenen Schreibvorgänge sofort, bei anderen einen leicht älteren Stand" }
+          ConsistentPrefix: { en: "writes in the right order, but maybe not the latest", de: "Schreibvorgänge in der richtigen Reihenfolge, aber eventuell nicht die letzten" }
+          Eventual: { en: "whatever has arrived, in no promised order", de: "was angekommen ist, ohne zugesagte Reihenfolge" }
+        values: [Strong, BoundedStaleness, Session, ConsistentPrefix, Eventual]
+        default: Session
+        why: >
+          Session is the default of Cosmos DB for a reason: a user always reads their own
+          writes - a chat they just sent, a record they just saved - at the cost and speed
+          of the weaker levels. Strong halves the read performance and cannot span regions
+          that are far apart; the weaker ones surprise a user in their own session.
+          **The two AVM modules disagree**: Bicep defaults to Session, Terraform to
+          `BoundedStaleness` - so it is written on every call. Changing it is an in-place
+          edit, but the application is written for one of them.
+        renders: consistency_policy.consistency_level / defaultConsistencyLevel
+
+  # --------------------------------------------------------------- networking
+  - id: networking
+    title: Networking
+    questions:
+      - id: public_network_access
+        ask: Should this account depart from the deployment's exposure posture?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The account is {value}."
+          de: "Das Konto ist {value}."
+        plain_values:
+          disabled: { en: "not reachable from the internet at all", de: "aus dem Internet überhaupt nicht erreichbar" }
+          enabled_with_firewall: { en: "reachable from the internet only from listed addresses", de: "aus dem Internet nur von gelisteten Adressen erreichbar" }
+          enabled: { en: "reachable from the internet", de: "aus dem Internet erreichbar" }
+        values: [disabled, enabled_with_firewall, enabled]
+        from_deployment: network_exposure
+        confirm_in: [production]
+        why: >
+          Asked only as a departure: exposure is a property of the system. `private` is
+          `disabled`, `public` is `enabled_with_firewall`, and a bare `enabled` - an
+          account with no IP list - is a recorded departure. Both AVM modules already
+          default to disabled; written anyway. With `disabled` the account answers only
+          through its private endpoint, which also takes the portal's data explorer away
+          from anyone outside the network.
+        renders: >
+          terraform: public_network_access_enabled (bool) and ip_range_filter;
+          bicep: networkRestrictions.publicNetworkAccess
+
+      - id: private_endpoint_subnet
+        ask: Which subnet should this account's private endpoint live in?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its private connection lands in subnet {value}."
+          de: "Seine private Anbindung landet im Subnetz {value}."
+        ref: subnet
+        from_deployment: private_endpoint_subnet
+        per_environment: true
+        why: >
+          One subnet carries the deployment's private endpoints, so this is inherited. For
+          the NoSQL API the sub-resource is `Sql`, and it is the only one this set uses.
+        renders: private_endpoints.<key>.subnet_resource_id / privateEndpoints[].subnetResourceId (service `Sql`)
+
+      - id: ip_rules
+        ask: Which public IP ranges may reach the account?
+        type: list
+        audience: engineer
+        plain:
+          en: "Public addresses allowed to reach the account: {value}."
+          de: "Öffentliche Adressen, die das Konto erreichen dürfen: {value}."
+        default: []
+        depends_on: { question: public_network_access, equals: enabled_with_firewall }
+        per_environment: true
+        why: >
+          An enumerated allowlist. An empty list with the firewall on denies every public
+          caller, which is valid and deliberate. `0.0.0.0` - which Cosmos DB reads as
+          "allow Azure services" - is not an allowlist and is the bypass's job, not this
+          list's.
+        renders: ip_range_filter / networkRestrictions.ipRules
+
+      - id: network_acl_bypass
+        ask: May trusted Azure services reach the account past its firewall?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Trusted Azure services {value} past the account's firewall."
+          de: "Vertrauenswürdige Azure-Dienste {value} an der Firewall des Kontos vorbei."
+        plain_values:
+          true: { en: "may pass", de: "dürfen" }
+          false: { en: "may not pass", de: "dürfen nicht" }
+        default: false
+        why: >
+          The bypass lets a short list of Microsoft services (the portal's data explorer
+          from a browser, Azure Functions' triggers in some modes) past the firewall. Off
+          by default: a closed account that nothing outside reads should not carry it, and
+          a consumer that needs it is named at this account.
+        renders: network_acl_bypass_for_azure_services / networkRestrictions.networkAclBypass
+
+  # ----------------------------------------------------------------- identity
+  - id: identity
+    title: Identity and access
+    questions:
+      - id: managed_identity
+        ask: Which managed identity should the account carry?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The account has {value}."
+          de: "Das Konto hat {value}."
+        plain_values:
+          none: { en: "no identity of its own", de: "keine eigene Identität" }
+          system_assigned: { en: "its own identity", de: "eine eigene Identität" }
+          user_assigned: { en: "a separately managed identity", de: "eine separat verwaltete Identität" }
+        values: [none, system_assigned, user_assigned]
+        default: none
+        why: >
+          The account's identity is used for one thing: reaching a Key Vault for a
+          customer-managed key (and for backup or analytical storage). Clients reach the
+          account with their own identities, not the account's, so an account without a
+          customer-managed key carries none. A customer-managed key needs the identity to
+          hold its role on the key before the key is set, which is why that case is
+          `user_assigned`.
+        forced_when: >
+          `key_management: customer_managed` forces `user_assigned`, recorded as forced
+          with `key_management` as forced_by
+        renders: managed_identities / managedIdentities
+
+      - id: user_assigned_identity_ids
+        ask: Which user-assigned identity?
+        type: list
+        audience: engineer
+        plain:
+          en: "It uses the identity {value}."
+          de: "Es nutzt die Identität {value}."
+        ref: user_assigned_identity
+        required: true
+        depends_on: { question: managed_identity, equals: user_assigned }
+        per_environment: true
+        why: The identity must already exist; this set does not create it.
+        renders: managed_identities.user_assigned_resource_ids / managedIdentities.userAssignedResourceIds
+
+      - id: data_plane_role_assignments
+        ask: Who needs to read or write the data?
+        type: list
+        audience: engineer
+        plain:
+          en: "Access to the data itself granted to: {value}."
+          de: "Zugriff auf die Daten selbst vergeben an: {value}."
+        default: []
+        per_environment: true
+        why: >
+          **Cosmos DB's data access is its own role system**, separate from Azure RBAC: the
+          roles `Cosmos DB Built-in Data Reader` and `Built-in Data Contributor` are
+          assigned on the account with `sqlRoleAssignments`, and an Azure `Contributor` or
+          `Owner` role does not read a single item. With local authentication off, nothing
+          reads the data until one is assigned, so an empty list is a working account nobody
+          can use, and not an answer: with no consumer named, the decision is an `open:`
+          entry owned by the workload owner, blocking apply. Scope to the database or
+          container where the consumer allows it, never wider. A pattern fills this from the
+          consumers it knows.
+        renders: >
+          terraform: **not the module** (it has no input for them) - azurerm_cosmosdb_sql_role_assignment;
+          bicep: sqlRoleAssignments (built-in role ids ending 0001 reader, 0002 contributor)
+
+      - id: role_assignments
+        ask: Who may manage the account itself?
+        type: list
+        audience: engineer
+        plain:
+          en: "Management rights on the account granted to: {value}."
+          de: "Verwaltungsrechte am Konto vergeben an: {value}."
+        default: []
+        per_environment: true
+        why: >
+          Azure RBAC on the account - the control plane: creating databases, changing
+          throughput, reading keys if they were enabled. Separate from the data roles above
+          on purpose, and usually the deploying principal's alone, so empty is a normal
+          answer.
+        renders: role_assignments / roleAssignments
+
+  # ----------------------------------------------------------------- security
+  - id: security
+    title: Security
+    questions:
+      - id: local_authentication_disabled
+        ask: May clients sign in with the account keys?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Signing in with account keys is {value}; access goes through company accounts."
+          de: "Die Anmeldung mit Kontoschlüsseln ist {value}; der Zugriff läuft über Firmenkonten."
+        plain_values:
+          true: { en: "switched off", de: "abgeschaltet" }
+          false: { en: "possible", de: "möglich" }
+        from_deployment: local_auth
+        confirm_in: [production]
+        why: >
+          Inherited: `local_auth: disabled` renders as `true`. An account key is a root
+          credential for every database in the account, does not expire and is not
+          attributable. It cannot be combined with the data roles above in the same client
+          without the client choosing one, which is why the roles come first. Both modules
+          default to disabled; written anyway.
+        renders: local_authentication_disabled / disableLocalAuthentication
+
+      - id: key_based_metadata_writes
+        ask: May account keys change databases and containers?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Creating or changing databases, containers and throughput with account keys is {value}."
+          de: "Das Anlegen oder Ändern von Datenbanken, Containern und Durchsatz mit Kontoschlüsseln ist {value}."
+        plain_values:
+          true: { en: "switched off", de: "abgeschaltet" }
+          false: { en: "possible", de: "möglich" }
+        from_deployment: local_auth
+        why: >
+          The second switch, and the one forgotten: with local authentication off the keys
+          cannot read data, but where it is on they could still reshape the account
+          through the data plane, outside the audit of Azure Resource Manager. Follows
+          `local_auth`. The Terraform input is the *enabled* form, the Bicep one the
+          *disabled* form.
+        renders: access_key_metadata_writes_enabled (inverse) / disableKeyBasedMetadataWriteAccess
+
+      - id: key_management
+        ask: Are the account's encryption keys platform-managed or customer-managed?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Encryption keys are {value}."
+          de: "Verschlüsselungsschlüssel sind {value}."
+        plain_values:
+          platform_managed: { en: "managed by Azure - encrypted, rotated, no effort on your side", de: "von Azure verwaltet: verschlüsselt, rotiert, kein Aufwand bei euch" }
+          customer_managed: { en: "your own, held in your key vault, so you can revoke them", de: "eure eigenen in eurem Schlüsseltresor, damit ihr sie zurückziehen könnt" }
+        values: [platform_managed, customer_managed]
+        from_deployment: key_management
+        confirm_in: [production]
+        why: >
+          Inherited. Data is encrypted at rest with a platform-managed key either way;
+          `customer_managed` adds a key of the customer's in a Key Vault with purge
+          protection, an identity that can wrap and unwrap it, and a rotation story. **It
+          is set at creation and cannot be removed**; an account that loses access to the
+          key becomes unreadable.
+        renders: customer_managed_key / customerManagedKey
+
+      - id: cmk_key_vault_key_id
+        ask: Which Key Vault key should encrypt the account?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Encrypted with your key {value}."
+          de: "Verschlüsselt mit eurem Schlüssel {value}."
+        ref: key_vault_key
+        required: true
+        depends_on: { question: key_management, equals: customer_managed }
+        per_environment: true
+        why: >
+          The key must exist, the vault must have soft delete and purge protection, and the
+          account's user-assigned identity must hold `Key Vault Crypto Service Encryption
+          User` on it before the account is created - an ordering that bites the first
+          attempt. The reference is the **unversioned** key, so a rotation reaches the
+          account without a change here.
+        renders: customer_managed_key.key_name and key_vault_resource_id / customerManagedKey.keyName and keyVaultResourceId
+
+  # ---------------------------------------------------------- data protection
+  - id: data_protection
+    title: Backup and recovery
+    questions:
+      - id: backup_policy
+        ask: How far back must a deletion or a bad write be undoable?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Backups allow going back {value}."
+          de: "Backups erlauben den Rückgang um {value}."
+        plain_values:
+          periodic: { en: "to one of a few snapshots taken a few hours apart, kept for a day or two", de: "auf einen von wenigen Schnappschüssen im Abstand von Stunden, ein bis zwei Tage aufbewahrt" }
+          continuous_7_days: { en: "to any second of the last seven days", de: "auf jede Sekunde der letzten sieben Tage" }
+          continuous_30_days: { en: "to any second of the last thirty days", de: "auf jede Sekunde der letzten dreißig Tage" }
+        values: [periodic, continuous_7_days, continuous_30_days]
+        derived_from:
+          question: data_loss_tolerance
+          map: { reproducible: periodic, one_week: continuous_7_days, one_month: continuous_30_days, three_months: continuous_30_days }
+        why: >
+          Derived from how long a deletion must stay undoable. Continuous backup restores
+          to a point in time, in place or into a new account, and costs per gigabyte of
+          the retention; periodic restores only to a snapshot and only by support request.
+          Continuous is the right floor for data that is not reproducible. 30 days is the
+          longest tier there is, so `three_months` is `continuous_30_days` and the
+          remainder is an export the template does not own - the map says so rather than
+          pretending, and the decision document names the gap. **Continuous cannot be
+          combined with multi-region writes**, which this set does not offer, and
+          converting periodic to continuous is one-way. The modules disagree on a default
+          (tier and redundancy), so every field is written.
+        renders: >
+          backup.type and backup.tier / backupPolicyType and backupPolicyContinuousTier
+          (`Continuous7Days`, `Continuous30Days`)
+
+      - id: backup_storage_redundancy
+        ask: Where are periodic backups kept?
+        type: enum
+        audience: engineer
+        plain:
+          en: "Periodic backups are kept {value}."
+          de: "Periodische Backups liegen {value}."
+        plain_values:
+          Local: { en: "in one datacenter", de: "in einem Rechenzentrum" }
+          Zone: { en: "across the zones of the region", de: "verteilt über die Zonen der Region" }
+          Geo: { en: "in a second region as well", de: "zusätzlich in einer zweiten Region" }
+        values: [Local, Zone, Geo]
+        default: Zone
+        depends_on: { question: backup_policy, equals: periodic }
+        why: >
+          Only periodic backups have it. Zone matches the platform's replication default
+          (ZRS); Geo is for a documented regional recovery plan. **The modules disagree**:
+          Terraform defaults to `Geo`, Bicep to `Local` - a deployment taking the module
+          default gets a different answer per target, which is why it is written.
+        renders: backup.storage_redundancy / backupStorageRedundancy
+
+      - id: analytical_storage
+        ask: Should the data also be kept in a column store for analytics?
+        type: bool
+        audience: engineer
+        plain:
+          en: "A column store for analytics beside the data is {value}."
+          de: "Ein Spaltenspeicher für Analysen neben den Daten ist {value}."
+        plain_values:
+          true: { en: "kept", de: "vorhanden" }
+          false: { en: "not kept", de: "nicht vorhanden" }
+        default: false
+        why: >
+          Analytical storage feeds Synapse Link and costs for the second copy. **Enabling
+          and then disabling it forces a new account**, so it is not a switch to try. Off,
+          until an analytics consumer is named.
+        renders: analytical_storage_enabled / enableAnalyticalStorage
+
+  # --------------------------------------------------------------- containers
+  - id: containers
+    title: Databases and containers
+    questions:
+      - id: databases
+        ask: Which databases and containers should the account hold?
+        type: list
+        audience: engineer
+        plain:
+          en: "The account holds the databases and containers {value}."
+          de: "Das Konto enthält die Datenbanken und Container {value}."
+        required: true
+        why: >
+          Each container is a name, a **partition key path** and an optional default
+          time-to-live. The partition key is the one decision here that cannot be changed:
+          it is fixed when the container is created and is the single biggest factor in
+          cost and in throttling, because throughput is divided evenly over partitions and
+          a key with a few hot values throttles at a fraction of the ceiling. The plugin
+          cannot choose it - it is the application's data model - so with no answer the
+          decision is an `open:` entry owned by the workload owner, blocking apply.
+          Every container takes `throughput_mode` and `max_throughput` as its own
+          dedicated throughput (a departure per container is recorded); throughput shared
+          at database level is not rendered.
+        renders: sql_databases.<db>.containers.<c> (name, partition_key_paths, default_ttl) / sqlDatabases[].containers[]
+
+  # ------------------------------------------------------------ observability
+  - id: observability
+    title: Observability
+    questions:
+      - id: diagnostic_workspace
+        ask: Which Log Analytics workspace should receive diagnostics?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its logs go to {value}."
+          de: "Seine Protokolle gehen in {value}."
+        ref: log_analytics_workspace
+        from_deployment: diagnostics_destination
+        per_environment: true
+        why: >
+          Inherited: one deployment, one destination. Without a diagnostic setting the
+          account keeps no record of who read what, and a throttled request leaves no
+          trace beyond the client's own log.
+        renders: diagnostic_settings / diagnosticSettings
+
+      - id: diagnostic_categories
+        ask: Which log categories should be collected?
+        type: list
+        audience: engineer
+        plain:
+          en: "Logged: {value}."
+          de: "Protokolliert wird: {value}."
+        plain_values:
+          ControlPlaneRequests: { en: "every change to the account, its databases and containers", de: "jede Änderung am Konto, an Datenbanken und Containern" }
+          DataPlaneRequests: { en: "every request to the data, with its cost and result", de: "jede Anfrage an die Daten mit Kosten und Ergebnis" }
+          QueryRuntimeStatistics: { en: "the text and runtime of queries", de: "Text und Laufzeit von Abfragen" }
+          PartitionKeyStatistics: { en: "how data spreads over the partition keys", de: "wie sich die Daten auf die Partitionsschlüssel verteilen" }
+          PartitionKeyRUConsumption: { en: "which partition keys use the throughput", de: "welche Partitionsschlüssel den Durchsatz verbrauchen" }
+        values: [ControlPlaneRequests, DataPlaneRequests, QueryRuntimeStatistics, PartitionKeyStatistics, PartitionKeyRUConsumption]
+        default: [ControlPlaneRequests, DataPlaneRequests]
+        why: >
+          Control-plane requests are the audit of who changed the account; data-plane
+          requests are the only way to see a 429 and which operation caused it. The three
+          others are for tuning and are the volume lines - `QueryRuntimeStatistics` writes
+          the query text, which can carry personal data, so it is a recorded choice and not
+          a default. Resource-specific destination tables (`Dedicated`) are the form that
+          keeps the categories queryable apart; the category names are the platform's and
+          are checked against `az monitor diagnostic-settings categories list --resource
+          <account id>` before a render, not remembered.
+        renders: diagnostic_settings.<key>.logs[].category / diagnosticSettings[].logCategoriesAndGroups[].category
+
+      - id: metrics_enabled
+        ask: Should all metrics be collected?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Usage and performance figures are {value}."
+          de: "Nutzungs- und Leistungswerte werden {value}."
+        plain_values:
+          true: { en: "collected", de: "erfasst" }
+          false: { en: "not collected", de: "nicht erfasst" }
+        default: true
+        why: >
+          Normalised RU consumption and the throttled-request counter are what decide
+          whether `max_throughput` was right, and they are cheap.
+        renders: metrics[].category = "AllMetrics" / metricCategories[].category

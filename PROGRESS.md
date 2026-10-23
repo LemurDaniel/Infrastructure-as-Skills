@@ -215,7 +215,15 @@ Verified Modules first, authored resources second.
   names of both modules are to be read from the README at render time.
   `check_repo_consistency.py` crashes on Windows (cp1252 decoding of the `claude plugin
   validate` output) unless run with `PYTHONUTF8=1`.
-- **Remaining families for the adessoGPT case**, in order: `data` (Cosmos DB), `ai` (AI
+- **`data/cosmos-db` landed 2026-10-23** (31 questions, API for NoSQL only; AVM TF 0.11.0,
+  `azurerm ~> 4.0`, / Bicep 0.21.1). Derived: zone redundancy from `outage_impact`, backup
+  from `data_loss_tolerance` (30 days is the longest tier, `three_months` leaves a stated
+  gap). **Found by doing it:** the Terraform module has no input for Cosmos DB's own data-plane
+  roles (rendered next to it with `azurerm_cosmosdb_sql_role_assignment`); the two modules
+  disagree on consistency and backup-redundancy defaults. The partition key is an `open:`
+  entry when nobody answers. Not done: no example, no tests, the throughput of a container is
+  one value for all of them, and the diagnostic category names are from memory.
+- **Remaining families for the adessoGPT case**, in order: `ai` (AI
   Search, Foundry/Azure OpenAI with deployments), `compute` (Container Registry, Container
   Apps environment, Function App), `observability/application-insights`,
   `network/network-security-group`. Private endpoints and DNS zones are the platform's and
