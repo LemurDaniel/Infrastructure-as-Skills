@@ -253,13 +253,35 @@ Verified Modules first, authored resources second.
   needs the platform's Azure Monitor Private Link Scope (`open:` entry without one); the NSG's
   baseline rules per `subnet_purpose` (`notes.md`) are from general knowledge and are confirmed
   against each service's documentation before a render; the NSG is associated through the
-  virtual-network set, which has no `network_security_group` question on a subnet yet - **and
-  no delegation question**, which App Service, Container Apps and Function App all point at.
-- **Next for the adessoGPT case:** the case itself - an `infra-spec.yaml` and diagram built from
-  these sets, which is what tests whether they compose (the wiring between them is a pattern
-  that does not exist: `patterns/` is empty). Private endpoints and DNS zones are the platform's
-  and stay referenced; the Entra app registration stays an `open:` entry. Then `ROADMAP.md` C1's
-  `data` (Azure SQL, PostgreSQL) and `integration` (Service Bus).
+  virtual-network set (`subnets_expecting_nsg` records it, `subnet_delegations` carries the
+  delegation the three compute sets point at).
+- **The chatbot example landed 2026-10-23** (`examples/chatbot/`, the generic form of the
+  adessoGPT diagram; Terraform only, one stage): request, spec (20 resources, 284 decisions,
+  seven `open:` entries), a root of 16 AVM module calls, tests (7 files, **79 decisions asserted,
+  205 marked not-testable with a reason**, `terraform test` 7 passed, coverage 284/284), decision
+  document (de), diagram. Nothing applied; no Bicep, no pipeline. The spec was written with a
+  scaffold (`build_spec.py`, resolves the sets against the request) that is not shipped. **What
+  running it corrected in the sets:** Cosmos DB's Terraform module has a different diagnostic
+  interface (`log_categories`, metrics `Requests`/`SLI`); `store_client_ip` is not inverse of
+  `disable_ip_masking`; the naming kind variant is `Microsoft.Web/sites::function`. **What it
+  found in the tooling:** the spec had no way to say a second resource of one kind - now
+  `<set>__<instance>` (`spec.md`, `check_spec.py`, `export_decisions.py`, which also drops the
+  stage prefix when there is one stage); `avm-res-app-managedenvironment` cannot be planned under
+  mock providers (an ephemeral resource in every version), so the environment is authored and the
+  departure is in the spec's `_target_overrides`; Key Vault, Container Registry and the Container
+  App module expose no attribute at all; a list output compared to a list literal is false in
+  HCL (compare `jsonencode`). **The diagram script** now reads instance keys, draws identities
+  and NSGs in a zone of their own, takes subnet delegations from the spec, routes callers on
+  tracks of their own (colour per caller from three callers up), keeps the PaaS services in one
+  row and the actor lines off the resource group's border; `run_diagram_tests.py` has the chatbot
+  as a case. Still open: no icon for Foundry and Container Apps in draw.io's library (nearest
+  used); PaaS-to-PaaS lines are not routed (said in `wiring.purposes`); the Entra app
+  registration, the shared private link from search to storage and the model quota are `open:`.
+- **Next:** the same case rendered to Bicep from the one spec (the cross-backend diff is what
+  tests the sets), a deploy pipeline once the owner names the system, and `patterns/` - the
+  wiring in this example (roles between resources, the private link, the order identity -> vault
+  -> consumer) is what a pattern would own. Then `ROADMAP.md` C1's `data` (Azure SQL, PostgreSQL)
+  and `integration` (Service Bus).
 - **A sandbox subscription for real plans, applies and the deploy agent** (`ROADMAP.md`
   A5, E): the owner sets it up — subscription, federated credential for OIDC, a fenced
   resource group. Not available yet (2026-10-18).
@@ -308,8 +330,7 @@ Verified Modules first, authored resources second.
 Widen the plugin-vs-plain measurement (3 runs per arm, cases on the small decisions, ~$15-25)
 before trusting the pilot. Re-run the eval suite (full, ~$5) against the two rules written after the baseline and
 accept the run if `vague-public-dev` rises without the other two dropping. Then
-the adessoGPT case end to end (Open, above), and a rendered example with its tests for the
-new sets - App Service first, as the other renders are checked against it; every set from
-2026-10-23 still lacks a diagram icon, a virtual-network delegation question and a render. B6's two graders and the
+the chatbot case in Bicep (Open, above); the sets from 2026-10-23 are now rendered once, in
+Terraform, and have no Bicep render and no eval case. B6's two graders and the
 extension run that writes a further stage's file once its open entries are answered stay
 on the list; A5 waits on the owner's sandbox.
