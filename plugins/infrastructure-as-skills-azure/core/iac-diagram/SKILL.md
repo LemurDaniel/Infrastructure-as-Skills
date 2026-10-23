@@ -121,8 +121,7 @@ lines are access, not plumbing.
 
 **How the lines run.** A caller leaves its icon to the right, drops on a track of its own in
 the free space at the right of the subnets - never through another icon - to a lane below the
-network, and fans out from there to its services, which sit in **one row** so that no line
-runs through a neighbour. Tracks are assigned right to left from the top caller down, so a lower
+network, and fans out from there to its services. Up to five sit in one row; more wrap into two, the second row shifted by half a slot, so that a line comes down in the gap between two icons and not through one - and the network stays narrow. Tracks are assigned right to left from the top caller down, so a lower
 run ends before the track of an upper one; lanes are assigned fewest targets first, since a drop
 crosses the lanes below its own. A line to Application Insights goes out along the row and in
 from the left through the gap beside the network. **With three or more callers the private
