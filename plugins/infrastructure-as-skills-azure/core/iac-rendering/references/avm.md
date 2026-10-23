@@ -87,6 +87,8 @@ current one before rendering (next section).
 | Container Apps environment | `avm-res-app-managedenvironment` v0.5.1 | `avm/res/app/managed-environment` 0.16.0 | Terraform module needs `azurerm ~> 4.0` and `azapi`; many inputs deprecated for `vnet_configuration`, `zone_redundant`, `workload_profiles`. Looked up 2026-10-23 |
 | Container App | `avm-res-app-containerapp` v0.9.0 | `avm/res/app/container-app` 0.23.0 | Terraform module AzAPI only. **Bicep defaults to external ingress, HTTP allowed, port 80**; Terraform to internal, HTTPS. Looked up 2026-10-23 |
 | Function App | `avm-res-web-site` v0.24.1 (`kind = "functionapp"`, `function_app_uses_fc1`) | `avm/res/web/site` 0.24.0 (`kind: 'functionapp,linux'`, `functionAppConfig`) | Same module as App Service. Plan `FC1` zone redundancy needs the `FCZONEREDUNDANCY` capability. Looked up 2026-10-23 |
+| Application Insights | `avm-res-insights-component` v0.5.0 | `avm/res/insights/component` 0.8.0 | Terraform module AzAPI only (`azapi`, `time`). Modules disagree: IP masking (`false` / `true` stores IPs), retention (90 / 365); both default public ingestion/query on and local auth off. Looked up 2026-10-23 |
+| Network security group | `avm-res-network-networksecuritygroup` v0.6.0 | `avm/res/network/network-security-group` 0.5.4 | Terraform module AzAPI only. Looked up 2026-10-23 |
 | Resource group | `avm-res-resources-resourcegroup` v0.4.0 | `avm/res/resources/resource-group` 0.4.4 | Not rendered — the deployment set expects the group to exist |
 
 Pattern modules worth knowing when `patterns/` fills: `avm-ptn-network-private-link-private-dns-zones`

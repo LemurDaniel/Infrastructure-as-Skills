@@ -246,11 +246,20 @@ Verified Modules first, authored resources second.
   `Microsoft.Web/serverFarms` for Premium) is from memory and to be confirmed; Container Apps
   session pools (the "code interpreter" of the adessoGPT diagram) have no set; the `app-service`
   boundary "no function apps / Container Apps" is now stale.
-- **Remaining families for the adessoGPT case**, in order: `observability/application-insights`,
-  `network/network-security-group`. Private endpoints and DNS zones are the platform's and stay
-  referenced; the Entra app registration stays an `open:` entry. Then the case itself: an
-  `infra-spec.yaml` and diagram for adessoGPT from these sets, which is what tests whether they
-  compose. Then `ROADMAP.md` C1's `data` (Azure SQL, PostgreSQL) and `integration` (Service Bus).
+- **`application-insights` (12) and `network-security-group` (9) landed 2026-10-23**, which
+  completes the resource sets of the adessoGPT diagram (AVM TF 0.5.0 / 0.6.0, both AzAPI only;
+  Bicep 0.8.0 / 0.5.4). Not done: no examples, no tests. **Found by doing it:** the modules
+  disagree on IP masking (Bicep stores client IPs by default) and retention; a closed component
+  needs the platform's Azure Monitor Private Link Scope (`open:` entry without one); the NSG's
+  baseline rules per `subnet_purpose` (`notes.md`) are from general knowledge and are confirmed
+  against each service's documentation before a render; the NSG is associated through the
+  virtual-network set, which has no `network_security_group` question on a subnet yet - **and
+  no delegation question**, which App Service, Container Apps and Function App all point at.
+- **Next for the adessoGPT case:** the case itself - an `infra-spec.yaml` and diagram built from
+  these sets, which is what tests whether they compose (the wiring between them is a pattern
+  that does not exist: `patterns/` is empty). Private endpoints and DNS zones are the platform's
+  and stay referenced; the Entra app registration stays an `open:` entry. Then `ROADMAP.md` C1's
+  `data` (Azure SQL, PostgreSQL) and `integration` (Service Bus).
 - **A sandbox subscription for real plans, applies and the deploy agent** (`ROADMAP.md`
   A5, E): the owner sets it up — subscription, federated credential for OIDC, a fenced
   resource group. Not available yet (2026-10-18).
@@ -299,8 +308,8 @@ Verified Modules first, authored resources second.
 Widen the plugin-vs-plain measurement (3 runs per arm, cases on the small decisions, ~$15-25)
 before trusting the pilot. Re-run the eval suite (full, ~$5) against the two rules written after the baseline and
 accept the run if `vague-public-dev` rises without the other two dropping. Then
-the remaining adessoGPT families (Open, above), and
-`compute` (Container Apps), plus a rendered App Service example with its tests; each with `audience`, `plain`, `per_environment` where it
-applies, both rendering references and a diagram icon. B6's two graders and the
+the adessoGPT case end to end (Open, above), and a rendered example with its tests for the
+new sets - App Service first, as the other renders are checked against it; every set from
+2026-10-23 still lacks a diagram icon, a virtual-network delegation question and a render. B6's two graders and the
 extension run that writes a further stage's file once its open entries are answered stay
 on the list; A5 waits on the owner's sandbox.

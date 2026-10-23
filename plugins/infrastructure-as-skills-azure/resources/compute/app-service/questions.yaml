@@ -19,7 +19,7 @@ boundaries:
   - "Does not create the Log Analytics workspace it routes diagnostics to."
   - "Does not create the integration subnet when the network is referenced; under network_ownership: create the virtual-network set carries it."
   - "Does not create Application Insights, deployment slots, custom domains, certificates, Easy Auth or backups. Each is a separate concern and has no question set yet."
-  - "Does not create function apps, Container Apps or an App Service Environment. A function app is a different `kind` with different decisions."
+  - "Does not create function apps, Container Apps or an App Service Environment. They have sets of their own (`function-app`, `container-apps`) or none (App Service Environment)."
   - "Does not grant the app's identity roles on the services it calls - that is wiring between resources, owned by a pattern."
   - "Does not set application settings or connection strings. They are deployment configuration, and a secret never goes into a template (use a Key Vault reference)."
 

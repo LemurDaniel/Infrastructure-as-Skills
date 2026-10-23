@@ -22,8 +22,8 @@ here never crowds out the description of how the protocol works.
 | Family | Covers | Routing |
 |---|---|---|
 | storage | storage accounts; containers, shares and queues planned | [resources/storage/routing.md](../../resources/storage/routing.md) |
-| network | virtual networks and subnets; NSGs, peering, route tables planned | [resources/network/routing.md](../../resources/network/routing.md) |
-| observability | Log Analytics workspaces; Application Insights and alerts planned | [resources/observability/routing.md](../../resources/observability/routing.md) |
+| network | virtual networks and subnets; network security groups; peering, route tables planned | [resources/network/routing.md](../../resources/network/routing.md) |
+| observability | Log Analytics workspaces; Application Insights; alerts planned | [resources/observability/routing.md](../../resources/observability/routing.md) |
 | compute | App Service (plan and web app); function apps; Container Apps; Container Registry | [resources/compute/routing.md](../../resources/compute/routing.md) |
 | security | Key Vault; user-assigned managed identity | [resources/security/routing.md](../../resources/security/routing.md) |
 | data | Cosmos DB (API for NoSQL); SQL, PostgreSQL planned | [resources/data/routing.md](../../resources/data/routing.md) |

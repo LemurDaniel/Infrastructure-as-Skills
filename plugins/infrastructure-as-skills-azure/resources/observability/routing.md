@@ -6,7 +6,7 @@ skill. Routing table — the request picks the question set:
 | Request mentions | Question set | Notes |
 |---|---|---|
 | Log Analytics, workspace, log retention | `log-analytics-workspace/questions.yaml` | [notes](log-analytics-workspace/notes.md) |
-| Application Insights, APM, traces | *not yet written* | Workspace-based now; needs a workspace first |
+| Application Insights, APM, traces, appinsights | `application-insights/questions.yaml` | [notes](application-insights/notes.md) - always workspace-based |
 | alert, action group, metric alert | *not yet written* | — |
 | dashboard, workbook | *not yet written* | — |
 

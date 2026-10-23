@@ -1,0 +1,265 @@
+schema_version: 1
+
+resource: Microsoft.Insights/components
+title: Azure Application Insights (workspace-based)
+
+naming:
+  terraform: "Azure::Microsoft.Insights/components"
+  bicep: "Microsoft.Insights/components"
+  # Bicep assembles the name from vars - this is the prefix it renders.
+  abbreviation: "appi"
+
+boundaries:
+  - "Does not create the resource group. Expects one from the spec's context."
+  - "Does not create the Log Analytics workspace it stores its data in - the component is workspace-based, always; the classic standalone form is retired and not offered. The workspace is the deployment's `diagnostics_destination`."
+  - "Does not create the Azure Monitor Private Link Scope (AMPLS) a closed component is reached through - shared infrastructure, owned by the platform. `private_link_scope` references it."
+  - "Does not instrument the application. The SDK or agent, its sampling in code and the connection string setting are the workload's; this set renders the component and hands the connection string to whoever sets it."
+  - "Does not create alerts, action groups, availability tests, workbooks or dashboards. Each is a separate concern and has no question set yet."
+  - "Does not render the profiler and debugger storage (`linked_storage_account`)."
+
+groups:
+
+  # ---------------------------------------------------------------- placement
+  - id: placement
+    title: Placement
+    questions:
+      - id: environments
+        ask: Which stages is this deployed to?
+        type: list
+        audience: engineer
+        plain:
+          en: "Deployed in the stages {value}."
+          de: "Wird in den Stufen {value} ausgerollt."
+        values: [development, test, qa, uat, integration, staging, preproduction, production, sandbox, demo, hotfix]
+        required: true
+        from_context: true
+        why: >
+          Drives the rendered name. One component per stage: telemetry of two stages in one
+          component cannot be told apart in a dashboard or an alert.
+        renders: naming parameter `environment`, and the tag of that name where the repository uses one
+
+      - id: location
+        ask: Which Azure region?
+        type: string
+        audience: engineer
+        plain:
+          en: "Runs in the Azure region {value}."
+          de: "Läuft in der Azure-Region {value}."
+        required: true
+        from_context: true
+        why: >
+          Part of the rendered name. The component lives in the workspace's region in
+          practice, since its data is stored there; a component in another region than its
+          workspace works and sends telemetry across regions.
+        renders: location
+
+      - id: resource_group_name
+        ask: Which resource group?
+        type: ref
+        audience: engineer
+        plain:
+          en: "Placed in the resource group {value}."
+          de: "Liegt in der Ressourcengruppe {value}."
+        ref: resource_group
+        required: true
+        from_context: true
+        per_environment: true
+        why: >
+          The component is placed into an existing group, with the application that sends to
+          it - its lifecycle is the application's, not the platform's.
+        renders: parent_id (AVM Terraform, AzAPI) / implicit in Bicep scope
+
+  # ---------------------------------------------------------------- component
+  - id: component
+    title: The component
+    questions:
+      - id: workspace
+        ask: Which Log Analytics workspace stores the telemetry?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its telemetry is stored in {value}."
+          de: "Seine Telemetrie wird in {value} gespeichert."
+        ref: log_analytics_workspace
+        from_deployment: diagnostics_destination
+        per_environment: true
+        why: >
+          Inherited: one deployment, one destination, so application telemetry sits beside the
+          platform logs and a trace can be followed from a request into the resource that
+          failed. A component is workspace-based and cannot be created without one. **The
+          workspace governs retention and the daily cap of what it stores** - the per-component
+          retention setting does not change that, which is why there is no retention question
+          here. Required by both modules.
+        renders: workspace_id / workspaceResourceId
+
+      - id: application_type
+        ask: Which kind of application sends telemetry?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The component is set up for {value}."
+          de: "Die Komponente ist eingerichtet für {value}."
+        plain_values:
+          web: { en: "a web application or a service", de: "eine Webanwendung oder einen Dienst" }
+          other: { en: "something that is neither (a job, a script, a function)", de: "etwas, das keines von beidem ist (ein Job, ein Skript, eine Funktion)" }
+        values: [web, other]
+        default: web
+        why: >
+          The type only changes how the portal presents the data and which views are offered; it
+          does not change what is collected. `web` is right for nearly everything including
+          functions and containers. **It is fixed at creation** - changing it replaces the
+          component, and the telemetry history of the old one stays behind in the workspace
+          under the old resource id.
+        renders: application_type / applicationType
+
+      - id: sampling_percentage
+        ask: What share of the telemetry should be kept?
+        type: int
+        audience: engineer
+        plain:
+          en: "{value} percent of the telemetry is kept."
+          de: "{value} Prozent der Telemetrie werden behalten."
+        default: 100
+        why: >
+          Sampling is the volume knob of the biggest cost line of an application's monitoring.
+          100 keeps everything and is the default, because a sampled trace is a trace that is
+          sometimes missing exactly when it is needed; a busy production system that pays for
+          its telemetry lowers it deliberately, and the better place for that is the SDK's
+          adaptive sampling, which keeps failures. The component-level value is the ingestion
+          sampling of what the SDK did not already drop.
+        renders: sampling_percentage / samplingPercentage
+
+      - id: daily_cap_gb
+        ask: Should this component's intake be capped per day?
+        type: int
+        audience: engineer
+        plain:
+          en: "Daily telemetry cap for this component: {value} GB (0: no cap)."
+          de: "Tägliche Obergrenze für die Telemetrie dieser Komponente: {value} GB (0: keine)."
+        default: 0
+        confirm_in: [production]
+        why: >
+          The guard against a logger in a loop. A cap does it by **dropping telemetry for the
+          rest of the day** once hit - a blind spot that arrives exactly when something
+          misbehaves loudly - so the default is none and production prefers an alert on
+          ingestion. 0 means no cap in the module's own terms (its default is 100 GB, which
+          is why it is written); if a cap is wanted the number is the answer, "yes" is not.
+        renders: daily_data_cap_in_gb / the component's `DailyDataCap` (a billing feature, not a template property in Bicep)
+
+      - id: store_client_ip
+        ask: Should the visitor's IP address be stored with the telemetry?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Visitors' IP addresses are {value}."
+          de: "IP-Adressen von Besuchern werden {value}."
+        plain_values:
+          true: { en: "stored in the telemetry", de: "mit der Telemetrie gespeichert" }
+          false: { en: "masked and not stored", de: "maskiert und nicht gespeichert" }
+        default: false
+        why: >
+          An IP address is personal data and telemetry keeps it for as long as the workspace
+          does. Masked is the default; storing them is for a workload that needs the
+          geography of its users and has a basis for processing it. **The modules disagree**:
+          the Terraform module masks by default (`disable_ip_masking = false`), the Bicep
+          module does not (`disableIpMasking: true`, which stores them), so it is written on
+          both. The decision belongs in the decision document, because a data-protection
+          review will ask.
+        renders: disable_ip_masking (inverse) / disableIpMasking
+
+  # --------------------------------------------------------------- networking
+  - id: networking
+    title: Networking
+    questions:
+      - id: public_network_access
+        ask: Should this component depart from the deployment's exposure posture?
+        type: enum
+        audience: engineer
+        plain:
+          en: "The component is {value}."
+          de: "Die Komponente ist {value}."
+        plain_values:
+          disabled: { en: "reachable only through the private monitoring connection, for sending and for reading", de: "nur über die private Überwachungsanbindung erreichbar, zum Senden und zum Lesen" }
+          enabled: { en: "reachable from the internet, for sending and for reading", de: "aus dem Internet erreichbar, zum Senden und zum Lesen" }
+        values: [disabled, enabled]
+        from_deployment: network_exposure
+        confirm_in: [production]
+        why: >
+          Asked only as a departure: exposure is a property of the system. `private` is
+          `disabled` for **both** ingestion and query, `public` is `enabled`; there is no
+          per-address firewall on a component, the control is the private link scope. Both
+          modules default both to enabled, so the posture is always written. **Disabling
+          ingestion means every application that sends to it must reach the scope**: a
+          function or an app on a network that cannot reach the private monitoring endpoint
+          silently loses its telemetry, and nothing at apply says so.
+        renders: >
+          terraform: internet_ingestion_enabled and internet_query_enabled;
+          bicep: publicNetworkAccessForIngestion and publicNetworkAccessForQuery
+
+      - id: private_link_scope
+        ask: Which private monitoring connection should the component belong to?
+        type: ref
+        audience: platform
+        plain:
+          en: "Its private connection is the monitoring scope {value}."
+          de: "Seine private Anbindung ist der Überwachungsbereich {value}."
+        ref: monitor_private_link_scope
+        required: true
+        depends_on: { question: public_network_access, equals: disabled }
+        per_environment: true
+        why: >
+          A closed component is reached through an **Azure Monitor Private Link Scope** (AMPLS),
+          which the platform owns - one per network, shared by every monitoring resource in it,
+          with its own private endpoint and a set of DNS zones (`monitor`, `oms`, `ods`,
+          `agentsvc`, blob). The component is added to the scope as a scoped resource; the
+          scope is not created here. Without one, a closed component cannot receive telemetry
+          at all. With no answer the decision is an `open:` entry owned by the platform team.
+        renders: monitor_private_link_scope / a scoped resource on the AMPLS
+
+  # ----------------------------------------------------------------- identity
+  - id: identity
+    title: Identity and access
+    questions:
+      - id: role_assignments
+        ask: Who needs which role on this component?
+        type: list
+        audience: engineer
+        plain:
+          en: "Access rights on the component granted to: {value}."
+          de: "Zugriffsrechte auf die Komponente vergeben an: {value}."
+        default: []
+        per_environment: true
+        why: >
+          With local authentication off, an application sends telemetry only with an Entra
+          token, so its identity needs `Monitoring Metrics Publisher` on the component - and the
+          SDK must be configured to use it; an application still on the instrumentation key
+          loses its telemetry the moment the switch is turned. People who read the data need
+          `Monitoring Reader` or a role on the workspace. A pattern fills this from the
+          consumers it knows.
+        renders: role_assignments / roleAssignments
+
+  # ----------------------------------------------------------------- security
+  - id: security
+    title: Security
+    questions:
+      - id: local_authentication_disabled
+        ask: May applications send telemetry with the instrumentation key alone?
+        type: bool
+        audience: engineer
+        plain:
+          en: "Sending telemetry with only a key is {value}; applications sign in with company identities."
+          de: "Das Senden von Telemetrie nur mit einem Schlüssel ist {value}; Anwendungen melden sich mit Firmenidentitäten an."
+        plain_values:
+          true: { en: "switched off", de: "abgeschaltet" }
+          false: { en: "possible", de: "möglich" }
+        from_deployment: local_auth
+        confirm_in: [production]
+        why: >
+          Inherited: `local_auth: disabled` renders as `true`. The instrumentation key is
+          embedded in the connection string, sits in every app setting and every browser that
+          loads a page with the JavaScript SDK, and anyone who has it can send telemetry - fake
+          events, a flood against the cap. With it off only authenticated senders are
+          accepted. **Both modules default to off (keys allowed)**, so it is written. A
+          **browser** SDK cannot authenticate with a managed identity, which is the case that
+          names a departure at this component.
+        renders: local_authentication_disabled / disableLocalAuth
