@@ -57,8 +57,8 @@ run "identity" {
 
   # decision: log-analytics-workspace.access.local_auth
   assert {
-    condition     = module.workspace.resource.local_authentication_enabled == false
-    error_message = "log-analytics-workspace.access.local_auth must be false, got ${try(jsonencode(module.workspace.resource.local_authentication_enabled), "unknown")}."
+    condition     = module.observability.workspace.resource.local_authentication_enabled == false
+    error_message = "log-analytics-workspace.access.local_auth must be false, got ${try(jsonencode(module.observability.workspace.resource.local_authentication_enabled), "unknown")}."
   }
 
   # not-testable: log-analytics-workspace.access.rbac_only_access - the module exposes no attribute for it; set through the module input, reviewed in the call
@@ -69,8 +69,8 @@ run "identity" {
 
   # decision: user-assigned-identity__web.identity.purpose
   assert {
-    condition     = module.identity["web"].resource.tags["purpose"] == "the web app and the MCP server, to reach models, search, data and secrets"
-    error_message = "user-assigned-identity__web.identity.purpose must be \"the web app and the MCP server, to reach models, search, data and secrets\", got ${try(jsonencode(module.identity["web"].resource.tags["purpose"]), "unknown")}."
+    condition     = module.identity.identities["web"].resource.tags["purpose"] == "the web app and the MCP server, to reach models, search, data and secrets"
+    error_message = "user-assigned-identity__web.identity.purpose must be \"the web app and the MCP server, to reach models, search, data and secrets\", got ${try(jsonencode(module.identity.identities["web"].resource.tags["purpose"]), "unknown")}."
   }
 
   # not-testable: user-assigned-identity__web.identity.federated_credentials - the module exposes no attribute for it; set through the module input, reviewed in the call
@@ -81,8 +81,8 @@ run "identity" {
 
   # decision: user-assigned-identity__connector.identity.purpose
   assert {
-    condition     = module.identity["connector"].resource.tags["purpose"] == "the document connector function, to index documents and keep its own state"
-    error_message = "user-assigned-identity__connector.identity.purpose must be \"the document connector function, to index documents and keep its own state\", got ${try(jsonencode(module.identity["connector"].resource.tags["purpose"]), "unknown")}."
+    condition     = module.identity.identities["connector"].resource.tags["purpose"] == "the document connector function, to index documents and keep its own state"
+    error_message = "user-assigned-identity__connector.identity.purpose must be \"the document connector function, to index documents and keep its own state\", got ${try(jsonencode(module.identity.identities["connector"].resource.tags["purpose"]), "unknown")}."
   }
 
   # not-testable: user-assigned-identity__connector.identity.federated_credentials - the module exposes no attribute for it; set through the module input, reviewed in the call
@@ -93,8 +93,8 @@ run "identity" {
 
   # decision: user-assigned-identity__runner.identity.purpose
   assert {
-    condition     = module.identity["runner"].resource.tags["purpose"] == "the code interpreter container app, to pull its image"
-    error_message = "user-assigned-identity__runner.identity.purpose must be \"the code interpreter container app, to pull its image\", got ${try(jsonencode(module.identity["runner"].resource.tags["purpose"]), "unknown")}."
+    condition     = module.identity.identities["runner"].resource.tags["purpose"] == "the code interpreter container app, to pull its image"
+    error_message = "user-assigned-identity__runner.identity.purpose must be \"the code interpreter container app, to pull its image\", got ${try(jsonencode(module.identity.identities["runner"].resource.tags["purpose"]), "unknown")}."
   }
 
   # not-testable: user-assigned-identity__runner.identity.federated_credentials - the module exposes no attribute for it; set through the module input, reviewed in the call
@@ -123,8 +123,8 @@ run "identity" {
 
   # decision: search-service.identity.managed_identity
   assert {
-    condition     = module.search.resource.identity[0].type == "SystemAssigned"
-    error_message = "search-service.identity.managed_identity must be \"SystemAssigned\", got ${try(jsonencode(module.search.resource.identity[0].type), "unknown")}."
+    condition     = module.ai.search.resource.identity[0].type == "SystemAssigned"
+    error_message = "search-service.identity.managed_identity must be \"SystemAssigned\", got ${try(jsonencode(module.ai.search.resource.identity[0].type), "unknown")}."
   }
 
   # not-testable: search-service.identity.role_assignments - the role assignments are child resources of the module, which the root cannot read

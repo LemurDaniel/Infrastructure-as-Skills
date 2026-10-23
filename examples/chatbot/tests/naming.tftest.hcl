@@ -69,53 +69,53 @@ run "naming" {
   command = plan
 
   assert {
-    condition     = data.naming_name.network.name == "vnet-we-prod-chatbot-01"
-    error_message = "The network name must come from naming.yaml: vnet-we-prod-chatbot-01, got ${data.naming_name.network.name}."
+    condition     = module.network.names.network == "vnet-we-prod-chatbot-01"
+    error_message = "The network name must come from naming.yaml: vnet-we-prod-chatbot-01, got ${module.network.names.network}."
   }
 
   assert {
-    condition     = data.naming_name.storage_account["uploads"].name == "stweprodchatbotuploads01"
-    error_message = "The storage account for uploads name must come from naming.yaml: stweprodchatbotuploads01, got ${data.naming_name.storage_account["uploads"].name}."
+    condition     = module.data.names.storage_account["uploads"] == "stweprodchatbotuploads01"
+    error_message = "The storage account for uploads name must come from naming.yaml: stweprodchatbotuploads01, got ${module.data.names.storage_account["uploads"]}."
   }
 
   assert {
-    condition     = data.naming_name.storage_account["host"].name == "stweprodchatbothost01"
-    error_message = "The storage account for the host name must come from naming.yaml: stweprodchatbothost01, got ${data.naming_name.storage_account["host"].name}."
+    condition     = module.data.names.storage_account["host"] == "stweprodchatbothost01"
+    error_message = "The storage account for the host name must come from naming.yaml: stweprodchatbothost01, got ${module.data.names.storage_account["host"]}."
   }
 
   assert {
-    condition     = data.naming_name.key_vault.name == "kv-prod-chatbot-128f"
-    error_message = "The key vault name must come from naming.yaml: kv-prod-chatbot-128f, got ${data.naming_name.key_vault.name}."
+    condition     = module.security.names.key_vault == "kv-prod-chatbot-128f"
+    error_message = "The key vault name must come from naming.yaml: kv-prod-chatbot-128f, got ${module.security.names.key_vault}."
   }
 
   assert {
-    condition     = data.naming_name.registry.name == "crweprodchatbot01"
-    error_message = "The registry name must come from naming.yaml: crweprodchatbot01, got ${data.naming_name.registry.name}."
+    condition     = module.compute.names.registry == "crweprodchatbot01"
+    error_message = "The registry name must come from naming.yaml: crweprodchatbot01, got ${module.compute.names.registry}."
   }
 
   assert {
-    condition     = data.naming_name.app["web"].name == "app-we-prod-chatbotweb-01"
-    error_message = "The web app name must come from naming.yaml: app-we-prod-chatbotweb-01, got ${data.naming_name.app["web"].name}."
+    condition     = module.compute.names.app["web"] == "app-we-prod-chatbotweb-01"
+    error_message = "The web app name must come from naming.yaml: app-we-prod-chatbotweb-01, got ${module.compute.names.app["web"]}."
   }
 
   assert {
-    condition     = data.naming_name.function.name == "func-we-prod-chatbotfunc-01"
-    error_message = "The connector function name must come from naming.yaml: func-we-prod-chatbotfunc-01, got ${data.naming_name.function.name}."
+    condition     = module.compute.names.function == "func-we-prod-chatbotfunc-01"
+    error_message = "The connector function name must come from naming.yaml: func-we-prod-chatbotfunc-01, got ${module.compute.names.function}."
   }
 
   assert {
-    condition     = data.naming_name.private_endpoint["web"].name == "pep-we-prod-chatbotweb-sites-01"
-    error_message = "The web app private endpoint name must come from naming.yaml: pep-we-prod-chatbotweb-sites-01, got ${data.naming_name.private_endpoint["web"].name}."
+    condition     = module.compute.names.private_endpoint["web"] == "pep-we-prod-chatbotweb-sites-01"
+    error_message = "The web app private endpoint name must come from naming.yaml: pep-we-prod-chatbotweb-sites-01, got ${module.compute.names.private_endpoint["web"]}."
   }
 
   assert {
-    condition     = data.naming_name.private_endpoint["kv"].name == "pep-we-prod-chatbotkv-vault-01"
-    error_message = "The key vault private endpoint name must come from naming.yaml: pep-we-prod-chatbotkv-vault-01, got ${data.naming_name.private_endpoint["kv"].name}."
+    condition     = module.security.names.private_endpoint["kv"] == "pep-we-prod-chatbotkv-vault-01"
+    error_message = "The key vault private endpoint name must come from naming.yaml: pep-we-prod-chatbotkv-vault-01, got ${module.security.names.private_endpoint["kv"]}."
   }
 
   # The AzAPI-based modules take the group as an id, not a name - the wrong one is a silent misplacement.
   assert {
-    condition     = module.storage["uploads"].resource.parent_id == data.azurerm_resource_group.this.id
+    condition     = module.data.storage["uploads"].resource.parent_id == data.azurerm_resource_group.this.id
     error_message = "The storage account is placed into the context's resource group."
   }
 }

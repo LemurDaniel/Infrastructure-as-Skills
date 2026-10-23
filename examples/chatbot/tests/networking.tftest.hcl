@@ -55,22 +55,22 @@ run "networking" {
 
   # decision: virtual-network.addressing.address_space
   assert {
-    condition     = jsonencode(module.network.resource.body.properties.addressSpace.addressPrefixes) == jsonencode(["10.20.0.0/16"])
-    error_message = "virtual-network.addressing.address_space must be [\"10.20.0.0/16\"], got ${try(jsonencode(module.network.resource.body.properties.addressSpace.addressPrefixes), "unknown")}."
+    condition     = jsonencode(module.network.network.resource.body.properties.addressSpace.addressPrefixes) == jsonencode(["10.20.0.0/16"])
+    error_message = "virtual-network.addressing.address_space must be [\"10.20.0.0/16\"], got ${try(jsonencode(module.network.network.resource.body.properties.addressSpace.addressPrefixes), "unknown")}."
   }
 
   # decision: virtual-network.addressing.subnets
   assert {
-    condition     = jsonencode(sort(keys(module.network.subnets))) == jsonencode(["snet-aca", "snet-endpoints", "snet-func", "snet-mcp", "snet-web"])
-    error_message = "virtual-network.addressing.subnets must be [\"snet-aca\", \"snet-endpoints\", \"snet-func\", \"snet-mcp\", \"snet-web\"], got ${try(jsonencode(sort(keys(module.network.subnets))), "unknown")}."
+    condition     = jsonencode(sort(keys(module.network.network.subnets))) == jsonencode(["snet-aca", "snet-endpoints", "snet-func", "snet-mcp", "snet-web"])
+    error_message = "virtual-network.addressing.subnets must be [\"snet-aca\", \"snet-endpoints\", \"snet-func\", \"snet-mcp\", \"snet-web\"], got ${try(jsonencode(sort(keys(module.network.network.subnets))), "unknown")}."
   }
 
   # not-testable: virtual-network.addressing.private_endpoint_subnet_prefix - the subnet is a child resource of the module, which the root cannot read
 
   # decision: virtual-network.addressing.dns_servers
   assert {
-    condition     = module.network.resource.body.properties.dhcpOptions == null
-    error_message = "virtual-network.addressing.dns_servers must be null, got ${try(jsonencode(module.network.resource.body.properties.dhcpOptions), "unknown")}."
+    condition     = module.network.network.resource.body.properties.dhcpOptions == null
+    error_message = "virtual-network.addressing.dns_servers must be null, got ${try(jsonencode(module.network.network.resource.body.properties.dhcpOptions), "unknown")}."
   }
 
   # not-testable: virtual-network.subnet_policy.private_endpoint_network_policies - the subnet is a child resource of the module, which the root cannot read
@@ -105,8 +105,8 @@ run "networking" {
 
   # decision: application-insights.networking.public_network_access
   assert {
-    condition     = module.insights.resource.internet_ingestion_enabled == false
-    error_message = "application-insights.networking.public_network_access must be false, got ${try(jsonencode(module.insights.resource.internet_ingestion_enabled), "unknown")}."
+    condition     = module.observability.insights.resource.internet_ingestion_enabled == false
+    error_message = "application-insights.networking.public_network_access must be false, got ${try(jsonencode(module.observability.insights.resource.internet_ingestion_enabled), "unknown")}."
   }
 
   # not-testable: key-vault.networking.public_network_access - the key-vault module exposes no attribute for it; set through the module input, reviewed in the call
@@ -117,84 +117,84 @@ run "networking" {
 
   # decision: storage-account__uploads.networking.public_network_access
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.publicNetworkAccess == "Disabled"
-    error_message = "storage-account__uploads.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.storage["uploads"].resource.body.properties.publicNetworkAccess), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.publicNetworkAccess == "Disabled"
+    error_message = "storage-account__uploads.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.publicNetworkAccess), "unknown")}."
   }
 
   # not-testable: storage-account__uploads.networking.private_endpoint_subnet - the private endpoint is a child resource of the module; the root sees only its name
 
   # decision: storage-account__uploads.networking.private_endpoint_subresources
   assert {
-    condition     = jsonencode(sort(keys(module.storage["uploads"].private_endpoints))) == jsonencode(["blob"])
-    error_message = "storage-account__uploads.networking.private_endpoint_subresources must be [\"blob\"], got ${try(jsonencode(sort(keys(module.storage["uploads"].private_endpoints))), "unknown")}."
+    condition     = jsonencode(sort(keys(module.data.storage["uploads"].private_endpoints))) == jsonencode(["blob"])
+    error_message = "storage-account__uploads.networking.private_endpoint_subresources must be [\"blob\"], got ${try(jsonencode(sort(keys(module.data.storage["uploads"].private_endpoints))), "unknown")}."
   }
 
   # decision: storage-account__uploads.networking.allow_azure_services_bypass
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.networkAcls.bypass == "AzureServices"
-    error_message = "storage-account__uploads.networking.allow_azure_services_bypass must be \"AzureServices\", got ${try(jsonencode(module.storage["uploads"].resource.body.properties.networkAcls.bypass), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.networkAcls.bypass == "AzureServices"
+    error_message = "storage-account__uploads.networking.allow_azure_services_bypass must be \"AzureServices\", got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.networkAcls.bypass), "unknown")}."
   }
 
   # decision: storage-account__host.networking.public_network_access
   assert {
-    condition     = module.storage["host"].resource.body.properties.publicNetworkAccess == "Disabled"
-    error_message = "storage-account__host.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.storage["host"].resource.body.properties.publicNetworkAccess), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.publicNetworkAccess == "Disabled"
+    error_message = "storage-account__host.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.data.storage["host"].resource.body.properties.publicNetworkAccess), "unknown")}."
   }
 
   # not-testable: storage-account__host.networking.private_endpoint_subnet - the private endpoint is a child resource of the module; the root sees only its name
 
   # decision: storage-account__host.networking.private_endpoint_subresources
   assert {
-    condition     = jsonencode(sort(keys(module.storage["host"].private_endpoints))) == jsonencode(["blob", "queue", "table"])
-    error_message = "storage-account__host.networking.private_endpoint_subresources must be [\"blob\", \"queue\", \"table\"], got ${try(jsonencode(sort(keys(module.storage["host"].private_endpoints))), "unknown")}."
+    condition     = jsonencode(sort(keys(module.data.storage["host"].private_endpoints))) == jsonencode(["blob", "queue", "table"])
+    error_message = "storage-account__host.networking.private_endpoint_subresources must be [\"blob\", \"queue\", \"table\"], got ${try(jsonencode(sort(keys(module.data.storage["host"].private_endpoints))), "unknown")}."
   }
 
   # decision: storage-account__host.networking.allow_azure_services_bypass
   assert {
-    condition     = module.storage["host"].resource.body.properties.networkAcls.bypass == "AzureServices"
-    error_message = "storage-account__host.networking.allow_azure_services_bypass must be \"AzureServices\", got ${try(jsonencode(module.storage["host"].resource.body.properties.networkAcls.bypass), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.networkAcls.bypass == "AzureServices"
+    error_message = "storage-account__host.networking.allow_azure_services_bypass must be \"AzureServices\", got ${try(jsonencode(module.data.storage["host"].resource.body.properties.networkAcls.bypass), "unknown")}."
   }
 
   # decision: cosmos-db.networking.public_network_access
   assert {
-    condition     = module.cosmos.public_network_access_enabled == false
-    error_message = "cosmos-db.networking.public_network_access must be false, got ${try(jsonencode(module.cosmos.public_network_access_enabled), "unknown")}."
+    condition     = module.data.cosmos.public_network_access_enabled == false
+    error_message = "cosmos-db.networking.public_network_access must be false, got ${try(jsonencode(module.data.cosmos.public_network_access_enabled), "unknown")}."
   }
 
   # not-testable: cosmos-db.networking.private_endpoint_subnet - the private endpoint is a child resource of the module; the root sees only its name
 
   # decision: cosmos-db.networking.network_acl_bypass
   assert {
-    condition     = module.cosmos.network_acl_bypass_for_azure_services == false
-    error_message = "cosmos-db.networking.network_acl_bypass must be false, got ${try(jsonencode(module.cosmos.network_acl_bypass_for_azure_services), "unknown")}."
+    condition     = module.data.cosmos.network_acl_bypass_for_azure_services == false
+    error_message = "cosmos-db.networking.network_acl_bypass must be false, got ${try(jsonencode(module.data.cosmos.network_acl_bypass_for_azure_services), "unknown")}."
   }
 
   # decision: foundry.networking.public_network_access
   assert {
-    condition     = module.foundry.resource.public_network_access == "Disabled"
-    error_message = "foundry.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.foundry.resource.public_network_access), "unknown")}."
+    condition     = module.ai.foundry.resource.public_network_access == "Disabled"
+    error_message = "foundry.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.ai.foundry.resource.public_network_access), "unknown")}."
   }
 
   # not-testable: foundry.networking.private_endpoint_subnet - the private endpoint is a child resource of the module; the root sees only its name
 
   # decision: foundry.networking.restrict_outbound
   assert {
-    condition     = module.foundry.resource.outbound_network_access_restricted == true
-    error_message = "foundry.networking.restrict_outbound must be true, got ${try(jsonencode(module.foundry.resource.outbound_network_access_restricted), "unknown")}."
+    condition     = module.ai.foundry.resource.outbound_network_access_restricted == true
+    error_message = "foundry.networking.restrict_outbound must be true, got ${try(jsonencode(module.ai.foundry.resource.outbound_network_access_restricted), "unknown")}."
   }
 
   # decision: search-service.networking.public_network_access
   assert {
-    condition     = module.search.resource.public_network_access_enabled == false
-    error_message = "search-service.networking.public_network_access must be false, got ${try(jsonencode(module.search.resource.public_network_access_enabled), "unknown")}."
+    condition     = module.ai.search.resource.public_network_access_enabled == false
+    error_message = "search-service.networking.public_network_access must be false, got ${try(jsonencode(module.ai.search.resource.public_network_access_enabled), "unknown")}."
   }
 
   # not-testable: search-service.networking.private_endpoint_subnet - the private endpoint is a child resource of the module; the root sees only its name
 
   # decision: search-service.networking.network_rule_bypass
   assert {
-    condition     = module.search.resource.network_rule_bypass_option == "None"
-    error_message = "search-service.networking.network_rule_bypass must be \"None\", got ${try(jsonencode(module.search.resource.network_rule_bypass_option), "unknown")}."
+    condition     = module.ai.search.resource.network_rule_bypass_option == "None"
+    error_message = "search-service.networking.network_rule_bypass must be \"None\", got ${try(jsonencode(module.ai.search.resource.network_rule_bypass_option), "unknown")}."
   }
 
   # not-testable: container-registry.networking.public_network_access - the container-registry module exposes no attribute for it; set through the module input, reviewed in the call
@@ -207,8 +207,8 @@ run "networking" {
 
   # decision: function-app.networking.public_network_access
   assert {
-    condition     = module.function.resource.body.properties.publicNetworkAccess == "Disabled"
-    error_message = "function-app.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.function.resource.body.properties.publicNetworkAccess), "unknown")}."
+    condition     = module.compute.function.resource.body.properties.publicNetworkAccess == "Disabled"
+    error_message = "function-app.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.compute.function.resource.body.properties.publicNetworkAccess), "unknown")}."
   }
 
   # not-testable: function-app.networking.private_endpoint_subnet - the private endpoint is a child resource of the module; the root sees only its name
@@ -219,14 +219,14 @@ run "networking" {
 
   # decision: function-app.networking.vnet_route_all
   assert {
-    condition     = module.function.resource.body.properties.outboundVnetRouting.allTraffic == true
-    error_message = "function-app.networking.vnet_route_all must be true, got ${try(jsonencode(module.function.resource.body.properties.outboundVnetRouting.allTraffic), "unknown")}."
+    condition     = module.compute.function.resource.body.properties.outboundVnetRouting.allTraffic == true
+    error_message = "function-app.networking.vnet_route_all must be true, got ${try(jsonencode(module.compute.function.resource.body.properties.outboundVnetRouting.allTraffic), "unknown")}."
   }
 
   # decision: app-service__web.networking.public_network_access
   assert {
-    condition     = module.app["web"].resource.body.properties.publicNetworkAccess == "Disabled"
-    error_message = "app-service__web.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.app["web"].resource.body.properties.publicNetworkAccess), "unknown")}."
+    condition     = module.compute.app["web"].resource.body.properties.publicNetworkAccess == "Disabled"
+    error_message = "app-service__web.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.compute.app["web"].resource.body.properties.publicNetworkAccess), "unknown")}."
   }
 
   # not-testable: app-service__web.networking.private_endpoint_subnet - the private endpoint is a child resource of the module; the root sees only its name
@@ -237,14 +237,14 @@ run "networking" {
 
   # decision: app-service__web.networking.vnet_route_all
   assert {
-    condition     = module.app["web"].resource.body.properties.outboundVnetRouting.allTraffic == true
-    error_message = "app-service__web.networking.vnet_route_all must be true, got ${try(jsonencode(module.app["web"].resource.body.properties.outboundVnetRouting.allTraffic), "unknown")}."
+    condition     = module.compute.app["web"].resource.body.properties.outboundVnetRouting.allTraffic == true
+    error_message = "app-service__web.networking.vnet_route_all must be true, got ${try(jsonencode(module.compute.app["web"].resource.body.properties.outboundVnetRouting.allTraffic), "unknown")}."
   }
 
   # decision: app-service__mcp.networking.public_network_access
   assert {
-    condition     = module.app["mcp"].resource.body.properties.publicNetworkAccess == "Disabled"
-    error_message = "app-service__mcp.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.app["mcp"].resource.body.properties.publicNetworkAccess), "unknown")}."
+    condition     = module.compute.app["mcp"].resource.body.properties.publicNetworkAccess == "Disabled"
+    error_message = "app-service__mcp.networking.public_network_access must be \"Disabled\", got ${try(jsonencode(module.compute.app["mcp"].resource.body.properties.publicNetworkAccess), "unknown")}."
   }
 
   # not-testable: app-service__mcp.networking.private_endpoint_subnet - the private endpoint is a child resource of the module; the root sees only its name
@@ -255,8 +255,8 @@ run "networking" {
 
   # decision: app-service__mcp.networking.vnet_route_all
   assert {
-    condition     = module.app["mcp"].resource.body.properties.outboundVnetRouting.allTraffic == true
-    error_message = "app-service__mcp.networking.vnet_route_all must be true, got ${try(jsonencode(module.app["mcp"].resource.body.properties.outboundVnetRouting.allTraffic), "unknown")}."
+    condition     = module.compute.app["mcp"].resource.body.properties.outboundVnetRouting.allTraffic == true
+    error_message = "app-service__mcp.networking.vnet_route_all must be true, got ${try(jsonencode(module.compute.app["mcp"].resource.body.properties.outboundVnetRouting.allTraffic), "unknown")}."
   }
 
   # not-testable: container-apps.ingress.ingress - the container app module exposes no attribute for it; set through the module input, reviewed in the call

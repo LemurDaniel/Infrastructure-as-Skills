@@ -55,16 +55,16 @@ run "security" {
 
   # decision: virtual-network.security.ddos_protection
   assert {
-    condition     = module.network.resource.body.properties.enableDdosProtection == false
-    error_message = "virtual-network.security.ddos_protection must be false, got ${try(jsonencode(module.network.resource.body.properties.enableDdosProtection), "unknown")}."
+    condition     = module.network.network.resource.body.properties.enableDdosProtection == false
+    error_message = "virtual-network.security.ddos_protection must be false, got ${try(jsonencode(module.network.network.resource.body.properties.enableDdosProtection), "unknown")}."
   }
 
   # not-testable: virtual-network.security.subnets_expecting_nsg - the subnet is a child resource of the module, which the root cannot read
 
   # decision: application-insights.security.local_authentication_disabled
   assert {
-    condition     = module.insights.resource.local_authentication_disabled == true
-    error_message = "application-insights.security.local_authentication_disabled must be true, got ${try(jsonencode(module.insights.resource.local_authentication_disabled), "unknown")}."
+    condition     = module.observability.insights.resource.local_authentication_disabled == true
+    error_message = "application-insights.security.local_authentication_disabled must be true, got ${try(jsonencode(module.observability.insights.resource.local_authentication_disabled), "unknown")}."
   }
 
   # not-testable: key-vault.security.enabled_for_services - the key-vault module exposes no attribute for it; set through the module input, reviewed in the call
@@ -73,114 +73,114 @@ run "security" {
 
   # decision: storage-account__uploads.security.shared_access_key_enabled
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.allowSharedKeyAccess == false
-    error_message = "storage-account__uploads.security.shared_access_key_enabled must be false, got ${try(jsonencode(module.storage["uploads"].resource.body.properties.allowSharedKeyAccess), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.allowSharedKeyAccess == false
+    error_message = "storage-account__uploads.security.shared_access_key_enabled must be false, got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.allowSharedKeyAccess), "unknown")}."
   }
 
   # decision: storage-account__uploads.security.min_tls_version
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.minimumTlsVersion == "TLS1_2"
-    error_message = "storage-account__uploads.security.min_tls_version must be \"TLS1_2\", got ${try(jsonencode(module.storage["uploads"].resource.body.properties.minimumTlsVersion), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.minimumTlsVersion == "TLS1_2"
+    error_message = "storage-account__uploads.security.min_tls_version must be \"TLS1_2\", got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.minimumTlsVersion), "unknown")}."
   }
 
   # decision: storage-account__uploads.security.https_traffic_only
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.supportsHttpsTrafficOnly == true
-    error_message = "storage-account__uploads.security.https_traffic_only must be true, got ${try(jsonencode(module.storage["uploads"].resource.body.properties.supportsHttpsTrafficOnly), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.supportsHttpsTrafficOnly == true
+    error_message = "storage-account__uploads.security.https_traffic_only must be true, got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.supportsHttpsTrafficOnly), "unknown")}."
   }
 
   # decision: storage-account__uploads.security.allow_blob_public_access
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.allowBlobPublicAccess == false
-    error_message = "storage-account__uploads.security.allow_blob_public_access must be false, got ${try(jsonencode(module.storage["uploads"].resource.body.properties.allowBlobPublicAccess), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.allowBlobPublicAccess == false
+    error_message = "storage-account__uploads.security.allow_blob_public_access must be false, got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.allowBlobPublicAccess), "unknown")}."
   }
 
   # decision: storage-account__uploads.security.infrastructure_encryption_enabled
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.encryption.requireInfrastructureEncryption == true
-    error_message = "storage-account__uploads.security.infrastructure_encryption_enabled must be true, got ${try(jsonencode(module.storage["uploads"].resource.body.properties.encryption.requireInfrastructureEncryption), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.encryption.requireInfrastructureEncryption == true
+    error_message = "storage-account__uploads.security.infrastructure_encryption_enabled must be true, got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.encryption.requireInfrastructureEncryption), "unknown")}."
   }
 
   # decision: storage-account__uploads.security.key_management
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.encryption.keySource == "Microsoft.Storage"
-    error_message = "storage-account__uploads.security.key_management must be \"Microsoft.Storage\", got ${try(jsonencode(module.storage["uploads"].resource.body.properties.encryption.keySource), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.encryption.keySource == "Microsoft.Storage"
+    error_message = "storage-account__uploads.security.key_management must be \"Microsoft.Storage\", got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.encryption.keySource), "unknown")}."
   }
 
   # decision: storage-account__uploads.security.sftp_enabled
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.isSftpEnabled == false
-    error_message = "storage-account__uploads.security.sftp_enabled must be false, got ${try(jsonencode(module.storage["uploads"].resource.body.properties.isSftpEnabled), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.isSftpEnabled == false
+    error_message = "storage-account__uploads.security.sftp_enabled must be false, got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.isSftpEnabled), "unknown")}."
   }
 
   # decision: storage-account__host.security.shared_access_key_enabled
   assert {
-    condition     = module.storage["host"].resource.body.properties.allowSharedKeyAccess == false
-    error_message = "storage-account__host.security.shared_access_key_enabled must be false, got ${try(jsonencode(module.storage["host"].resource.body.properties.allowSharedKeyAccess), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.allowSharedKeyAccess == false
+    error_message = "storage-account__host.security.shared_access_key_enabled must be false, got ${try(jsonencode(module.data.storage["host"].resource.body.properties.allowSharedKeyAccess), "unknown")}."
   }
 
   # decision: storage-account__host.security.min_tls_version
   assert {
-    condition     = module.storage["host"].resource.body.properties.minimumTlsVersion == "TLS1_2"
-    error_message = "storage-account__host.security.min_tls_version must be \"TLS1_2\", got ${try(jsonencode(module.storage["host"].resource.body.properties.minimumTlsVersion), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.minimumTlsVersion == "TLS1_2"
+    error_message = "storage-account__host.security.min_tls_version must be \"TLS1_2\", got ${try(jsonencode(module.data.storage["host"].resource.body.properties.minimumTlsVersion), "unknown")}."
   }
 
   # decision: storage-account__host.security.https_traffic_only
   assert {
-    condition     = module.storage["host"].resource.body.properties.supportsHttpsTrafficOnly == true
-    error_message = "storage-account__host.security.https_traffic_only must be true, got ${try(jsonencode(module.storage["host"].resource.body.properties.supportsHttpsTrafficOnly), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.supportsHttpsTrafficOnly == true
+    error_message = "storage-account__host.security.https_traffic_only must be true, got ${try(jsonencode(module.data.storage["host"].resource.body.properties.supportsHttpsTrafficOnly), "unknown")}."
   }
 
   # decision: storage-account__host.security.allow_blob_public_access
   assert {
-    condition     = module.storage["host"].resource.body.properties.allowBlobPublicAccess == false
-    error_message = "storage-account__host.security.allow_blob_public_access must be false, got ${try(jsonencode(module.storage["host"].resource.body.properties.allowBlobPublicAccess), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.allowBlobPublicAccess == false
+    error_message = "storage-account__host.security.allow_blob_public_access must be false, got ${try(jsonencode(module.data.storage["host"].resource.body.properties.allowBlobPublicAccess), "unknown")}."
   }
 
   # decision: storage-account__host.security.infrastructure_encryption_enabled
   assert {
-    condition     = module.storage["host"].resource.body.properties.encryption.requireInfrastructureEncryption == true
-    error_message = "storage-account__host.security.infrastructure_encryption_enabled must be true, got ${try(jsonencode(module.storage["host"].resource.body.properties.encryption.requireInfrastructureEncryption), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.encryption.requireInfrastructureEncryption == true
+    error_message = "storage-account__host.security.infrastructure_encryption_enabled must be true, got ${try(jsonencode(module.data.storage["host"].resource.body.properties.encryption.requireInfrastructureEncryption), "unknown")}."
   }
 
   # decision: storage-account__host.security.key_management
   assert {
-    condition     = module.storage["host"].resource.body.properties.encryption.keySource == "Microsoft.Storage"
-    error_message = "storage-account__host.security.key_management must be \"Microsoft.Storage\", got ${try(jsonencode(module.storage["host"].resource.body.properties.encryption.keySource), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.encryption.keySource == "Microsoft.Storage"
+    error_message = "storage-account__host.security.key_management must be \"Microsoft.Storage\", got ${try(jsonencode(module.data.storage["host"].resource.body.properties.encryption.keySource), "unknown")}."
   }
 
   # decision: storage-account__host.security.sftp_enabled
   assert {
-    condition     = module.storage["host"].resource.body.properties.isSftpEnabled == false
-    error_message = "storage-account__host.security.sftp_enabled must be false, got ${try(jsonencode(module.storage["host"].resource.body.properties.isSftpEnabled), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.isSftpEnabled == false
+    error_message = "storage-account__host.security.sftp_enabled must be false, got ${try(jsonencode(module.data.storage["host"].resource.body.properties.isSftpEnabled), "unknown")}."
   }
 
   # decision: cosmos-db.security.local_authentication_disabled
   assert {
-    condition     = module.cosmos.local_authentication_disabled == true
-    error_message = "cosmos-db.security.local_authentication_disabled must be true, got ${try(jsonencode(module.cosmos.local_authentication_disabled), "unknown")}."
+    condition     = module.data.cosmos.local_authentication_disabled == true
+    error_message = "cosmos-db.security.local_authentication_disabled must be true, got ${try(jsonencode(module.data.cosmos.local_authentication_disabled), "unknown")}."
   }
 
   # decision: cosmos-db.security.key_based_metadata_writes
   assert {
-    condition     = module.cosmos.access_key_metadata_writes_enabled == false
-    error_message = "cosmos-db.security.key_based_metadata_writes must be false, got ${try(jsonencode(module.cosmos.access_key_metadata_writes_enabled), "unknown")}."
+    condition     = module.data.cosmos.access_key_metadata_writes_enabled == false
+    error_message = "cosmos-db.security.key_based_metadata_writes must be false, got ${try(jsonencode(module.data.cosmos.access_key_metadata_writes_enabled), "unknown")}."
   }
 
   # not-testable: cosmos-db.security.key_management - platform-managed keys: the module is given no key, nothing to observe
 
   # decision: foundry.security.local_authentication_disabled
   assert {
-    condition     = tostring(module.foundry.resource.local_authentication_enabled) == "false"
-    error_message = "foundry.security.local_authentication_disabled must be \"false\", got ${try(jsonencode(tostring(module.foundry.resource.local_authentication_enabled)), "unknown")}."
+    condition     = tostring(module.ai.foundry.resource.local_authentication_enabled) == "false"
+    error_message = "foundry.security.local_authentication_disabled must be \"false\", got ${try(jsonencode(tostring(module.ai.foundry.resource.local_authentication_enabled)), "unknown")}."
   }
 
   # not-testable: foundry.security.key_management - platform-managed keys: the module is given no key, nothing to observe
 
   # decision: search-service.security.local_authentication_disabled
   assert {
-    condition     = tostring(module.search.resource.local_authentication_enabled) == "false"
-    error_message = "search-service.security.local_authentication_disabled must be \"false\", got ${try(jsonencode(tostring(module.search.resource.local_authentication_enabled)), "unknown")}."
+    condition     = tostring(module.ai.search.resource.local_authentication_enabled) == "false"
+    error_message = "search-service.security.local_authentication_disabled must be \"false\", got ${try(jsonencode(tostring(module.ai.search.resource.local_authentication_enabled)), "unknown")}."
   }
 
   # not-testable: search-service.security.key_management - platform-managed keys: the module is given no key, nothing to observe
@@ -193,14 +193,14 @@ run "security" {
 
   # decision: function-app.security.https_only
   assert {
-    condition     = module.function.resource.body.properties.httpsOnly == true
-    error_message = "function-app.security.https_only must be true, got ${try(jsonencode(module.function.resource.body.properties.httpsOnly), "unknown")}."
+    condition     = module.compute.function.resource.body.properties.httpsOnly == true
+    error_message = "function-app.security.https_only must be true, got ${try(jsonencode(module.compute.function.resource.body.properties.httpsOnly), "unknown")}."
   }
 
   # decision: function-app.security.min_tls_version
   assert {
-    condition     = module.function.resource.body.properties.siteConfig.minTlsVersion == "1.2"
-    error_message = "function-app.security.min_tls_version must be \"1.2\", got ${try(jsonencode(module.function.resource.body.properties.siteConfig.minTlsVersion), "unknown")}."
+    condition     = module.compute.function.resource.body.properties.siteConfig.minTlsVersion == "1.2"
+    error_message = "function-app.security.min_tls_version must be \"1.2\", got ${try(jsonencode(module.compute.function.resource.body.properties.siteConfig.minTlsVersion), "unknown")}."
   }
 
   # not-testable: function-app.security.basic_auth_enabled - the site module in this form exposes no attribute for it; set through the module input, reviewed in the call
@@ -209,14 +209,14 @@ run "security" {
 
   # decision: app-service__web.security.https_only
   assert {
-    condition     = module.app["web"].resource.body.properties.httpsOnly == true
-    error_message = "app-service__web.security.https_only must be true, got ${try(jsonencode(module.app["web"].resource.body.properties.httpsOnly), "unknown")}."
+    condition     = module.compute.app["web"].resource.body.properties.httpsOnly == true
+    error_message = "app-service__web.security.https_only must be true, got ${try(jsonencode(module.compute.app["web"].resource.body.properties.httpsOnly), "unknown")}."
   }
 
   # decision: app-service__web.security.min_tls_version
   assert {
-    condition     = module.app["web"].resource.body.properties.siteConfig.minTlsVersion == "1.2"
-    error_message = "app-service__web.security.min_tls_version must be \"1.2\", got ${try(jsonencode(module.app["web"].resource.body.properties.siteConfig.minTlsVersion), "unknown")}."
+    condition     = module.compute.app["web"].resource.body.properties.siteConfig.minTlsVersion == "1.2"
+    error_message = "app-service__web.security.min_tls_version must be \"1.2\", got ${try(jsonencode(module.compute.app["web"].resource.body.properties.siteConfig.minTlsVersion), "unknown")}."
   }
 
   # not-testable: app-service__web.security.ftps_state - the site module in this form exposes no attribute for it; set through the module input, reviewed in the call
@@ -225,14 +225,14 @@ run "security" {
 
   # decision: app-service__mcp.security.https_only
   assert {
-    condition     = module.app["mcp"].resource.body.properties.httpsOnly == true
-    error_message = "app-service__mcp.security.https_only must be true, got ${try(jsonencode(module.app["mcp"].resource.body.properties.httpsOnly), "unknown")}."
+    condition     = module.compute.app["mcp"].resource.body.properties.httpsOnly == true
+    error_message = "app-service__mcp.security.https_only must be true, got ${try(jsonencode(module.compute.app["mcp"].resource.body.properties.httpsOnly), "unknown")}."
   }
 
   # decision: app-service__mcp.security.min_tls_version
   assert {
-    condition     = module.app["mcp"].resource.body.properties.siteConfig.minTlsVersion == "1.2"
-    error_message = "app-service__mcp.security.min_tls_version must be \"1.2\", got ${try(jsonencode(module.app["mcp"].resource.body.properties.siteConfig.minTlsVersion), "unknown")}."
+    condition     = module.compute.app["mcp"].resource.body.properties.siteConfig.minTlsVersion == "1.2"
+    error_message = "app-service__mcp.security.min_tls_version must be \"1.2\", got ${try(jsonencode(module.compute.app["mcp"].resource.body.properties.siteConfig.minTlsVersion), "unknown")}."
   }
 
   # not-testable: app-service__mcp.security.ftps_state - the site module in this form exposes no attribute for it; set through the module input, reviewed in the call

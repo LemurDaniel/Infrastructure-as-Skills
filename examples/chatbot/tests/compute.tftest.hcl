@@ -57,26 +57,26 @@ run "compute" {
 
   # decision: application-insights.component.application_type
   assert {
-    condition     = module.insights.resource.application_type == "web"
-    error_message = "application-insights.component.application_type must be \"web\", got ${try(jsonencode(module.insights.resource.application_type), "unknown")}."
+    condition     = module.observability.insights.resource.application_type == "web"
+    error_message = "application-insights.component.application_type must be \"web\", got ${try(jsonencode(module.observability.insights.resource.application_type), "unknown")}."
   }
 
   # decision: application-insights.component.sampling_percentage
   assert {
-    condition     = module.insights.resource.sampling_percentage == 100
-    error_message = "application-insights.component.sampling_percentage must be 100, got ${try(jsonencode(module.insights.resource.sampling_percentage), "unknown")}."
+    condition     = module.observability.insights.resource.sampling_percentage == 100
+    error_message = "application-insights.component.sampling_percentage must be 100, got ${try(jsonencode(module.observability.insights.resource.sampling_percentage), "unknown")}."
   }
 
   # decision: application-insights.component.daily_cap_gb
   assert {
-    condition     = module.insights.resource.daily_data_cap_in_gb == 0
-    error_message = "application-insights.component.daily_cap_gb must be 0, got ${try(jsonencode(module.insights.resource.daily_data_cap_in_gb), "unknown")}."
+    condition     = module.observability.insights.resource.daily_data_cap_in_gb == 0
+    error_message = "application-insights.component.daily_cap_gb must be 0, got ${try(jsonencode(module.observability.insights.resource.daily_data_cap_in_gb), "unknown")}."
   }
 
   # decision: application-insights.component.store_client_ip
   assert {
-    condition     = module.insights.resource.disable_ip_masking == false
-    error_message = "application-insights.component.store_client_ip must be false, got ${try(jsonencode(module.insights.resource.disable_ip_masking), "unknown")}."
+    condition     = module.observability.insights.resource.disable_ip_masking == false
+    error_message = "application-insights.component.store_client_ip must be false, got ${try(jsonencode(module.observability.insights.resource.disable_ip_masking), "unknown")}."
   }
 
   # not-testable: cosmos-db.account.capacity_mode - a container- or region-level setting inside the module's nested inputs, not exposed as an output
@@ -87,22 +87,22 @@ run "compute" {
 
   # decision: cosmos-db.account.total_throughput_limit
   assert {
-    condition     = module.cosmos.capacity.total_throughput_limit == -1
-    error_message = "cosmos-db.account.total_throughput_limit must be -1, got ${try(jsonencode(module.cosmos.capacity.total_throughput_limit), "unknown")}."
+    condition     = module.data.cosmos.capacity.total_throughput_limit == -1
+    error_message = "cosmos-db.account.total_throughput_limit must be -1, got ${try(jsonencode(module.data.cosmos.capacity.total_throughput_limit), "unknown")}."
   }
 
   # decision: cosmos-db.account.free_tier
   assert {
-    condition     = module.cosmos.free_tier_enabled == false
-    error_message = "cosmos-db.account.free_tier must be false, got ${try(jsonencode(module.cosmos.free_tier_enabled), "unknown")}."
+    condition     = module.data.cosmos.free_tier_enabled == false
+    error_message = "cosmos-db.account.free_tier must be false, got ${try(jsonencode(module.data.cosmos.free_tier_enabled), "unknown")}."
   }
 
   # not-testable: foundry.account.kind - the module resource output carries no kind or project-management attribute for the AIServices form
 
   # decision: foundry.account.sku_name
   assert {
-    condition     = module.foundry.resource.sku_name == "S0"
-    error_message = "foundry.account.sku_name must be \"S0\", got ${try(jsonencode(module.foundry.resource.sku_name), "unknown")}."
+    condition     = module.ai.foundry.resource.sku_name == "S0"
+    error_message = "foundry.account.sku_name must be \"S0\", got ${try(jsonencode(module.ai.foundry.resource.sku_name), "unknown")}."
   }
 
   # not-testable: foundry.account.project_management - the module resource output carries no kind or project-management attribute for the AIServices form
@@ -115,38 +115,38 @@ run "compute" {
 
   # decision: cosmos-db.resilience.automatic_failover
   assert {
-    condition     = module.cosmos.automatic_failover_enabled == true
-    error_message = "cosmos-db.resilience.automatic_failover must be true, got ${try(jsonencode(module.cosmos.automatic_failover_enabled), "unknown")}."
+    condition     = module.data.cosmos.automatic_failover_enabled == true
+    error_message = "cosmos-db.resilience.automatic_failover must be true, got ${try(jsonencode(module.data.cosmos.automatic_failover_enabled), "unknown")}."
   }
 
   # decision: cosmos-db.resilience.consistency_level
   assert {
-    condition     = module.cosmos.consistency_policy.consistency_level == "Session"
-    error_message = "cosmos-db.resilience.consistency_level must be \"Session\", got ${try(jsonencode(module.cosmos.consistency_policy.consistency_level), "unknown")}."
+    condition     = module.data.cosmos.consistency_policy.consistency_level == "Session"
+    error_message = "cosmos-db.resilience.consistency_level must be \"Session\", got ${try(jsonencode(module.data.cosmos.consistency_policy.consistency_level), "unknown")}."
   }
 
   # decision: search-service.service.sku
   assert {
-    condition     = module.search.resource.sku == "standard"
-    error_message = "search-service.service.sku must be \"standard\", got ${try(jsonencode(module.search.resource.sku), "unknown")}."
+    condition     = module.ai.search.resource.sku == "standard"
+    error_message = "search-service.service.sku must be \"standard\", got ${try(jsonencode(module.ai.search.resource.sku), "unknown")}."
   }
 
   # decision: search-service.service.replica_count
   assert {
-    condition     = module.search.resource.replica_count == 2
-    error_message = "search-service.service.replica_count must be 2, got ${try(jsonencode(module.search.resource.replica_count), "unknown")}."
+    condition     = module.ai.search.resource.replica_count == 2
+    error_message = "search-service.service.replica_count must be 2, got ${try(jsonencode(module.ai.search.resource.replica_count), "unknown")}."
   }
 
   # decision: search-service.service.partition_count
   assert {
-    condition     = module.search.resource.partition_count == 1
-    error_message = "search-service.service.partition_count must be 1, got ${try(jsonencode(module.search.resource.partition_count), "unknown")}."
+    condition     = module.ai.search.resource.partition_count == 1
+    error_message = "search-service.service.partition_count must be 1, got ${try(jsonencode(module.ai.search.resource.partition_count), "unknown")}."
   }
 
   # decision: search-service.service.semantic_ranker
   assert {
-    condition     = module.search.resource.semantic_search_sku == "free"
-    error_message = "search-service.service.semantic_ranker must be \"free\", got ${try(jsonencode(module.search.resource.semantic_search_sku), "unknown")}."
+    condition     = module.ai.search.resource.semantic_search_sku == "free"
+    error_message = "search-service.service.semantic_ranker must be \"free\", got ${try(jsonencode(module.ai.search.resource.semantic_search_sku), "unknown")}."
   }
 
   # not-testable: container-registry.registry.sku - the container-registry module exposes no attribute for it; set through the module input, reviewed in the call
@@ -159,34 +159,34 @@ run "compute" {
 
   # decision: container-apps.environment.workload_profile
   assert {
-    condition     = azapi_resource.container_environment.body.properties.workloadProfiles[0].workloadProfileType == "Consumption"
-    error_message = "container-apps.environment.workload_profile must be \"Consumption\", got ${try(jsonencode(azapi_resource.container_environment.body.properties.workloadProfiles[0].workloadProfileType), "unknown")}."
+    condition     = module.compute.container_environment.body.properties.workloadProfiles[0].workloadProfileType == "Consumption"
+    error_message = "container-apps.environment.workload_profile must be \"Consumption\", got ${try(jsonencode(module.compute.container_environment.body.properties.workloadProfiles[0].workloadProfileType), "unknown")}."
   }
 
   # decision: container-apps.environment.zone_redundant
   assert {
-    condition     = azapi_resource.container_environment.body.properties.zoneRedundant == true
-    error_message = "container-apps.environment.zone_redundant must be true, got ${try(jsonencode(azapi_resource.container_environment.body.properties.zoneRedundant), "unknown")}."
+    condition     = module.compute.container_environment.body.properties.zoneRedundant == true
+    error_message = "container-apps.environment.zone_redundant must be true, got ${try(jsonencode(module.compute.container_environment.body.properties.zoneRedundant), "unknown")}."
   }
 
   # decision: container-apps.environment.internal
   assert {
-    condition     = azapi_resource.container_environment.body.properties.vnetConfiguration.internal == true
-    error_message = "container-apps.environment.internal must be true, got ${try(jsonencode(azapi_resource.container_environment.body.properties.vnetConfiguration.internal), "unknown")}."
+    condition     = module.compute.container_environment.body.properties.vnetConfiguration.internal == true
+    error_message = "container-apps.environment.internal must be true, got ${try(jsonencode(module.compute.container_environment.body.properties.vnetConfiguration.internal), "unknown")}."
   }
 
   # not-testable: container-apps.environment.infrastructure_subnet - the subnet id is unknown at plan time
 
   # decision: container-apps.environment.public_network_access
   assert {
-    condition     = azapi_resource.container_environment.body.properties.publicNetworkAccess == "Disabled"
-    error_message = "container-apps.environment.public_network_access must be \"Disabled\", got ${try(jsonencode(azapi_resource.container_environment.body.properties.publicNetworkAccess), "unknown")}."
+    condition     = module.compute.container_environment.body.properties.publicNetworkAccess == "Disabled"
+    error_message = "container-apps.environment.public_network_access must be \"Disabled\", got ${try(jsonencode(module.compute.container_environment.body.properties.publicNetworkAccess), "unknown")}."
   }
 
   # decision: container-apps.environment.peer_traffic_encryption
   assert {
-    condition     = azapi_resource.container_environment.body.properties.peerTrafficConfiguration.encryption.enabled == true
-    error_message = "container-apps.environment.peer_traffic_encryption must be true, got ${try(jsonencode(azapi_resource.container_environment.body.properties.peerTrafficConfiguration.encryption.enabled), "unknown")}."
+    condition     = module.compute.container_environment.body.properties.peerTrafficConfiguration.encryption.enabled == true
+    error_message = "container-apps.environment.peer_traffic_encryption must be true, got ${try(jsonencode(module.compute.container_environment.body.properties.peerTrafficConfiguration.encryption.enabled), "unknown")}."
   }
 
   # not-testable: container-apps.app.container_image - the container app module exposes no attribute for it; set through the module input, reviewed in the call

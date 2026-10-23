@@ -55,20 +55,20 @@ run "data_protection" {
 
   # decision: log-analytics-workspace.cost.retention_days
   assert {
-    condition     = module.workspace.resource.retention_in_days == 30
-    error_message = "log-analytics-workspace.cost.retention_days must be 30, got ${try(jsonencode(module.workspace.resource.retention_in_days), "unknown")}."
+    condition     = module.observability.workspace.resource.retention_in_days == 30
+    error_message = "log-analytics-workspace.cost.retention_days must be 30, got ${try(jsonencode(module.observability.workspace.resource.retention_in_days), "unknown")}."
   }
 
   # decision: log-analytics-workspace.cost.daily_quota_gb
   assert {
-    condition     = module.workspace.resource.daily_quota_gb == -1
-    error_message = "log-analytics-workspace.cost.daily_quota_gb must be -1, got ${try(jsonencode(module.workspace.resource.daily_quota_gb), "unknown")}."
+    condition     = module.observability.workspace.resource.daily_quota_gb == -1
+    error_message = "log-analytics-workspace.cost.daily_quota_gb must be -1, got ${try(jsonencode(module.observability.workspace.resource.daily_quota_gb), "unknown")}."
   }
 
   # decision: log-analytics-workspace.cost.sku
   assert {
-    condition     = module.workspace.resource.sku == "PerGB2018"
-    error_message = "log-analytics-workspace.cost.sku must be \"PerGB2018\", got ${try(jsonencode(module.workspace.resource.sku), "unknown")}."
+    condition     = module.observability.workspace.resource.sku == "PerGB2018"
+    error_message = "log-analytics-workspace.cost.sku must be \"PerGB2018\", got ${try(jsonencode(module.observability.workspace.resource.sku), "unknown")}."
   }
 
   # not-testable: log-analytics-workspace.data_protection.immediate_purge_protection - the module exposes no attribute for it; set through the module input, reviewed in the call
@@ -77,14 +77,14 @@ run "data_protection" {
 
   # decision: storage-account__uploads.data_protection.replication
   assert {
-    condition     = module.storage["uploads"].resource.body.sku.name == "Standard_ZRS"
-    error_message = "storage-account__uploads.data_protection.replication must be \"Standard_ZRS\", got ${try(jsonencode(module.storage["uploads"].resource.body.sku.name), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.sku.name == "Standard_ZRS"
+    error_message = "storage-account__uploads.data_protection.replication must be \"Standard_ZRS\", got ${try(jsonencode(module.data.storage["uploads"].resource.body.sku.name), "unknown")}."
   }
 
   # decision: storage-account__uploads.data_protection.access_tier
   assert {
-    condition     = module.storage["uploads"].resource.body.properties.accessTier == "Hot"
-    error_message = "storage-account__uploads.data_protection.access_tier must be \"Hot\", got ${try(jsonencode(module.storage["uploads"].resource.body.properties.accessTier), "unknown")}."
+    condition     = module.data.storage["uploads"].resource.body.properties.accessTier == "Hot"
+    error_message = "storage-account__uploads.data_protection.access_tier must be \"Hot\", got ${try(jsonencode(module.data.storage["uploads"].resource.body.properties.accessTier), "unknown")}."
   }
 
   # not-testable: storage-account__uploads.data_protection.blob_soft_delete_days - blob-service properties are built in the module's blob_service child, which the root cannot read
@@ -101,14 +101,14 @@ run "data_protection" {
 
   # decision: storage-account__host.data_protection.replication
   assert {
-    condition     = module.storage["host"].resource.body.sku.name == "Standard_ZRS"
-    error_message = "storage-account__host.data_protection.replication must be \"Standard_ZRS\", got ${try(jsonencode(module.storage["host"].resource.body.sku.name), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.sku.name == "Standard_ZRS"
+    error_message = "storage-account__host.data_protection.replication must be \"Standard_ZRS\", got ${try(jsonencode(module.data.storage["host"].resource.body.sku.name), "unknown")}."
   }
 
   # decision: storage-account__host.data_protection.access_tier
   assert {
-    condition     = module.storage["host"].resource.body.properties.accessTier == "Hot"
-    error_message = "storage-account__host.data_protection.access_tier must be \"Hot\", got ${try(jsonencode(module.storage["host"].resource.body.properties.accessTier), "unknown")}."
+    condition     = module.data.storage["host"].resource.body.properties.accessTier == "Hot"
+    error_message = "storage-account__host.data_protection.access_tier must be \"Hot\", got ${try(jsonencode(module.data.storage["host"].resource.body.properties.accessTier), "unknown")}."
   }
 
   # not-testable: storage-account__host.data_protection.blob_soft_delete_days - blob-service properties are built in the module's blob_service child, which the root cannot read
@@ -127,8 +127,8 @@ run "data_protection" {
 
   # decision: cosmos-db.data_protection.analytical_storage
   assert {
-    condition     = module.cosmos.analytical_storage_enabled == false
-    error_message = "cosmos-db.data_protection.analytical_storage must be false, got ${try(jsonencode(module.cosmos.analytical_storage_enabled), "unknown")}."
+    condition     = module.data.cosmos.analytical_storage_enabled == false
+    error_message = "cosmos-db.data_protection.analytical_storage must be false, got ${try(jsonencode(module.data.cosmos.analytical_storage_enabled), "unknown")}."
   }
 
   # not-testable: cosmos-db.containers.databases - a container- or region-level setting inside the module's nested inputs, not exposed as an output
