@@ -75,35 +75,41 @@ LABELS = {
         'internet': 'Internet', 'users': 'Users', 'noPublic': 'no public access', 'existing': 'existing - not created',
         'decisions': 'Decisions', 'open': 'Open', 'assumed': 'Assumed', 'exposure': 'Exposure',
         'network': 'Network', 'mandates': 'Mandates', 'dns': 'Private DNS', 'diag': 'Diagnostics',
-        'forces': 'forces', 'peSubnet': 'private endpoints', 'owner': 'owner', 'noSet': 'no question set',
+        'forces': 'forces', 'forcedHead': 'Forced by a decision', 'peSubnet': 'private endpoints', 'owner': 'owner', 'noSet': 'no question set',
         'arch': 'Architecture', 'ext': 'Internet and external services', 'monitoring': 'Monitoring',
         'diagNote': 'Diagnostic settings of all resources', 'nameRes': 'Name resolution',
         'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'public access disabled', 'support': 'Identities and network baseline',
         'compute': 'Compute', 'computeSubnet': 'snet-compute', 'delegated': 'delegated to', 'optional': 'optional',
-        'legend': 'Legend', 'legCallers': 'a caller on its way to the private endpoints - one colour per caller', 'legPE': 'from the private endpoints to the service, no public path', 'legPrivate': 'access over a private endpoint, no public path',
+        'legend': 'Legend', 'legCallers': 'a caller on its way to the private endpoints - one colour per caller', 'legPE': 'from the private endpoints to the service, no public path', 'legPrivateAny': 'private access, no public path', 'legPrivate': 'access over a private endpoint, no public path',
         'legPublic': 'access from or over the internet', 'legExisting': 'existing, not created here',
         'legOptional': 'optional component', 'legOpen': 'open or assumed decision',
         'subPrivate': 'No service is reachable from the internet: access runs over private endpoints.',
         'subExc': 'Private by default; the named exceptions are reachable from the internet behind a firewall.',
         'subPublic': 'The system is reachable from the internet by design.',
-        'keyless': ' Sign-in is by company identity, no keys.',
+        'subPrivateExc': 'Access runs over private endpoints; reachable from the internet: {names}.',
+        'noPublicExc': 'no public access, except: {names}',
+        'telemetry': 'telemetry',
+        'keyless': ' Access to the resources is by identity, no keys.',
     },
     'de': {
         'internet': 'Internet', 'users': 'Benutzer', 'noPublic': 'kein öffentlicher Zugriff', 'existing': 'vorhanden - wird nicht erstellt',
         'decisions': 'Entscheidungen', 'open': 'Offen', 'assumed': 'Angenommen', 'exposure': 'Erreichbarkeit',
         'network': 'Netzwerk', 'mandates': 'Vorgaben', 'dns': 'Private DNS', 'diag': 'Diagnose',
-        'forces': 'erzwingt', 'peSubnet': 'Private Endpoints', 'owner': 'zuständig', 'noSet': 'ohne Fragenset',
+        'forces': 'erzwingt', 'forcedHead': 'Durch Entscheidungen erzwungen', 'peSubnet': 'Private Endpoints', 'owner': 'zuständig', 'noSet': 'ohne Fragenset',
         'arch': 'Architektur', 'ext': 'Internet und externe Dienste', 'monitoring': 'Monitoring',
         'diagNote': 'Diagnose-Einstellungen aller Ressourcen', 'nameRes': 'Namensauflösung',
         'peBundle': 'Private Endpoints', 'paas': 'Azure PaaS', 'paasPrivate': 'öffentlicher Zugriff deaktiviert', 'support': 'Identitäten und Netzwerkgrundlage',
         'compute': 'Compute', 'computeSubnet': 'snet-compute', 'delegated': 'delegiert an', 'optional': 'optional',
-        'legend': 'Legende', 'legCallers': 'Aufrufer auf dem Weg zu den Private Endpoints - eine Farbe je Aufrufer', 'legPE': 'von den Private Endpoints zum Dienst, kein öffentlicher Weg', 'legPrivate': 'Zugriff über Private Endpoint, kein öffentlicher Weg',
+        'legend': 'Legende', 'legCallers': 'Aufrufer auf dem Weg zu den Private Endpoints - eine Farbe je Aufrufer', 'legPE': 'von den Private Endpoints zum Dienst, kein öffentlicher Weg', 'legPrivateAny': 'privater Zugriff, kein öffentlicher Weg', 'legPrivate': 'Zugriff über Private Endpoint, kein öffentlicher Weg',
         'legPublic': 'Zugriff aus dem oder über das Internet', 'legExisting': 'vorhanden, wird hier nicht erstellt',
         'legOptional': 'optionales Bauteil', 'legOpen': 'offene oder angenommene Entscheidung',
         'subPrivate': 'Kein Dienst ist aus dem Internet erreichbar: Zugriffe laufen über Private Endpoints.',
         'subExc': 'Standardmäßig privat; die benannten Ausnahmen sind hinter einer Firewall aus dem Internet erreichbar.',
         'subPublic': 'Das System ist absichtlich aus dem Internet erreichbar.',
-        'keyless': ' Die Anmeldung läuft über Firmenidentitäten, ohne Schlüssel.',
+        'subPrivateExc': 'Zugriffe laufen über Private Endpoints; aus dem Internet erreichbar: {names}.',
+        'noPublicExc': 'kein öffentlicher Zugriff, außer: {names}',
+        'telemetry': 'Telemetrie',
+        'keyless': ' Zugriffe auf die Ressourcen laufen über Identitäten, ohne Schlüssel.',
     },
 }
 
@@ -170,6 +176,7 @@ SLOT_W, SLOT_H, ICON = 172, 132, 48
 LABEL_W = SLOT_W - 10
 HEAD, ZHEAD, PAD = 40, 30, 16
 ZONE_W = SLOT_W + 40
+TRK = 24   # spacing of parallel tracks
 TOP = 80
 
 CONTAINER_STYLE = 'rounded=1;arcSize=2;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0078D4;verticalAlign=top;align=left;spacingLeft=36;spacingTop=4;fontStyle=1;container=1;collapsible=0;'
@@ -179,7 +186,8 @@ EDGE_BASE = 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFi
 PRIVATE_COLOR, PUBLIC_COLOR = '#0078D4', '#D83B01'
 # With three or more callers the private lines are told apart by colour: one colour per caller,
 # a legend entry each. Orange stays what leaves or crosses the internet.
-CALLER_COLORS = ['#0078D4', '#008272', '#8764B8', '#498205', '#B146C2', '#8E562E', '#005B70', '#986F0B']
+# Never blue (PRIVATE_COLOR, the line from the endpoints to the service), orange or red.
+CALLER_COLORS = ['#008272', '#8764B8', '#498205', '#B146C2', '#8E562E', '#005B70', '#986F0B', '#69797E']
 
 
 def zone_style(fill, stroke, font):
@@ -351,16 +359,31 @@ def main():
     drawn = compute + paas + support
 
     def pna(k):
-        v = s(get_decision(resources[k], ['networking', 'public_network_access']))
-        return v or ('disabled' if is_private else 'enabled')
+        # The group differs by question set (a workspace keeps it under `access`): networking first,
+        # then any other group that carries the decision.
+        groups = ['networking'] + [g for g in (resources[k] if isinstance(resources[k], dict) else {}) if g != 'networking']
+        for g in groups:
+            v = s(get_decision(resources[k], [g, 'public_network_access']))
+            if v:
+                return v
+        return 'disabled' if is_private else 'enabled'
 
     def pe_subnet_of(k):
         return get_decision(resources[k], ['networking', 'private_endpoint_subnet'])
 
     # Which resources get a private endpoint: a private posture or an explicit subnet,
-    # and not a public-access departure.
+    # and not a public-access departure. A Container Apps environment is injected into its
+    # subnet (internal), it has no endpoint unless the spec names a subnet for one.
+    INJECTED_KINDS = {'container-app', 'container-apps', 'container-apps-environment'}
     with_pe = [k for k in drawn if base(k) not in SUPPORT_KINDS
+               and (base(k) not in INJECTED_KINDS or pe_subnet_of(k) is not None)
                and (is_private or pe_subnet_of(k) is not None) and (pna(k) == 'disabled' or pe_subnet_of(k) is not None)]
+
+    # A private posture with a named departure (a workspace left public) is not "no public access":
+    # the subtitle and the footer name the exception instead of claiming everything.
+    public_exceptions = [k for k in res_keys if exposure == 'private' and base(k) not in SUPPORT_KINDS
+                         and k != 'virtual-network' and pna(k) != 'disabled']
+    exception_names = ', '.join(dict.fromkeys(TYPE_NAMES.get(base(k), base(k)) for k in public_exceptions))
 
     pe_subnet_name = subnet_name(get_decision(dep, ['private_endpoint_subnet']), res_keys)
     pe_subnet_prefix = get_decision(dep, ['private_endpoint_subnet_prefix'])
@@ -542,7 +565,7 @@ def main():
         cols_p = 2 if len(paas) > 9 else 1
         stagger = 0
         cw = max(cols_c * SLOT_W + 2 * PAD, 2 * SLOT_W + 2 * PAD)        # compute subnet width
-        coll_w = 34 + 16 * (len(callers) + n_inter)
+        coll_w = 34 + TRK * (len(callers) + n_inter)
         pe_w = SLOT_W
         w_main = PAD + cw + coll_w + pe_w + PAD
         chan_w = 80
@@ -592,7 +615,7 @@ def main():
     if side:
         PAAS_HEAD = 48   # a two-line title: the column is narrow
         paas_h = PAAS_HEAD + rows_height(paas, cols_p) + PAD
-    cols_s = min(max(len(support), 1), max(block_w // SLOT_W, 1) if side else max(cols_p, 3))
+    cols_s = min(max(len(support), 1), max((block_w - 2 * PAD) // SLOT_W, 1) if side else max(cols_p, 3))
     support_h = (ZHEAD + rows_height(support, cols_s) + PAD) if support else 0
 
     # One bus lane per compute resource that calls PaaS, between the network and the PaaS zone.
@@ -610,7 +633,7 @@ def main():
     if draw_law or has_ai:
         right.append({'id': 'monitoring', 'h': ZHEAD + SLOT_H * ((1 if draw_law else 0) + (1 if has_ai else 0)) + 40 + PAD,
                       'inside': not law_existing})
-    if zones:
+    if zones or dns_existing and dns_ownership:
         right.append({'id': 'dnszones', 'h': ZHEAD + SLOT_H + PAD, 'inside': not dns_existing})
     right_in = [r for r in right if r['inside']]
     right_out = [r for r in right if not r['inside']]
@@ -619,7 +642,11 @@ def main():
     # --- Geometry, phase B: positions --------------------------------------
     ext_w = ZONE_W if actors else 0
     # No subscription frame: it changes per environment and only adds a layer.
-    rg_x, rg_y = 20 + (ext_w + 40 if actors else 0), TOP
+    # Each line between an actor and a compute resource runs on a track of its own in the gap.
+    n_ae = sum(1 for a in access if (is_actor(a['from']) and a['to'] in compute) or (is_actor(a['to']) and a['from'] in compute))
+    ACT_STEP = 36
+    ext_gap = 40 + ACT_STEP * max(n_ae - 1, 0)
+    rg_x, rg_y = 20 + (ext_w + ext_gap if actors else 0), TOP
     sub_x, sub_y = rg_x, rg_y
     main_x, main_y = rg_x + PAD, rg_y + HEAD + 10
     rin_x = main_x + block_w + PAD
@@ -676,6 +703,8 @@ def main():
     # Title and subtitle
     workload = s(get_value(ctx.get('workload'))) or s(get_at(spec, ['spec', 'id']))
     sub_line = {'private': T['subPrivate'], 'private_with_exceptions': T['subExc'], 'public': T['subPublic']}.get(exposure, '')
+    if exposure == 'private' and public_exceptions:
+        sub_line = T['subPrivateExc'].replace('{names}', exception_names)
     if sub_line and s(get_decision(dep, ['local_auth'])) == 'disabled':
         sub_line += T['keyless']
     add_text('title', '1', 20, 12, 900, 30, f"<b>{esc(workload)} &#8212; {T['arch']}</b>",
@@ -708,7 +737,8 @@ def main():
     icons.append({'id': 'rg-icon', 'parent': 'rg', 'x': rg_x + 6, 'y': rg_y + 6, 'w': 24, 'h': 24,
                   'style': f"image;aspect=fixed;html=1;image={ICONS['resource-group']};", 'value': ''})
     if is_private:
-        add_text('rg-private', 'rg', rg_x + PAD, rg_y + rg_h - 26, rg_w - 2 * PAD, 20, f"&#128274; {T['noPublic']}",
+        footer = T['noPublicExc'].replace('{names}', exception_names) if public_exceptions else T['noPublic']
+        add_text('rg-private', 'rg', rg_x + PAD, rg_y + rg_h - 26, rg_w - 2 * PAD, 20, f"&#128274; {esc(footer)}",
                  'text;html=1;align=left;verticalAlign=middle;fontColor=#107C10;fontStyle=2;')
 
     # Network zone: subnets with their compute, then the bundled endpoints
@@ -789,7 +819,7 @@ def main():
         is_mon = r['id'] == 'monitoring'
         existing = law_existing if is_mon else dns_existing
         add_container({'id': f"z-{r['id']}", 'parent': parent, 'x': px, 'y': py, 'w': ZONE_W, 'h': r['h'],
-                       'style': ZONES['monitoring'] if is_mon else ZONES['platform'],
+                       'style': (ZONES['monitoring'] if is_mon else ZONES['platform']) + (EXISTING_STYLE if existing else ''),
                        'value': esc(T['monitoring'] if is_mon else T['nameRes'])})
         sx, sy = px + (ZONE_W - SLOT_W) / 2, py + ZHEAD
         if is_mon:
@@ -807,7 +837,7 @@ def main():
                      'text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontColor=#605E5C;')
         else:
             add_icon('dns', f"z-{r['id']}", sx, sy, 'private-dns-zone',
-                     format_label('Private DNS Zones', f"{len(zones)}× privatelink.*", T['existing'] if existing else ''),
+                     format_label('Private DNS Zones', f"{len(zones)}× privatelink.*" if zones else 'privatelink.*', T['existing'] if existing else ''),
                      False, existing)
         if inside:
             ry_in += r['h'] + PAD
@@ -837,6 +867,36 @@ def main():
                 else:
                     txt = s(entry)
                 lines.append(f"<font color='#8A6100'>{esc(k)}: {esc(get_decision(dep, [k]))} → {T['forces']} {esc(txt)}</font>")
+    # Every forced decision, grouped by what forced it: the same attribute with the same value on
+    # several resources is one entry with a count.
+    chains = {}
+
+    def walk_forced(node, path):
+        if isinstance(node, dict):
+            if s(node.get('source')) == 'forced' and node.get('forced_by'):
+                chains.setdefault(s(node['forced_by']), []).append((path, node))
+                return
+            for ck, cv in node.items():
+                walk_forced(cv, f"{path}.{ck}" if path else str(ck))
+
+    walk_forced(dep, 'deployment')
+    walk_forced(resources, 'resources')
+    if chains:
+        lines.append('')
+        lines.append(f"<b>{esc(T['forcedHead'])}</b>")
+    for by, items in chains.items():
+        grouped = {}
+        for path, node in items:
+            attr = path.split('.')[-1]
+            val = get_value(node)
+            shown = s(val) if not isinstance(val, (dict, list)) else f"({len(val)})"
+            grouped.setdefault((attr, shown), []).append(path)
+        parts = []
+        for (attr, shown), paths in grouped.items():
+            where = f" ×{len(paths)}" if len(paths) > 1 else (f" ({paths[0].split('.')[1]})" if paths[0].startswith('resources.') else '')
+            parts.append(f"{attr} = {shown}{where}")
+        src = by.replace('deployment.', '').replace('resources.', '')
+        lines.append(f"<font color='#8A6100'>{esc(src)} → {T['forces']} {esc('; '.join(parts))}</font>")
     if open_items:
         lines.append('')
         lines.append(f"<b><font color='#D13438'>{T['open']}</font></b>")
@@ -892,6 +952,19 @@ def main():
     vn_cell = by_id.get('vnet') or by_id.get('z-compute')
     gut0 = (vn_cell['x'] + vn_cell['w'] - 2 * PAD) if vn_cell else sub_x
     inter = {}   # compute -> compute: tracks left of the callers' own
+    actor_edges = [a for a in access if (is_actor(a['from']) and a['to'] in compute) or (is_actor(a['to']) and a['from'] in compute)]
+    actor_edges = [a for a in actor_edges if node_id(a['from']) in by_id and node_id(a['to']) in by_id]
+    ay = lambda a: by_id[node_id(a['from'] if is_actor(a['from']) else a['to'])]['y']
+    actor_edges.sort(key=lambda a: (ay(a), a['from'], a['to']))
+    gx_of = {(a['from'], a['to']): 20 + ext_w + 14 + ACT_STEP * (len(actor_edges) - 1 - i) for i, a in enumerate(actor_edges)}
+    at_comp = {}
+    for a in actor_edges:
+        at_comp.setdefault(a['to'] if is_actor(a['from']) else a['from'], []).append(a)
+    # A compute that is the target of a compute -> compute line takes that line high on its right
+    # side and sends its own lines to the endpoints from lower down, so an arrowhead never lands
+    # where another line leaves.
+    IN_FR, OUT_FR = 0.25, 0.75
+    inter_tgt = {a['to'] for a in access if a['from'] in compute and a['to'] in compute}
     gap_edges = 0  # actors <-> compute: tracks in the gap between the external zone and the group,
                    # so a vertical run never lies on the resource group's border
     for n, a in enumerate(access):
@@ -905,7 +978,8 @@ def main():
         color = PUBLIC_COLOR if public else (caller_color.get(a['from'], PRIVATE_COLOR) if dense else PRIVATE_COLOR)
         style = EDGE_BASE + f"strokeColor={color};fontColor={color};fontSize=10;labelBackgroundColor=#FFFFFF;"
         sc, dc = by_id[src], by_id[dst]
-        edge = {'id': f"e-{n}", 'source': src, 'target': dst, 'value': a['label']}
+        edge_label = a['label'] or (T['telemetry'] if a['from'] in compute and base(a['to']) in MONITOR_KINDS else '')
+        edge = {'id': f"e-{n}", 'source': src, 'target': dst, 'value': edge_label}
         if a['from'] in caller_i and a['to'] in paas:
             tx = gut0 - 16 * track_rank[a['from']]
             bus_y = bus_base + 10 * lane_rank[a['from']]
@@ -914,11 +988,11 @@ def main():
         elif a['from'] in compute and a['to'] in compute:
             k = inter.setdefault(a['from'] + '>' + a['to'], len(inter))
             if side and 'snet-pe' in by_id:
-                tx = by_id['snet-pe']['x'] - coll_w + 14 + 16 * (len(callers) + k)
+                tx = by_id['snet-pe']['x'] - coll_w + 14 + TRK * (len(callers) + k)
             else:
                 tx = gut0 - 16 * (len(callers) + 1 + k)
-            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=1;entryY=0.5;'
-            edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': dc['y'] + dc['h'] / 2}]
+            edge['style'] = style + f"exitX=1;exitY=0.5;entryX=1;entryY={IN_FR};"
+            edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': dc['y'] + dc['h'] * IN_FR}]
         elif side and a['from'] in compute and base(a['to']) in MONITOR_KINDS:
             # past the PaaS column along the free strip above the zones, down in the gap in front
             # of the monitoring zone
@@ -926,8 +1000,20 @@ def main():
             top = main_y - 6
             zone = by_id.get('z-monitoring')
             gx = (zone['x'] - 9) if zone else dc['x'] - 22
-            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
-            edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': top}, {'x': gx, 'y': top}, {'x': gx, 'y': dc['y'] + dc['h'] / 2}]
+            # Leaves the icon low on its right side on a track of its own (the endpoint line leaves
+            # at mid height), drops to the strip under the endpoint subnet and runs out below it,
+            # so it never lies on a line from the endpoints to a service.
+            ex_y = sc['y'] + sc['h'] * 0.9
+            sub = by_id.get(sc['parent'])
+            xa = (sub['x'] + sub['w'] + 12) if sub else sc['x'] + sc['w'] + 40
+            pe_sn = by_id.get('snet-pe')
+            yg = (pe_sn['y'] + pe_sn['h'] + 16) if pe_sn else ex_y + 40
+            edge['style'] = style + 'exitX=1;exitY=0.9;entryX=0;entryY=0.5;'
+            edge['points'] = [{'x': xa, 'y': ex_y}, {'x': xa, 'y': yg}, {'x': tx, 'y': yg}, {'x': tx, 'y': top}, {'x': gx, 'y': top}, {'x': gx, 'y': dc['y'] + dc['h'] / 2}]
+            # label on the first drop, near the icon
+            seg = [abs(xa - (sc['x'] + sc['w'])), abs(yg - ex_y), abs(tx - xa), abs(yg - top), abs(gx - tx), abs(dc['y'] + dc['h'] / 2 - top)]
+            if sum(seg):
+                edge['lx'] = round(2 * ((seg[0] + 0.5 * seg[1]) / sum(seg)) - 1, 3)
         elif a['from'] in compute and base(a['to']) in MONITOR_KINDS:
             # To the monitoring zone: out to the right along the row, up or down in the gap between
             # the network and the zone, in from the left - not across the picture.
@@ -935,15 +1021,18 @@ def main():
             edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
             edge['points'] = [{'x': tx, 'y': sc['y'] + sc['h'] / 2}, {'x': tx, 'y': dc['y'] + dc['h'] / 2}]
         elif is_actor(a['from']) and a['to'] in compute:
-            gx = 20 + ext_w + 8 + 12 * min(gap_edges, 2)
-            gap_edges += 1
-            edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
-            edge['points'] = [{'x': gx, 'y': sc['y'] + sc['h'] / 2}, {'x': gx, 'y': dc['y'] + dc['h'] / 2}]
+            # own x track per actor line, own height at the compute icon: no shared or crossing runs
+            gx = gx_of[(a['from'], a['to'])]
+            sib = at_comp[a['to']]
+            fr = 0.2 + (0.6 * sib.index(a) / (len(sib) - 1) if len(sib) > 1 else 0.3)
+            edge['style'] = style + f"exitX=1;exitY=0.5;entryX=0;entryY={num(round(fr, 2))};"
+            edge['points'] = [{'x': gx, 'y': sc['y'] + sc['h'] / 2}, {'x': gx, 'y': dc['y'] + dc['h'] * fr}]
         elif is_actor(a['to']) and a['from'] in compute:
-            gx = 20 + ext_w + 8 + 12 * min(gap_edges, 2)
-            gap_edges += 1
-            edge['style'] = style + 'exitX=0;exitY=0.5;entryX=1;entryY=0.5;'
-            edge['points'] = [{'x': gx, 'y': sc['y'] + sc['h'] / 2}, {'x': gx, 'y': dc['y'] + dc['h'] / 2}]
+            gx = gx_of[(a['from'], a['to'])]
+            sib = at_comp[a['from']]
+            fr = 0.2 + (0.6 * sib.index(a) / (len(sib) - 1) if len(sib) > 1 else 0.7)
+            edge['style'] = style + f"exitX=0;exitY={num(round(fr, 2))};entryX=1;entryY=0.5;"
+            edge['points'] = [{'x': gx, 'y': sc['y'] + sc['h'] * fr}, {'x': gx, 'y': dc['y'] + dc['h'] / 2}]
         elif is_actor(a['to']):
             # Outbound to an external service: out of the left side towards the external zone.
             # Up over the row and out along the subnet's left edge, so the line does not
@@ -953,6 +1042,17 @@ def main():
             edge['points'] = [{'x': sc['x'] + sc['w'] / 2, 'y': sc['slot']['y'] + 3}, {'x': left, 'y': sc['slot']['y'] + 3}]
         else:
             edge['style'] = style + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;'
+        if a in actor_edges and edge.get('points') and len(edge['points']) == 2:
+            # Label on the vertical run, a third of the way in from the actor: the middle of the path
+            # is where another actor's line crosses.
+            p0, p1 = edge['points']
+            sx_, sy_ = (sc['x'] + sc['w'], sc['y'] + sc['h'] / 2) if is_actor(a['from']) else (sc['x'], p0['y'])
+            ex_, ey_ = (dc['x'], p1['y']) if is_actor(a['from']) else (dc['x'] + dc['w'], dc['y'] + dc['h'] / 2)
+            h1, v, h2 = abs(p0['x'] - sx_), abs(p1['y'] - p0['y']), abs(ex_ - p1['x'])
+            tot = h1 + v + h2
+            if tot and v:
+                f = (h1 + 0.3 * v) / tot if is_actor(a['from']) else (h1 + 0.7 * v) / tot
+                edge['lx'] = round(2 * f - 1, 3)
         edges.append(edge)
 
     # Hub layout: one line per caller into the endpoints, one per service out of them.
@@ -965,15 +1065,16 @@ def main():
         cx0 = by_id['snet-pe']['x'] - coll_w
         pe_mid = pe['y'] + pe['h'] / 2
         n_c = len(callers)
-        mid_y = {k: by_id[node_of[k]]['y'] + by_id[node_of[k]]['h'] / 2 for k in callers if node_of[k] in by_id}
+        out_fr = {k: (OUT_FR if k in inter_tgt else 0.5) for k in callers}
+        mid_y = {k: by_id[node_of[k]]['y'] + by_id[node_of[k]]['h'] * out_fr[k] for k in callers if node_of[k] in by_id}
         by_dist = sorted(mid_y, key=lambda k: -abs(mid_y[k] - pe_mid))
         by_y = sorted(mid_y, key=lambda k: mid_y[k])
         for k in by_y:
-            tx = cx0 + 14 + 16 * (n_c - 1 - by_dist.index(k))
+            tx = cx0 + 14 + TRK * (n_c - 1 - by_dist.index(k))
             frac = 0.2 + (0.6 * by_y.index(k) / (n_c - 1) if n_c > 1 else 0.3)
             public = any(is_public_edge(a) for a in access if a['from'] == k and a['to'] in paas)
             color = PUBLIC_COLOR if public else (caller_color[k] if dense else PRIVATE_COLOR)
-            st = EDGE_BASE + f"strokeColor={color};exitX=1;exitY=0.5;entryX=0;entryY={num(frac)};"
+            st = EDGE_BASE + f"strokeColor={color};exitX=1;exitY={out_fr[k]};entryX=0;entryY={num(frac)};"
             edges.append({'id': f"e-in-{by_y.index(k)}", 'source': node_of[k], 'target': 'pe-bundle', 'value': '', 'style': st,
                           'points': [{'x': tx, 'y': mid_y[k]}, {'x': tx, 'y': pe['y'] + pe['h'] * frac}]})
         trunk = vn_cell['x'] + vn_cell['w'] + 28
@@ -994,16 +1095,20 @@ def main():
                           f"{esc(TYPE_NAMES.get(base(k), base(k)))} &#183; {esc(s(purposes.get(k)) or (k.partition('__')[2] or k))}")
     if side:
         legend.append(f"<font color='{PRIVATE_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPE'])}")
+        # blue lines that are not the endpoint-to-service lines (users reaching the app) need their own entry
+        if any(PRIVATE_COLOR in e['style'] and not e['id'].startswith('e-out-') for e in edges):
+            legend.append(f"<font color='{PRIVATE_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPrivateAny'])}")
     elif not dense and any(PRIVATE_COLOR in e['style'] for e in edges):
         legend.append(f"<font color='{PRIVATE_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPrivate'])}")
     if any(PUBLIC_COLOR in e['style'] for e in edges):
         legend.append(f"<font color='{PUBLIC_COLOR}'><b>&#9473;&#9473;&#9654;</b></font> {esc(T['legPublic'])}")
-    if vnet_existing or law_existing or (zones and dns_existing):
+    if vnet_existing or law_existing or ((zones or dns_ownership) and dns_existing):
         legend.append(f"<font color='#999999'>&#9477;&#9477;&#9477;</font> {esc(T['legExisting'])}")
     if optional:
         legend.append(f"<font color='#999999'>&#9679;</font> {esc(T['legOptional'])}")
     if open_items or assumed:
-        legend.append(f"<font color='#D13438'>&#9679;</font> {esc(T['legOpen'])}")
+        # open items are drawn as red text (a flagged label, the panel list), not as a marker
+        legend.append(f"<font color='#D13438'>{esc(T['legOpen'])}</font>")
     if len(legend) > 1:
         add_container({'id': 'legend', 'parent': '1', 'x': sub_x, 'y': sub_y + sub_h + 30, 'w': min(max(sub_w, 420), 560), 'h': len(legend) * 15 + 26,
                        'style': 'rounded=1;arcSize=4;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fillColor=#FFFFFF;strokeColor=#C8C6C4;fontSize=11;',
@@ -1071,7 +1176,8 @@ def main():
         if e.get('points'):
             # Waypoints are absolute, since every edge's parent is the root layer.
             pts = ''.join(f'<mxPoint x="{num(p["x"])}" y="{num(p["y"])}"/>' for p in e['points'])
-            o.append(f'          <mxGeometry relative="1" as="geometry"><Array as="points">{pts}</Array></mxGeometry>')
+            lx_attr = ' x="' + num(e['lx']) + '"' if 'lx' in e else ''
+            o.append(f'          <mxGeometry{lx_attr} relative="1" as="geometry"><Array as="points">{pts}</Array></mxGeometry>')
         else:
             o.append('          <mxGeometry relative="1" as="geometry"/>')
         o.append('        </mxCell>')

@@ -34,12 +34,35 @@ so it can be run afterwards too.
 decisions panel; Azure names, types, ranges and role names stay as Azure spells them,
 since those are what the customer will find in the portal.
 
-**Do not write the draw.io XML by hand.** The layout is computed: every icon has a fixed
-slot, containers are sized from their contents, each edge type has its own track, and the
-script fails if any two shapes or labels overlap. A hand-placed diagram gets every one of
-those wrong in a way that only shows in the picture — labels that wrap after every word
-because they inherit the 48px icon width, a label running into the icon below, two role
-names stacked on the same line. If the generated layout is wrong, fix the script.
+**Generate first, never write the draw.io XML from scratch.** The layout is computed: every
+icon has a fixed slot, containers are sized from their contents, each edge type has its own
+track, and the script fails if any two shapes or labels overlap. A hand-placed diagram gets
+every one of those wrong in a way that only shows in the picture — labels that wrap after
+every word because they inherit the 48px icon width, a label running into the icon below, two
+role names stacked on the same line. The script does the bulk of the work, and does it
+without spending tokens on coordinates.
+
+**Then fine-tune by hand, last.** What the script cannot judge is taste: a label a few pixels
+off its line, a lane that sits a little tight, a colour that reads too close to its
+neighbour. Fix those on the generated file, in this order:
+
+1. Generate, verify, look at the picture, and list what is off.
+2. Sort the list. A fault that would recur on any spec (overlap, shared anchor, a line
+   through an icon, a legend that contradicts a colour) is a **script bug**: fix
+   `new_diagram.py` and regenerate, so the next spec benefits. A fault that is particular to
+   this picture is **hand work**.
+3. Keep the `.drawio` (`export_diagram.py --keep`, or `drawio_png.py extract`), edit only the
+   affected cells by id with Edit — `geometry`, `value`, a style attribute, a waypoint —
+   never rewrite the file, and never change the ids, which `verify_diagram.py` and the
+   `extract` diff rely on.
+4. `verify_diagram.py`, then `export_diagram.py`, then look at the picture again. Each
+   hand edit must pass the same checks as a generated one.
+
+Hand edits are the **last step and are lost on regeneration**: tune only once the spec is
+settled, and if the spec changes afterwards, regenerate and redo the edits (note them in the
+hand-over so that is possible). Never hand-edit to silence `overlaps` or `does not fit`, and
+never move a shape the script placed on a computed slot by more than a few pixels — a
+bigger move is a script bug.
 
 **One file is delivered: `infra-diagram.drawio.png`.** A PNG with the diagram embedded — it
 opens in a document, a chat or an email like any image, and opens in draw.io as the
@@ -60,8 +83,9 @@ Exit codes, all scripts: `0` ok, `1` failed, `2` could not run.
   call the draw.io CLI directly, and never hand over a PNG `drawio_png.py check` calls BAD.
   `--scale` (default 2) and `--border` (default 20) are options.
 
-**Regeneration overwrites the PNG.** Manual edits in draw.io are lost on the next run. A change
-the customer makes in the picture is a change to a decision, and it goes back into the spec.
+**Regeneration overwrites the PNG.** Manual edits, the customer's and the fine-tuning above,
+are lost on the next run. A change the customer makes in the picture is a change to a
+decision, and it goes back into the spec.
 
 To see what the customer changed, take the XML out of their PNG and diff it against a fresh
 generation. The ids are stable, so the diff shows the cells they moved, renamed or added:
@@ -99,7 +123,7 @@ lines are access, not plumbing.
 
 | Spec | Drawn as |
 |---|---|
-| `context` | The resource group as the outermost container, region and environment in its label; no subscription frame (it changes per environment and adds only a layer); title and one-line subtitle (exposure, keyless) above |
+| `context` | The resource group as the outermost container, region and environment in its label; no subscription frame (it changes per environment and adds only a layer); title and one-line subtitle (exposure, keyless; a resource left public in a private deployment is named, never covered by "no public access") above |
 | `virtual-network` subnets, `deployment.address_space` | A virtual network zone with its subnets and ranges. A subnet that hosts compute carries its delegation (`delegated to Microsoft.Web/serverFarms`) |
 | Compute (`app-service`, `function-app`, `container-app`, `virtual-machine`, …) | An icon inside the subnet named by its `networking.integration_subnet` decision, else the first integration-like subnet |
 | Other `resources:` (storage, vault, database, bus, registry, …) | An icon in the *Azure PaaS* zone below the network, titled *public access disabled* when every one is. A PaaS service is not in the VNet; its endpoint is |

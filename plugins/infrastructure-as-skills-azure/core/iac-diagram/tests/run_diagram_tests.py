@@ -81,6 +81,16 @@ def generic(cells):
             bad.append(f"{k}: edge with a missing end ({v['source']} -> {v['target']})")
         if 'strokeColor=' not in v['style']:
             bad.append(f"{k}: edge without a colour")
+    # An arrowhead must stay readable: a line ending at an icon and a line leaving it never use
+    # the same anchor point, or the two share a stub and one head hides the other.
+    def anchor(style, kind):
+        m = re.search(kind + r'X=([\d.]+);' + kind + r'Y=([\d.]+)', style)
+        return (m.group(1), m.group(2)) if m else None
+    for k in vertices(cells):
+        ins = {anchor(e['style'], 'entry') for e in edges(cells).values() if e['target'] == k} - {None}
+        outs = {anchor(e['style'], 'exit') for e in edges(cells).values() if e['source'] == k} - {None}
+        if ins & outs:
+            bad.append(f"{k}: an incoming and an outgoing line share the anchor {sorted(ins & outs)}")
     pe = [k for k in vertices(cells) if k.startswith('pe-') and k != 'pe-bundle']
     if pe:
         bad.append(f"one private endpoint icon per resource is back: {pe}")
@@ -217,6 +227,17 @@ def case_example_chatbot(cells):
         bad.append(f"hub layout: expected 4 callers into the endpoints and 7 services out of them, found {len(into_pe)} and {len(out_of_pe)}")
     if "container-apps" in cells['legend']['value'] or 'Container App' not in cells['legend']['value']:
         bad.append('the legend does not name the callers')
+    if any(PRIVATE in e['style'] for e in into_pe):
+        bad.append(f"a caller is drawn in {PRIVATE}, the colour of the line from the endpoints to the service")
+    if 'Container App' in cells['pe-bundle']['value']:
+        bad.append('the Container Apps environment is injected into its subnet and has no private endpoint, but the hub counts it')
+    # The workspace leaves public access enabled: neither the subtitle nor the footer may claim otherwise.
+    if 'Log Analytics' not in cells['subtitle']['value'] or 'Kein Dienst' in cells['subtitle']['value'] or 'No service' in cells['subtitle']['value']:
+        bad.append('the subtitle claims no service is public although the workspace is')
+    if 'Log Analytics' not in cells['rg-private']['value']:
+        bad.append('the footer says "no public access" without naming the workspace as the exception')
+    if not any(e['value'] == 'telemetry' for e in edges(cells).values()):
+        bad.append('the line to Application Insights is not labelled as telemetry')
     return bad
 
 
