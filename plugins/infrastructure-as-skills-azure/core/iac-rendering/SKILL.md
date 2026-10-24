@@ -86,6 +86,11 @@ than inferring the shape from an example spec.
     `scripts/check_pipeline.py <spec>` before handing over; it fails on a missing stage, a
     gate that does not match `pipeline_approvals`, an apply without a saved plan and a
     secret in the file.
+11. **Run it as agents when the spec is large.** With the Agent tool and several resource
+    families, render in two parallel arms - code, pipeline and a read-only test agent;
+    diagram and a read-only review agent that looks at the picture - each with its own
+    bounded fix loop. The protocol, the stop rules and what goes into an agent's brief are
+    in [agents.md](references/agents.md). A small spec is faster in sequence.
 
 ## Do not invent attributes
 
@@ -117,6 +122,7 @@ is spelled. A port that reads as a transliteration has usually lost one of them.
 | [references/bicep-idiom.md](references/bicep-idiom.md) | Target is Bicep |
 | [references/pipelines.md](references/pipelines.md) | Always, after the code: the flow and invariants every pipeline shares |
 | [references/pipelines.github.md](references/pipelines.github.md), [.ado.md](references/pipelines.ado.md), [.gitlab.md](references/pipelines.gitlab.md), [.local.md](references/pipelines.local.md) | `deploy_mechanism` is that system |
+| [references/agents.md](references/agents.md) | The Agent tool is available and the spec spans several families: the two arms, the loops, the briefs |
 | [../iac-authoring/references/spec.md](../iac-authoring/references/spec.md) | Reading the spec you render from |
 | [../iac-authoring/references/guardrails.md](../iac-authoring/references/guardrails.md) | A value in the spec looks wrong and you need the rule behind it |
 | `scripts/run_arm_tests.py` | A Bicep render: its `tests/*.armtest.yaml` against the compiled ARM |
