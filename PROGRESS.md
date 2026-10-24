@@ -25,7 +25,10 @@ Verified Modules first, authored resources second.
   already implement what the first authored render got wrong — the diagnostic setting
   that collects no blob logs, the endpoint named after the index — with one interface in
   both targets. `deployment.module_source` records it once; `module_telemetry` beside it,
-  because the modules phone home by default and a reviewer will ask. The contract is
+  because the modules phone home by default and a reviewer will ask. **Asked first, in both
+  modes** (owner's call, 2026-10-24, reversing "not asked"): a `customer` question in plain words, before
+  the description, `avm` recommended, `authored` recommended when the repository holds authored blocks;
+  skipped when the user stated it or a carried spec has it. Evals not re-run on it. The contract is
   `core/iac-rendering/references/avm.md`; each resource reference opens with the decision
   → module input table and the call, and keeps the authored rendering below it.
 - **Module coordinates and versions stay in the renderer, never in the spec.** Versions
@@ -89,7 +92,7 @@ Verified Modules first, authored resources second.
   default answer derives the guardrail default so an unanswered requirement changes
   nothing. Both checks verify the map covers every answer. Customer questions in a
   run: environment, exposure, mandates, the three requirements, and log retention when
-  the deployment owns the workspace - six, the budget. `iac-authoring` now has the two
+  the deployment owns the workspace - six, the budget (the module choice, asked first, is one more). `iac-authoring` now has the two
   modes: customer (default; only `customer` questions asked, the rest resolved or
   opened) and engineer.
 - **The decision document is rendered, not written.** B5, 2026-10-18. Every question

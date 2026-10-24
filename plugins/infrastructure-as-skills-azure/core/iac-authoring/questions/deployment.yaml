@@ -413,9 +413,9 @@ groups:
     title: Modules
     questions:
       - id: module_source
-        ask: Should resources render as calls to Azure Verified Modules, or as authored resources?
+        ask: Should the code be built from the building blocks Microsoft tests and maintains, or from resources written out one by one?
         type: enum
-        audience: engineer
+        audience: customer
         plain:
           en: "The code is built from {value}."
           de: "Der Code wird aus {value} gebaut."
@@ -435,11 +435,19 @@ groups:
           deployment: a configuration that mixes module calls and authored
           resources for the same resource type has two conventions to review.
           `authored` is for a repository that already renders its resources
-          this way and did not ask to migrate, or for a user who stated it.
+          this way and did not ask to migrate, or for a user who wants the
+          resources written out and under their own review.
           A resource whose type has no `Available` module in the AVM index
           renders authored either way, recorded per module with
           `source: forced` - the index is checked at render time, not
-          remembered. Not asked unless the user raises it.
+          remembered. Asked first, in both modes, before the description
+          and before any resource question: it decides what every later
+          decision renders to, and it is the one choice a person can make
+          without knowing a resource. `avm` is the recommended answer and
+          the default when nobody answers; a repository that already holds
+          authored resource blocks makes `authored` the recommended one. Not
+          asked when the user stated it ("ohne Module", "mit AVM") or when a
+          carried spec has it.
         renders: >
           composition.modules[].implementation for every module (avm | authored);
           terraform: module "<id>" { source = "Azure/avm-res-<ns>-<type>/azurerm" }

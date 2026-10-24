@@ -57,7 +57,7 @@ the mode decides which audiences are put to the person:
 
 | Mode | Asked | Resolved without asking | Entered when |
 |---|---|---|---|
-| **customer** (default) | `customer` questions only — the deployment set's context, posture, mandates and `requirements` group | `platform` from `platform.yaml` or its default, `engineer` from its default; a `required` one nobody present can answer is an `open:` entry naming its owner | Nothing says otherwise |
+| **customer** (default) | `customer` questions only — the module choice (asked first), the deployment set's context, posture, mandates and `requirements` group | `platform` from `platform.yaml` or its default, `engineer` from its default; a `required` one nobody present can answer is an `open:` entry naming its owner | Nothing says otherwise |
 | **engineer** | `customer` and `engineer` questions; `platform` too when no profile answers them | — | The user says they are the engineer or asks in engineer terms (names a subnet, a SKU, a provider argument), or the repository already holds IaC code or a spec and the user is extending it |
 
 Say which mode the run is in, in the first message, so the person can redirect:
@@ -70,9 +70,30 @@ In customer mode no question with Azure vocabulary reaches the person, whatever 
 would cost to default it. The cost of a wrong default is a line in Phase 4 that the
 person can object to; the cost of a subnet question is a person who stops answering.
 
-## Phase 0 — Ask what is being built, in the user's own words
+## Phase 0 — Ask how the code is built, then what is being built
 
-The interview opens with one open question, not with the question set. Let the user
+**The first question is the module choice**, before the description and before any resource
+question: `deployment.module_source` — the code built from Azure Verified Modules (`avm`), or
+from resources written out one by one (`authored`). It comes first because it decides what
+every later decision renders to, and because it is the one choice a person can make without
+knowing a resource. Ask it through `AskUserQuestion`, `avm` first and marked recommended;
+when the repository already holds authored resource blocks, put `authored` first instead.
+In customer mode word it without the product name:
+
+```
+Wie soll der Code gebaut werden?
+  1. Aus Microsofts geprüften, gepflegten Bausteinen (empfohlen) - getestet, in Terraform
+     und Bicep gleich aufgebaut
+  2. Aus einzeln ausgeschriebenen Ressourcen - jede Zeile im eigenen Review, dafür mehr
+     Code, den ihr selbst pflegt
+```
+
+In engineer mode name them: Azure Verified Modules, or authored resources. **Skip it when it
+is already answered**: the user said it ("ohne Module", "mit AVM"), or a carried
+`infra-spec.yaml` has it. A resource whose type has no Azure Verified Module renders
+authored whatever the answer, recorded per module; say so when the person chose `avm`.
+
+Then the interview opens with one open question, not with the question set. Let the user
 describe what they are building, and let that description answer as much as it can.
 Only what it leaves open is asked afterwards.
 
@@ -176,11 +197,11 @@ agree on. If the split is settled per renderer, the same spec produces one Terra
 and six Bicep files, and comparing the two outputs stops meaning anything. See
 [references/spec.md](references/spec.md#modularity).
 
-The same reading settles `deployment.module_source`: a repository whose resources are
-already authored resource blocks stays `authored`; everything else is `avm` — each
-resource a call to its Azure Verified Module, which is the default and is not asked.
-Under `avm` the split above is mostly decided too: one module call per resource, the
-root holding the wiring, so `single` unless a pattern says otherwise.
+`deployment.module_source` is not read from the repository: it is asked first, in Phase 0,
+and the repository only decides which answer is recommended (authored resource blocks
+already there → `authored`). Under `avm` the split above is mostly decided too: one module
+call per resource, the root holding the wiring, so `single` unless a pattern says
+otherwise.
 
 ## Phase 2 — Resolve the deployment set, then every resource question
 
