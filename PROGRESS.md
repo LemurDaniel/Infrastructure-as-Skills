@@ -291,6 +291,25 @@ Verified Modules first, authored resources second.
   provider is configured in each test file with the root's seed. Not done: Bicep has no equivalent
   yet (`bicep-idiom.md` unchanged), and the generator for the layout is the Python scratch of this
   session - the idiom is the contract, the example the proof.
+- **Rendering with agents, drafted 2026-10-24** (`iac-rendering/references/agents.md`, step 11 of the
+  skill): two arms from one spec, code (code agent, pipeline agent, read-only test agent, 3 passes) and
+  diagram (diagram agent, read-only review agent that looks at the PNG, 2 passes), findings with a
+  severity and one cause (`render` goes back to the agent, `spec` is the main agent's and restarts both
+  arms), `polish` never goes back. **Trialled once** on a copy of the chatbot spec (`deploy_mechanism:
+  github` added): diagram arm ran 2 passes, code and pipeline were rendered, coverage 284/284,
+  `check_pipeline.py` green after the spec fix. **Not run:** `terraform init`, `validate`, `test` on that
+  render (the Windows path limit stops `init` in a scratch directory; `subst` does not help, git
+  resolves it), so the code arm is unproven. **What it found:** a review of the picture finds what the
+  geometry check does not (claims the spec does not carry); the generator drew "no public access" over a
+  public workspace, read `public_network_access` from one group only, counted a Container Apps
+  environment as a private endpoint and gave the first caller the endpoint blue - fixed in
+  `new_diagram.py`, asserted in `run_diagram_tests.py`. **Open:** `agents.md` lacks a severity *not
+  checkable* (a reviewer counted an unverifiable number as an error) and one-cause-per-finding; the
+  chatbot spec says `granularity: single` while the example is per-family; an `open:` entry for a value
+  that sits in a stage file needs `environments:` or `check_pipeline.py` takes the stage as resolved;
+  `terraform.md` tables are stale in places (`log_categories` for the Key Vault, Search, Foundry, ACR,
+  Cosmos DB and NSG modules). The trial's render is **not committed** (`examples/chatbot-agents/`): its
+  tests have not run.
 - **Next:** the same case rendered to Bicep from the one spec (the cross-backend diff is what
   tests the sets), a deploy pipeline once the owner names the system, and `patterns/` - the
   wiring in this example (roles between resources, the private link, the order identity -> vault
@@ -341,7 +360,9 @@ Verified Modules first, authored resources second.
 
 ## Next
 
-Widen the plugin-vs-plain measurement (3 runs per arm, cases on the small decisions, ~$15-25)
+Finish the agent trial: `terraform init`, `validate` and `test` on the render in
+`examples/chatbot-agents/` (a short path, it is in the repo), fix what they find, then commit the
+folder or drop it; add the two missing rules to `agents.md`. Widen the plugin-vs-plain measurement (3 runs per arm, cases on the small decisions, ~$15-25)
 before trusting the pilot. Re-run the eval suite (full, ~$5) against the two rules written after the baseline and
 accept the run if `vague-public-dev` rises without the other two dropping. Then
 the chatbot case in Bicep (Open, above); the sets from 2026-10-23 are now rendered once, in
